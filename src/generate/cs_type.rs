@@ -2448,6 +2448,15 @@ pub trait CSType: Sized {
             vec![]
         };
 
+        // if no params, just empty span
+        // avoid allocs
+        let params_types_array_cpp = match params_types_count {
+            0 => "::std::span<const Il2CppType* const, 0>()".to_string(),
+            _ => format!(
+                "::std::array<const Il2CppType*, {params_types_count}>{{{params_types_format}}}"
+            ),
+        };
+
         let method_info_lines = match &template {
             Some(template) => {
                 // generic
@@ -2461,16 +2470,25 @@ pub trait CSType: Sized {
                     .join(", ");
                 let template_count = template.names.len();
 
+                // if no template params, just empty span
+                // avoid allocs
+                let template_classes_array_cpp = match template_count {
+                    0 => "std::span<const Il2CppClass* const, 0>()".to_string(),
+                    _ => format!(
+                        "std::array<const Il2CppClass*, {template_count}>{{{template_names}}}"
+                    ),
+                };
+
                 vec![
                 format!("static auto* ___internal_method_base = THROW_UNLESS((::il2cpp_utils::FindMethod(
                     {declaring_classof_call},
                     \"{m_name}\",
-                    std::array<const Il2CppClass*, {template_count}>{{{template_names}}},
-                    ::std::array<const Il2CppType*, {params_types_count}>{{{params_types_format}}}
+                    {template_classes_array_cpp},
+                    {params_types_array_cpp}
                 )));"),
                 format!("static auto* {METHOD_INFO_VAR_NAME} = THROW_UNLESS(::il2cpp_utils::MakeGenericMethod(
                     ___internal_method_base,
-                    std::array<const Il2CppClass*, {template_count}>{{{template_names}}}
+                    {template_classes_array_cpp}
                 ));"),
                 ]
             }
@@ -2479,8 +2497,8 @@ pub trait CSType: Sized {
                     format!("static auto* {METHOD_INFO_VAR_NAME} = THROW_UNLESS((::il2cpp_utils::FindMethod(
                         {declaring_classof_call},
                         \"{m_name}\",
-                        std::array<const Il2CppClass*, 0>{{}},
-                        ::std::array<const Il2CppType*, {params_types_count}>{{{params_types_format}}}
+                        std::span<const Il2CppClass* const, 0>(),
+                        {params_types_array_cpp}
                     )));"),
                     ]
             }
@@ -2493,7 +2511,6 @@ pub trait CSType: Sized {
                 .chain(param_names)
                 .join(", ")
         )];
-
 
         // instance methods should resolve slots if this is an interface, or if this is a virtual/abstract method, and not a final method
         // static methods can't be virtual or interface anyway so checking for that here is irrelevant
