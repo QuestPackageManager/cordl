@@ -66,7 +66,7 @@ CORDL_HIDDEN TOut RunMethodRethrow(T&& instance, MethodInfo const* method, TArgs
   //     }
   //   }
 
-  return ::il2cpp_utils::RunMethodRethrow<TOut, checkTypes, T, TArgs...>(std::forward<T>(instance), method, std::forward<TArgs>(params)...);
+  return ::il2cpp_utils::RunMethodRethrow<TOut, checkTypes>(std::forward<T>(instance), method, std::forward<TArgs>(params)...);
 }
 } // namespace cordl_internals
 } // end anonymous namespace
