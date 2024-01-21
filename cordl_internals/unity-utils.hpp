@@ -2,6 +2,19 @@
 
 #include "concepts.hpp"
 #include "beatsaber-hook/shared/utils/typedefs.h"
+#include "beatsaber-hook/shared/utils/typedefs-wrappers.hpp"
+
+#if __has_feature(cxx_exceptions)
+#define __UNITYW_UNITY_NULL_HANDLE_CHECK(...)                                                                                                                                                        \
+  if (isAlive()) return __VA_ARGS__;                                                                                                                                                                   \
+  throw ::il2cpp_utils::NullHandleException()
+
+#else
+#include "beatsaber-hook/shared/utils/utils.h"
+#define __UNITYW_UNITY_NULL_HANDLE_CHECK(...)                                                                                                                                                        \
+  if (isAlive()) return __VA_ARGS__;                                                                                                                                                                   \
+  CRASH_UNLESS(false)
+#endif
 
 template <typename T>
 struct UnityW {
@@ -26,11 +39,11 @@ struct UnityW {
   }
 
   constexpr T* ptr() {
-    __SAFE_PTR_UNITY_NULL_HANDLE_CHECK(innerPtr);
+    __UNITYW_UNITY_NULL_HANDLE_CHECK(innerPtr);
   }
 
   constexpr T const* ptr() const {
-    __SAFE_PTR_UNITY_NULL_HANDLE_CHECK(innerPtr);
+    __UNITYW_UNITY_NULL_HANDLE_CHECK(innerPtr);
   }
 
   /// @brief Explicitly cast this instance to a T*.
