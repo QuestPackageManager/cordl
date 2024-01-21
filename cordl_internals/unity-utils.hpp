@@ -3,11 +3,12 @@
 #include "concepts.hpp"
 #include "beatsaber-hook/shared/utils/typedefs.h"
 #include "beatsaber-hook/shared/utils/typedefs-wrappers.hpp"
+#include "beatsaber-hook/shared/utils/il2cpp-utils-exceptions.hpp"
 
 #if __has_feature(cxx_exceptions)
-#define __UNITYW_UNITY_NULL_HANDLE_CHECK(...)                                                                                                                                                        \
+#define __UNITYW_UNITY_NULL_HANDLE_CHECK(...)                                                                                                                                                          \
   if (isAlive()) return __VA_ARGS__;                                                                                                                                                                   \
-  throw ::il2cpp_utils::NullHandleException()
+  throw ::cordl_internals::NullUnityObjectException()
 
 #else
 #include "beatsaber-hook/shared/utils/utils.h"
@@ -15,6 +16,17 @@
   if (isAlive()) return __VA_ARGS__;                                                                                                                                                                   \
   CRASH_UNLESS(false)
 #endif
+
+namespace {
+namespace cordl_internals {
+
+
+struct NullUnityObjectException : il2cpp_utils::exceptions::StackTraceException {
+  NullUnityObjectException() : il2cpp_utils::exceptions::StackTraceException("A SafePtr<T> instance is holding a null handle!") {}
+};
+
+} // namespace cordl_internals
+}
 
 template <typename T>
 struct UnityW {
