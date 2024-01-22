@@ -5,6 +5,7 @@
 #include "ptr-utils.hpp"
 #include "method-utils.hpp"
 #include "field-utils.hpp"
+#include "unity-utils.hpp"
 
 #include "beatsaber-hook/shared/utils/byref.hpp"
 #include "beatsaber-hook/shared/utils/il2cpp-utils-methods.hpp"
@@ -14,7 +15,6 @@
 #include "beatsaber-hook/shared/utils/typedefs.h"
 
 #include "concepts.hpp"
-#include "box-utils.hpp"
 
 // TODO: Implement
 template <typename T>
