@@ -58,8 +58,8 @@ struct UnityW {
     __UNITYW_UNITY_NULL_HANDLE_CHECK(innerPtr);
   }
 
-  /// @brief Explicitly cast this instance to a T*.
-  constexpr explicit operator T*() const {
+  /// @brief Implicitly cast this instance to a T*.
+  constexpr operator T*() const {
     return const_cast<T*>(ptr());
   }
 
