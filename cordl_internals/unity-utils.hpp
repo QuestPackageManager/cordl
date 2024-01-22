@@ -1,35 +1,22 @@
 #pragma once
 
 #include "concepts.hpp"
+#include "exceptions.hpp"
 #include "beatsaber-hook/shared/utils/typedefs.h"
-#include "beatsaber-hook/shared/utils/typedefs-wrappers.hpp"
-#include "beatsaber-hook/shared/utils/il2cpp-utils-exceptions.hpp"
 
 #if __has_feature(cxx_exceptions)
 #define __UNITYW_UNITY_NULL_HANDLE_CHECK(...)                                                                                                                                                          \
   if (isAlive()) return __VA_ARGS__;                                                                                                                                                                   \
-  throw ::cordl_internals::NullUnityObjectException()
+  throw ::cordl_internals::NullException(std::string(typeid(*this).name()) + " is holding a null Object")
 
 #else
 #include "beatsaber-hook/shared/utils/utils.h"
-#define __UNITYW_UNITY_NULL_HANDLE_CHECK(...)                                                                                                                                                        \
+#define __UNITYW_UNITY_NULL_HANDLE_CHECK(...)                                                                                                                                                          \
   if (isAlive()) return __VA_ARGS__;                                                                                                                                                                   \
   CRASH_UNLESS(false)
 #endif
 
-namespace {
-namespace cordl_internals {
-
-
-struct NullUnityObjectException : il2cpp_utils::exceptions::StackTraceException {
-  NullUnityObjectException() : il2cpp_utils::exceptions::StackTraceException("A SafePtr<T> instance is holding a null handle!") {}
-};
-
-} // namespace cordl_internals
-}
-
-template <typename T>
-struct UnityW {
+template <typename T> struct UnityW {
   constexpr UnityW() noexcept = default;
   constexpr UnityW(T* t) noexcept : innerPtr(t) {}
 
@@ -113,8 +100,7 @@ MARK_GEN_REF_T(UnityW);
 
 // static_assert(il2cpp_utils::has_il2cpp_conversion<UnityW<Il2CppObject>>);
 
-template <class T>
-struct BS_HOOKS_HIDDEN ::il2cpp_utils::il2cpp_type_check::need_box<UnityW<T>> {
+template <class T> struct BS_HOOKS_HIDDEN ::il2cpp_utils::il2cpp_type_check::need_box<UnityW<T>> {
   constexpr static bool value = false;
 };
 
@@ -127,8 +113,7 @@ template <class T> struct ::il2cpp_utils::il2cpp_type_check::il2cpp_no_arg_type<
 
 // technically not a class
 // but we do this to allow generics to work as intended
-template <class T>
-struct ::il2cpp_utils::il2cpp_type_check::il2cpp_no_arg_class<UnityW<T>> {
+template <class T> struct ::il2cpp_utils::il2cpp_type_check::il2cpp_no_arg_class<UnityW<T>> {
   static inline Il2CppClass* get() {
     // don't double cache here, just inline
     return ::il2cpp_utils::il2cpp_type_check::il2cpp_no_arg_class<T*>::get();
