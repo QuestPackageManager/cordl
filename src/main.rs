@@ -720,7 +720,7 @@ fn format_files() -> Result<()> {
             let mut command = Command::new("clang-format");
             command.arg("-i").arg(path);
 
-            let spawn = command.output()?;
+            let spawn = command.output().suggestion("You may be missing clang-format. Ensure it is on PATH")?;
 
             if !spawn.stderr.is_empty() {
                 error!(
