@@ -29,6 +29,19 @@ template <typename T> struct UnityW {
     return const_cast<void*>(static_cast<void const*>(unsafePtr()));
   }
 
+  template <typename U>
+  inline UnityW<U> cast() const {
+    return UnityW<U>(::il2cpp_utils::cast<U>(const_cast<T*>(this->innerPtr)));
+  }
+
+  template <typename U>
+  inline std::optional<UnityW<U>> cast() const {
+    auto attemptedCast = ::il2cpp_utils::try_cast<U>(const_cast<T*>(this->innerPtr));
+    if (!attemptedCast) return std::nullopt;
+
+    return UnityW<U>(attemptedCast.value());
+  }
+  
   constexpr T const* unsafePtr() const noexcept {
     return innerPtr;
   }
@@ -89,7 +102,7 @@ template <typename T> struct UnityW {
   }
 
   [[nodiscard]] static constexpr inline void* cached_ptr(T const* ptr) {
-    return ptr->___m_CachedPtr;
+    return ptr->m_CachedPtr;
   }
 
 private:
