@@ -35,13 +35,13 @@ template <typename T> struct UnityW {
   }
 
   template <typename U>
-  inline std::optional<UnityW<U>> cast() const {
+  inline std::optional<UnityW<U>> try_cast() const {
     auto attemptedCast = ::il2cpp_utils::try_cast<U>(const_cast<T*>(this->innerPtr));
     if (!attemptedCast) return std::nullopt;
 
     return UnityW<U>(attemptedCast.value());
   }
-  
+
   constexpr T const* unsafePtr() const noexcept {
     return innerPtr;
   }
@@ -118,7 +118,7 @@ template <class T> struct BS_HOOKS_HIDDEN ::il2cpp_utils::il2cpp_type_check::nee
 };
 
 template <class T> struct ::il2cpp_utils::il2cpp_type_check::il2cpp_no_arg_type<UnityW<T>> {
-  static inline Il2CppClass* get() {
+  static inline const Il2CppType* get() {
     // don't double cache here, just inline
     return ::il2cpp_utils::il2cpp_type_check::il2cpp_no_arg_type<T*>::get();
   }
