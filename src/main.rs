@@ -7,7 +7,7 @@
 #![feature(exit_status_error)]
 
 use brocolib::{global_metadata::TypeDefinitionIndex, runtime_metadata::TypeData};
-use color_eyre::{eyre::Context, Result};
+use color_eyre::{eyre::Context, Result, Section};
 use generate::{config::GenerationConfig, metadata::Metadata};
 use itertools::Itertools;
 extern crate pretty_env_logger;
