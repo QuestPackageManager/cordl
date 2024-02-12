@@ -642,6 +642,9 @@ impl CppContextCollection {
     pub fn get(&self) -> &HashMap<CppTypeTag, CppContext> {
         &self.all_contexts
     }
+    pub fn get_mut(&mut self) -> &mut HashMap<CppTypeTag, CppContext> {
+        &mut self.all_contexts
+    }
 
     pub fn write_all(&self, config: &GenerationConfig) -> color_eyre::Result<()> {
         let amount = self.all_contexts.len() as f64;

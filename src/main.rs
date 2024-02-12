@@ -26,7 +26,7 @@ use crate::{
         context_collection::CppContextCollection, cpp_type_tag::CppTypeTag,
         cs_context_collection::CsContextCollection, members::CppMember,
     },
-    handlers::{object, unity, value_type},
+    handlers::{field_offset_omit::remove_field_coments, object, unity, value_type},
 };
 mod data;
 mod generate;
@@ -46,6 +46,9 @@ struct Cli {
     /// Whether to format with clang-format
     #[clap(short, long)]
     format: bool,
+    /// Whether to format with clang-format
+    #[clap(short, long)]
+    remove_verbose_comments: bool,
 
     /// Whether to generate generic method specializations
     #[clap(short, long)]
@@ -354,6 +357,10 @@ fn main() -> color_eyre::Result<()> {
                 CppTypeTag::TypeDefinitionIndex(tdi),
             );
         }
+    }
+
+    if cli.remove_verbose_comments {
+        remove_field_coments(&mut cpp_context_collection)?;
     }
 
     const write_all: bool = true;
