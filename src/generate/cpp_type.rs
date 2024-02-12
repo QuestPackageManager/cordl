@@ -301,16 +301,16 @@ impl CppType {
                 generic_args.write(writer)?;
             }
             writeln!(writer, "// Is value type: {}", self.is_value_type)?;
-            writeln!(
-                writer,
-                "// Dependencies: {:?}",
-                self.requirements
-                    .depending_types
-                    .iter()
-                    .sorted()
-                    .collect_vec()
-            )?;
-            writeln!(writer, "// Self: {:?}", self.self_tag)?;
+            // writeln!(
+            //     writer,
+            //     "// Dependencies: {:?}",
+            //     self.requirements
+            //         .depending_types
+            //         .iter()
+            //         .sorted()
+            //         .collect_vec()
+            // )?;
+            // writeln!(writer, "// Self: {:?}", self.self_tag)?;
 
             let clazz_name = self
                 .cpp_name_components
