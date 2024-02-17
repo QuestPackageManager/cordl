@@ -93,7 +93,7 @@ pub struct CppForwardDeclare {
     pub literals: Option<Vec<String>>,
 }
 
-#[derive(Debug, Eq, Hash, PartialEq, Clone)]
+#[derive(Debug, Clone, Eq, Hash, PartialEq, PartialOrd)]
 pub struct CppCommentedString {
     pub data: String,
     pub comment: Option<String>,
@@ -112,7 +112,7 @@ pub struct CppUsingAlias {
     pub template: Option<CppTemplate>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, PartialOrd)]
 pub enum CppMember {
     FieldDecl(CppFieldDecl),
     FieldImpl(CppFieldImpl),
@@ -262,6 +262,49 @@ pub struct CppMethodDecl {
     pub body: Option<Vec<Arc<dyn Writable>>>,
 }
 
+impl PartialEq for CppMethodDecl {
+    fn eq(&self, other: &Self) -> bool {
+        self.cpp_name == other.cpp_name
+            && self.return_type == other.return_type
+            && self.parameters == other.parameters
+            && self.instance == other.instance
+            && self.template == other.template
+            && self.suffix_modifiers == other.suffix_modifiers
+            && self.prefix_modifiers == other.prefix_modifiers
+            && self.is_virtual == other.is_virtual
+            && self.is_constexpr == other.is_constexpr
+            && self.is_const == other.is_const
+            && self.is_no_except == other.is_no_except
+            && self.is_operator == other.is_operator
+            && self.is_inline == other.is_inline
+            && self.brief == other.brief
+            // can't gurantee body is equal
+            && self.body.is_some() == other.body.is_some()
+    }
+}
+
+impl PartialOrd for CppMethodDecl {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        match self.cpp_name.partial_cmp(&other.cpp_name) {
+            Some(core::cmp::Ordering::Equal) => {}
+            ord => return ord,
+        }
+        match self.return_type.partial_cmp(&other.return_type) {
+            Some(core::cmp::Ordering::Equal) => {}
+            ord => return ord,
+        }
+        match self.parameters.partial_cmp(&other.parameters) {
+            Some(core::cmp::Ordering::Equal) => {}
+            ord => return ord,
+        }
+        match self.instance.partial_cmp(&other.instance) {
+            Some(core::cmp::Ordering::Equal) => {}
+            ord => return ord,
+        }
+        self.template.partial_cmp(&other.template)
+    }
+}
+
 impl From<CppMethodDecl> for CppMethodImpl {
     fn from(value: CppMethodDecl) -> Self {
         Self {
@@ -323,6 +366,65 @@ pub struct CppMethodImpl {
     pub body: Vec<Arc<dyn Writable>>,
 }
 
+impl PartialEq for CppMethodImpl {
+    fn eq(&self, other: &Self) -> bool {
+        self.cpp_method_name == other.cpp_method_name
+            && self.declaring_cpp_full_name == other.declaring_cpp_full_name
+            && self.return_type == other.return_type
+            && self.parameters == other.parameters
+            && self.instance == other.instance
+            && self.declaring_type_template == other.declaring_type_template
+            && self.template == other.template
+            && self.is_const == other.is_const
+            && self.is_virtual == other.is_virtual
+            && self.is_constexpr == other.is_constexpr
+            && self.is_no_except == other.is_no_except
+            && self.is_operator == other.is_operator
+            && self.is_inline == other.is_inline
+            && self.suffix_modifiers == other.suffix_modifiers
+            && self.prefix_modifiers == other.prefix_modifiers
+            && self.brief == other.brief
+        // can't guarantee body is the same
+        // && self.body == other.body
+    }
+}
+
+impl PartialOrd for CppMethodImpl {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        match self.cpp_method_name.partial_cmp(&other.cpp_method_name) {
+            Some(core::cmp::Ordering::Equal) => {}
+            ord => return ord,
+        }
+        match self
+            .declaring_cpp_full_name
+            .partial_cmp(&other.declaring_cpp_full_name)
+        {
+            Some(core::cmp::Ordering::Equal) => {}
+            ord => return ord,
+        }
+        match self.return_type.partial_cmp(&other.return_type) {
+            Some(core::cmp::Ordering::Equal) => {}
+            ord => return ord,
+        }
+        match self.parameters.partial_cmp(&other.parameters) {
+            Some(core::cmp::Ordering::Equal) => {}
+            ord => return ord,
+        }
+        match self.instance.partial_cmp(&other.instance) {
+            Some(core::cmp::Ordering::Equal) => {}
+            ord => return ord,
+        }
+        match self
+            .declaring_type_template
+            .partial_cmp(&other.declaring_type_template)
+        {
+            Some(core::cmp::Ordering::Equal) => {}
+            ord => return ord,
+        }
+        self.template.partial_cmp(&other.template)
+    }
+}
+
 // TODO: Generics
 #[derive(Clone, Debug)]
 pub struct CppConstructorDecl {
@@ -344,6 +446,40 @@ pub struct CppConstructorDecl {
     pub brief: Option<String>,
     pub body: Option<Vec<Arc<dyn Writable>>>,
 }
+
+impl PartialEq for CppConstructorDecl {
+    fn eq(&self, other: &Self) -> bool {
+        self.cpp_name == other.cpp_name
+            && self.parameters == other.parameters
+            && self.template == other.template
+            && self.is_constexpr == other.is_constexpr
+            && self.is_explicit == other.is_explicit
+            && self.is_default == other.is_default
+            && self.is_no_except == other.is_no_except
+            && self.is_delete == other.is_delete
+            && self.is_protected == other.is_protected
+            && self.base_ctor == other.base_ctor
+            && self.initialized_values == other.initialized_values
+            && self.brief == other.brief
+            // can't guarantee equality
+            && self.body.is_some() == other.body.is_some()
+    }
+}
+
+impl PartialOrd for CppConstructorDecl {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        match self.cpp_name.partial_cmp(&other.cpp_name) {
+            Some(core::cmp::Ordering::Equal) => {}
+            ord => return ord,
+        }
+        match self.parameters.partial_cmp(&other.parameters) {
+            Some(core::cmp::Ordering::Equal) => {}
+            ord => return ord,
+        }
+        self.template.partial_cmp(&other.template)
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct CppConstructorImpl {
     pub declaring_full_name: String,
@@ -362,7 +498,44 @@ pub struct CppConstructorImpl {
     pub body: Vec<Arc<dyn Writable>>,
 }
 
-#[derive(Clone, Debug)]
+impl PartialEq for CppConstructorImpl {
+    fn eq(&self, other: &Self) -> bool {
+        self.declaring_full_name == other.declaring_full_name
+            && self.declaring_name == other.declaring_name
+            && self.parameters == other.parameters
+            && self.base_ctor == other.base_ctor
+            && self.initialized_values == other.initialized_values
+            && self.is_constexpr == other.is_constexpr
+            && self.is_no_except == other.is_no_except
+            && self.is_default == other.is_default
+            && self.template == other.template
+        // can't guarantee equality
+        // && self.body == other.body
+    }
+}
+
+impl PartialOrd for CppConstructorImpl {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        match self
+            .declaring_full_name
+            .partial_cmp(&other.declaring_full_name)
+        {
+            Some(core::cmp::Ordering::Equal) => {}
+            ord => return ord,
+        }
+        match self.declaring_name.partial_cmp(&other.declaring_name) {
+            Some(core::cmp::Ordering::Equal) => {}
+            ord => return ord,
+        }
+        match self.parameters.partial_cmp(&other.parameters) {
+            Some(core::cmp::Ordering::Equal) => {}
+            ord => return ord,
+        }
+        self.template.partial_cmp(&other.template)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, PartialOrd)]
 pub struct CppNestedStruct {
     pub declaring_name: String,
     pub base_type: Option<String>,
@@ -374,7 +547,7 @@ pub struct CppNestedStruct {
     pub packing: Option<u8>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, PartialOrd)]
 pub struct CppNestedUnion {
     pub declarations: Vec<Rc<CppMember>>,
     pub brief_comment: Option<String>,
