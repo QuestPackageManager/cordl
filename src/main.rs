@@ -26,7 +26,7 @@ use crate::{
         context_collection::CppContextCollection, cpp_type_tag::CppTypeTag,
         cs_context_collection::CsContextCollection, members::CppMember,
     },
-    handlers::{field_offset_omit::remove_field_coments, object, unity, value_type},
+    handlers::{comment_omit::remove_coments, object, unity, value_type},
 };
 mod data;
 mod generate;
@@ -360,7 +360,7 @@ fn main() -> color_eyre::Result<()> {
     }
 
     if cli.remove_verbose_comments {
-        remove_field_coments(&mut cpp_context_collection)?;
+        remove_coments(&mut cpp_context_collection)?;
     }
 
     const write_all: bool = true;
@@ -727,7 +727,9 @@ fn format_files() -> Result<()> {
             let mut command = Command::new("clang-format");
             command.arg("-i").arg(path);
 
-            let spawn = command.output().suggestion("You may be missing clang-format. Ensure it is on PATH")?;
+            let spawn = command
+                .output()
+                .suggestion("You may be missing clang-format. Ensure it is on PATH")?;
 
             if !spawn.stderr.is_empty() {
                 error!(

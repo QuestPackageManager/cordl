@@ -1,22 +1,14 @@
-use brocolib::{global_metadata::TypeDefinitionIndex, runtime_metadata::Il2CppType};
 use color_eyre::Result;
 use log::info;
-use std::{path::PathBuf, rc::Rc};
+use std::rc::Rc;
 
-use crate::{
-    data::name_components::NameComponents,
-    generate::{
-        context_collection::{self, CppContextCollection},
-        cpp_type::{self, CppType},
-        cs_context_collection::CsContextCollection,
-        members::{CppInclude, CppMember},
-        metadata::{Il2cppFullName, Metadata, TypeUsage},
-        type_extensions::TypeDefinitionExtensions,
-    },
+use crate::generate::{
+    context_collection::CppContextCollection, cs_context_collection::CsContextCollection,
+    members::CppMember,
 };
 
-pub fn remove_field_coments(context_collection: &mut CppContextCollection) -> Result<()> {
-    info!("Removing field comments");
+pub fn remove_coments(context_collection: &mut CppContextCollection) -> Result<()> {
+    info!("Removing comments");
 
     context_collection
         .get_mut_cpp_context_collection()
@@ -31,6 +23,12 @@ pub fn remove_field_coments(context_collection: &mut CppContextCollection) -> Re
                     match Rc::make_mut(d) {
                         CppMember::FieldDecl(cpp_field_decl) => {
                             cpp_field_decl.brief_comment = None;
+                        }
+                        CppMember::MethodDecl(cpp_method_decl) => {
+                            cpp_method_decl.brief = None;
+                        }
+                        CppMember::ConstructorDecl(cpp_constructor_decl) => {
+                            cpp_constructor_decl.brief = None;
                         }
                         _ => {
                             return Ok(());
