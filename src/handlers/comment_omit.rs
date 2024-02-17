@@ -24,6 +24,9 @@ pub fn remove_coments(context_collection: &mut CppContextCollection) -> Result<(
                         CppMember::FieldDecl(cpp_field_decl) => {
                             cpp_field_decl.brief_comment = None;
                         }
+                        CppMember::Property(cpp_property_decl) => {
+                            cpp_property_decl.brief_comment = None;
+                        }
                         CppMember::MethodDecl(cpp_method_decl) => {
                             cpp_method_decl.brief = None;
                         }
