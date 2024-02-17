@@ -390,6 +390,7 @@ impl CppType {
             // Write all declarations within the type here
             self.declarations
                 .iter()
+                .sorted_by(|a, b| a.as_ref().partial_cmp(b.as_ref()).unwrap())
                 .sorted_by(|a, b| {
                     // fields and unions need to be sorted by offset to work correctly
 
