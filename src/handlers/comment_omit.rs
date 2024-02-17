@@ -1,10 +1,11 @@
 use color_eyre::Result;
 use log::info;
-use std::rc::Rc;
+use std::{os::linux::raw::stat, rc::Rc};
 
 use crate::generate::{
-    context_collection::CppContextCollection, cs_context_collection::CsContextCollection,
-    members::CppMember,
+    context_collection::CppContextCollection,
+    cs_context_collection::CsContextCollection,
+    members::{CppMember, CppNonMember},
 };
 
 pub fn remove_coments(context_collection: &mut CppContextCollection) -> Result<()> {
@@ -32,6 +33,21 @@ pub fn remove_coments(context_collection: &mut CppContextCollection) -> Result<(
                         }
                         CppMember::ConstructorDecl(cpp_constructor_decl) => {
                             cpp_constructor_decl.brief = None;
+                        }
+                        _ => {
+                            return Ok(());
+                        }
+                    };
+                    Ok(())
+                })?;
+
+            cpp_type
+                .nonmember_declarations
+                .iter_mut()
+                .try_for_each(|d| -> Result<()> {
+                    match Rc::make_mut(d) {
+                        CppNonMember::CppStaticAssert(static_asert) => {
+                            static_asert.condition = "".to_string();
                         }
                         _ => {
                             return Ok(());
