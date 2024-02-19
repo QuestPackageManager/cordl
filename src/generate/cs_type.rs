@@ -1,6 +1,7 @@
 use core::panic;
 use log::{debug, info, warn};
 use std::{
+    clone,
     collections::HashMap,
     io::{Cursor, Read},
     rc::Rc,
@@ -1469,7 +1470,7 @@ pub trait CSType: Sized {
             .map(|s| -> CppMember { CppMember::CppLine(s.into()) });
 
         let nested_struct = CppNestedStruct {
-            base_type: Some(enum_base),
+            base_type: Some(enum_base.clone()),
             declaring_name: unwrapped_name.clone(),
             is_class: false,
             is_enum: true,
@@ -1483,7 +1484,7 @@ pub trait CSType: Sized {
             .push(CppMember::NestedStruct(nested_struct).into());
 
         let operator_body = format!("return static_cast<{unwrapped_name}>(this->value__);");
-        let operator_decl = CppMethodDecl {
+        let unwrapped_operator_decl = CppMethodDecl {
             cpp_name: Default::default(),
             instance: true,
             return_type: unwrapped_name,
@@ -1501,10 +1502,19 @@ pub trait CSType: Sized {
             template: None,
             is_inline: true,
         };
+        // convert to proper backing type
+        let backing_operator_decl = CppMethodDecl {
+            brief: Some("Conversion into unwrapped enum value".to_string()),
+            return_type: enum_base,
+            ..unwrapped_operator_decl.clone()
+        };
 
         cpp_type
             .declarations
-            .push(CppMember::MethodDecl(operator_decl).into());
+            .push(CppMember::MethodDecl(unwrapped_operator_decl).into());
+        cpp_type
+            .declarations
+            .push(CppMember::MethodDecl(backing_operator_decl).into());
     }
 
     fn create_valuetype_field_wrapper(&mut self) {
