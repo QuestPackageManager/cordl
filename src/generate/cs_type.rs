@@ -1490,12 +1490,12 @@ pub trait CSType: Sized {
             return_type: unwrapped_name,
 
             brief: Some("Conversion into unwrapped enum value".to_string()),
-            body: Some(vec![Arc::new(CppLine::make(operator_body))]), // TODO:
+            body: Some(vec![Arc::new(CppLine::make(operator_body))]),
             is_const: true,
             is_constexpr: true,
             is_virtual: false,
             is_operator: true,
-            is_no_except: true, // TODO:
+            is_no_except: true,
             parameters: vec![],
             prefix_modifiers: vec![],
             suffix_modifiers: vec![],
@@ -1503,9 +1503,11 @@ pub trait CSType: Sized {
             is_inline: true,
         };
         // convert to proper backing type
+        let backing_operator_body = format!("return static_cast<{enum_base}>(this->value__);");
         let backing_operator_decl = CppMethodDecl {
             brief: Some("Conversion into unwrapped enum value".to_string()),
             return_type: enum_base,
+            body: Some(vec![Arc::new(CppLine::make(backing_operator_body))]),
             ..unwrapped_operator_decl.clone()
         };
 
