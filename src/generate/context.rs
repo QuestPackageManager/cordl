@@ -472,10 +472,10 @@ impl CppContext {
                 .write(&mut fundamental_writer)?;
 
             // if guard for intellisense
-            writeln!(typeimpl_writer, "#ifndef {CORDL_NO_INCLUDE_IMPL_DEFINE}")?;
+            writeln!(fundamental_writer, "#ifndef {CORDL_NO_INCLUDE_IMPL_DEFINE}")?;
             CppInclude::new_exact(diff_paths(&self.type_impl_path, base_path).unwrap())
                 .write(&mut fundamental_writer)?;
-            writeln!(typeimpl_writer, "#endif")?;
+            writeln!(fundamental_writer, "#endif")?;
         }
 
         // TODO: Write type impl and fundamental files here
