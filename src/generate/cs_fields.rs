@@ -126,7 +126,8 @@ pub fn handle_static_fields(
             is_constexpr: !f_type.is_static() || f_type.is_constant(),
             is_inline: true,
             is_virtual: false,
-            is_operator: false,
+            is_implicit_operator: false,
+            is_explicit_operator: false,
             is_no_except: false, // TODO:
             parameters: vec![],
             prefix_modifiers: vec![],
@@ -145,7 +146,8 @@ pub fn handle_static_fields(
             is_constexpr: !f_type.is_static() || f_type.is_constant(),
             is_inline: true,
             is_virtual: false,
-            is_operator: false,
+            is_implicit_operator: false,
+            is_explicit_operator: false,
             is_no_except: false, // TODO:
             parameters: vec![CppParam {
                 def_value: None,
@@ -591,7 +593,9 @@ pub(crate) fn prop_methods_from_fieldinfo(
         is_constexpr: !f_type.is_static() || f_type.is_constant(),
         is_inline: true,
         is_virtual: false,
-        is_operator: false,
+        is_implicit_operator: false,
+        is_explicit_operator: false,
+
         is_no_except: false, // TODO:
         parameters: vec![],
         prefix_modifiers: vec![],
@@ -611,7 +615,9 @@ pub(crate) fn prop_methods_from_fieldinfo(
         is_constexpr: !f_type.is_static() || f_type.is_constant(),
         is_inline: true,
         is_virtual: false,
-        is_operator: false,
+        is_implicit_operator: false,
+        is_explicit_operator: false,
+
         is_no_except: false, // TODO:
         parameters: vec![],
         prefix_modifiers: vec![],
@@ -630,7 +636,9 @@ pub(crate) fn prop_methods_from_fieldinfo(
         is_constexpr: !f_type.is_static() || f_type.is_constant(),
         is_inline: true,
         is_virtual: false,
-        is_operator: false,
+        is_implicit_operator: false,
+        is_explicit_operator: false,
+
         is_no_except: false, // TODO:
         parameters: vec![CppParam {
             def_value: None,

@@ -148,7 +148,9 @@ fn reference_type_convert(cpp_type: &mut CppType, il2cpp_t: &str) {
         is_const: false,
         is_constexpr: true,
         is_virtual: false,
-        is_operator: true,
+        is_implicit_operator: true,
+        is_explicit_operator: false,
+
         is_inline: true,
         is_no_except: true,
         parameters: vec![],
@@ -168,7 +170,9 @@ fn reference_type_convert(cpp_type: &mut CppType, il2cpp_t: &str) {
         is_const: true,
         is_constexpr: true,
         is_virtual: false,
-        is_operator: true,
+        is_implicit_operator: true,
+        is_explicit_operator: false,
+
         is_inline: true,
         is_no_except: true,
         parameters: vec![],
@@ -229,7 +233,9 @@ fn value_type_convert(cpp_type: &mut CppType, il2cpp_t: &str) {
         is_const: false,
         is_constexpr: true,
         is_virtual: false,
-        is_operator: true,
+        is_implicit_operator: true,
+        is_explicit_operator: false,
+
         is_inline: true,
         is_no_except: true,
         parameters: vec![],
@@ -249,7 +255,9 @@ fn value_type_convert(cpp_type: &mut CppType, il2cpp_t: &str) {
         is_const: true,
         is_constexpr: true,
         is_virtual: false,
-        is_operator: true,
+        is_implicit_operator: true,
+        is_explicit_operator: false,
+        
         is_inline: true,
         is_no_except: true,
         parameters: vec![],

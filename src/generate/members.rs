@@ -255,7 +255,8 @@ pub struct CppMethodDecl {
     pub is_constexpr: bool,
     pub is_const: bool,
     pub is_no_except: bool,
-    pub is_operator: bool,
+    pub is_implicit_operator: bool,
+    pub is_explicit_operator: bool,
     pub is_inline: bool,
 
     pub brief: Option<String>,
@@ -275,7 +276,7 @@ impl PartialEq for CppMethodDecl {
             && self.is_constexpr == other.is_constexpr
             && self.is_const == other.is_const
             && self.is_no_except == other.is_no_except
-            && self.is_operator == other.is_operator
+            && self.is_implicit_operator == other.is_implicit_operator
             && self.is_inline == other.is_inline
             && self.brief == other.brief
             // can't gurantee body is equal
@@ -315,7 +316,7 @@ impl From<CppMethodDecl> for CppMethodImpl {
             instance: value.instance,
             is_const: value.is_const,
             is_no_except: value.is_no_except,
-            is_operator: value.is_operator,
+            is_operator: value.is_implicit_operator,
             is_virtual: value.is_virtual,
             is_constexpr: value.is_constexpr,
             is_inline: value.is_inline,

@@ -250,7 +250,9 @@ impl Writable for CppMethodDecl {
         if self.is_virtual {
             prefix_modifiers.push("virtual");
         }
-        if self.is_operator {
+        if self.is_explicit_operator {
+            prefix_modifiers.push("explicit operator")
+        } else if self.is_implicit_operator {
             prefix_modifiers.push("operator")
         }
 

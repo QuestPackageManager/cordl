@@ -1001,7 +1001,9 @@ pub trait CSType: Sized {
                 is_const: false,
                 is_constexpr: true,
                 is_no_except: !t.is_value_type() && !t.is_enum_type(),
-                is_operator: true,
+                is_implicit_operator: true,
+                is_explicit_operator: false,
+
                 is_virtual: false,
                 is_inline: true,
                 parameters: vec![],
@@ -1011,7 +1013,7 @@ pub trait CSType: Sized {
             };
             let helper_method_decl = CppMethodDecl {
                 brief: Some(format!("Convert to {interface_cpp_name:?}")),
-                is_operator: false,
+                is_implicit_operator: false,
                 return_type: interface_cpp_pointer.clone(),
                 cpp_name: format!("i_{}", config.sanitize_to_cpp_name(&interface_cpp_name)),
                 ..operator_method_decl.clone()
@@ -1494,7 +1496,8 @@ pub trait CSType: Sized {
             is_const: true,
             is_constexpr: true,
             is_virtual: false,
-            is_operator: true,
+            is_explicit_operator: false,
+            is_implicit_operator: true,
             is_no_except: true,
             parameters: vec![],
             prefix_modifiers: vec![],
@@ -1508,6 +1511,7 @@ pub trait CSType: Sized {
             brief: Some("Conversion into unwrapped enum value".to_string()),
             return_type: enum_base,
             body: Some(vec![Arc::new(CppLine::make(backing_operator_body))]),
+            is_explicit_operator: true,
             ..unwrapped_operator_decl.clone()
         };
 
@@ -1769,7 +1773,9 @@ pub trait CSType: Sized {
             is_constexpr: true,
             is_const: false,
             is_no_except: true,
-            is_operator: false,
+            is_implicit_operator: false,
+            is_explicit_operator: false,
+
             is_inline: false,
             brief: None,
             body: Some(vec![
@@ -1797,7 +1803,9 @@ pub trait CSType: Sized {
             is_constexpr: true,
             is_const: false,
             is_no_except: true,
-            is_operator: false,
+            is_implicit_operator: false,
+            is_explicit_operator: false,
+
             is_inline: false,
             brief: None,
             body: Some(vec![
@@ -2164,7 +2172,9 @@ pub trait CSType: Sized {
             is_constexpr: false,
             instance: false,
             is_const: false,
-            is_operator: false,
+            is_implicit_operator: false,
+            is_explicit_operator: false,
+
             is_virtual: false,
             is_inline: true,
             prefix_modifiers: vec![],
@@ -2396,7 +2406,9 @@ pub trait CSType: Sized {
             suffix_modifiers: Default::default(),
             prefix_modifiers: Default::default(),
             is_virtual: false,
-            is_operator: false,
+            is_implicit_operator: false,
+            is_explicit_operator: false,
+
             is_inline: true,
         };
 
