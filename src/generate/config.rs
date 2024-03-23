@@ -83,7 +83,7 @@ impl GenerationConfig {
             }
 
             // Coincidentally the same as path_name
-            _ => string.replace(['<', '`', '>', '/', '.', '|', ',', '(', ')', '[', ']'], "_"),
+            _ => string.replace(['<', '`', '>', '/', '.', '|', ',', '(', ')', '[', ']', '-'], "_"),
         }
     }
     /// for converting C++ names into just a single C++ word
