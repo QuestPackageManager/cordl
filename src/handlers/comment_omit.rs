@@ -1,6 +1,6 @@
 use color_eyre::Result;
 use log::info;
-use std::{os::linux::raw::stat, rc::Rc};
+use std::rc::Rc;
 
 use crate::generate::{
     context_collection::CppContextCollection,
