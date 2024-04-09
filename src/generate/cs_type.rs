@@ -3405,13 +3405,19 @@ pub trait CSType: Sized {
                         //     }
                         //     _ => inst_t,
                         // })
-                        .map(|t| {
+                        .map(|gen_arg_t| {
+                            let should_include = gen_arg_t.valuetype;
+                            let gen_include_detch = match should_include {
+                                true => next_include_depth,
+                                false => 0,
+                            };
+
                             cpp_type.cppify_name_il2cpp_recurse(
                                 requirements,
                                 ctx_collection,
                                 metadata,
-                                t,
-                                next_include_depth,
+                                gen_arg_t,
+                                gen_include_detch,
                                 // use declaring generic inst since we're cppifying generic args
                                 declaring_generic_inst_types,
                                 TypeUsage::GenericArg,
