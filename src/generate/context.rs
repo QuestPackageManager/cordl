@@ -209,6 +209,19 @@ impl CppContext {
         writeln!(typeimpl_writer, "#pragma once")?;
         writeln!(fundamental_writer, "#pragma once")?;
 
+        // add IWYU
+        let typedef_include_path = diff_paths(&self.typedef_path, base_path).unwrap();
+        let typeimpl_include_path = diff_paths(&self.type_impl_path, base_path).unwrap();
+        let fundamental_include_path = diff_paths(&self.fundamental_path, base_path).unwrap();
+
+        let fundamental_include_pragma = format!(
+            "// IWYU pragma private; include \"{}\"",
+            fundamental_include_path.display()
+        );
+        writeln!(typedef_writer, "{fundamental_include_pragma}")?;
+        writeln!(typeimpl_writer, "{fundamental_include_pragma}")?;
+        writeln!(fundamental_writer, "// IWYU pragma: begin_export")?;
+
         // Include cordl config
         // this is so confusing but basically gets the relative folder
         // navigation for `_config.hpp`
@@ -362,8 +375,7 @@ impl CppContext {
         // write forward declares
         // and includes for impl
         {
-            CppInclude::new_exact(diff_paths(&self.typedef_path, base_path).unwrap())
-                .write(&mut typeimpl_writer)?;
+            CppInclude::new_exact(&typedef_include_path).write(&mut typeimpl_writer)?;
 
             let forward_declare_and_includes = || {
                 typedef_types
@@ -468,8 +480,10 @@ impl CppContext {
 
         // Fundamental
         {
-            CppInclude::new_exact(diff_paths(&self.typedef_path, base_path).unwrap())
-                .write(&mut fundamental_writer)?;
+            // end IWYU
+            writeln!(fundamental_writer, "// IWYU pragma: end_export")?;
+
+            CppInclude::new_exact(typedef_include_path).write(&mut fundamental_writer)?;
 
             // if guard for intellisense
             writeln!(fundamental_writer, "#ifndef {CORDL_NO_INCLUDE_IMPL_DEFINE}")?;
