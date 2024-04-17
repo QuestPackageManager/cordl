@@ -480,9 +480,6 @@ impl CppContext {
 
         // Fundamental
         {
-            // end IWYU
-            writeln!(fundamental_writer, "// IWYU pragma: end_exports")?;
-
             CppInclude::new_exact(typedef_include_path).write(&mut fundamental_writer)?;
 
             // if guard for intellisense
@@ -490,6 +487,9 @@ impl CppContext {
             CppInclude::new_exact(diff_paths(&self.type_impl_path, base_path).unwrap())
                 .write(&mut fundamental_writer)?;
             writeln!(fundamental_writer, "#endif")?;
+
+            // end IWYU
+            writeln!(fundamental_writer, "// IWYU pragma: end_exports")?;
         }
 
         // TODO: Write type impl and fundamental files here
