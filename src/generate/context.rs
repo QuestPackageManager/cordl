@@ -220,7 +220,7 @@ impl CppContext {
         );
         writeln!(typedef_writer, "{fundamental_include_pragma}")?;
         writeln!(typeimpl_writer, "{fundamental_include_pragma}")?;
-        writeln!(fundamental_writer, "// IWYU pragma: begin_export")?;
+        writeln!(fundamental_writer, "// IWYU pragma: begin_exports")?;
 
         // Include cordl config
         // this is so confusing but basically gets the relative folder
@@ -481,7 +481,7 @@ impl CppContext {
         // Fundamental
         {
             // end IWYU
-            writeln!(fundamental_writer, "// IWYU pragma: end_export")?;
+            writeln!(fundamental_writer, "// IWYU pragma: end_exports")?;
 
             CppInclude::new_exact(typedef_include_path).write(&mut fundamental_writer)?;
 
