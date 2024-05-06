@@ -3080,7 +3080,10 @@ pub trait CSType: Sized {
             Il2CppTypeEnum::Object
             | Il2CppTypeEnum::Valuetype
             | Il2CppTypeEnum::Class
-            | Il2CppTypeEnum::Typedbyref => {
+            | Il2CppTypeEnum::Typedbyref 
+            // ptr types
+            | Il2CppTypeEnum::I 
+            | Il2CppTypeEnum::U => {
                 let typ_cpp_tag: CppTypeTag = typ_tag.into();
 
                 // handle resolving indirection
@@ -3450,12 +3453,10 @@ pub trait CSType: Sized {
             Il2CppTypeEnum::I2 => "int16_t".to_string().into(),
             Il2CppTypeEnum::I4 => "int32_t".to_string().into(),
             Il2CppTypeEnum::I8 => "int64_t".to_string().into(),
-            Il2CppTypeEnum::I => "void*".to_string().into(),
             Il2CppTypeEnum::U1 => "uint8_t".to_string().into(),
             Il2CppTypeEnum::U2 => "uint16_t".to_string().into(),
             Il2CppTypeEnum::U4 => "uint32_t".to_string().into(),
             Il2CppTypeEnum::U8 => "uint64_t".to_string().into(),
-            Il2CppTypeEnum::U => "void*".to_string().into(),
 
             // https://learn.microsoft.com/en-us/nimbusml/concepts/types
             // https://en.cppreference.com/w/cpp/types/floating-point
