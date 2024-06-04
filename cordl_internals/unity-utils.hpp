@@ -92,7 +92,7 @@ template <typename T> struct UnityW {
   }
 
   [[nodiscard]] static constexpr inline void *cached_ptr(T const *ptr) {
-    return ptr->m_CachedPtr;
+    return ptr->m_CachedPtr.m_value.convert();
   }
 
 
@@ -111,7 +111,7 @@ struct BS_HOOKS_HIDDEN ::il2cpp_utils::il2cpp_type_check::need_box<UnityW<T>> {
 
 template <class T>
 struct ::il2cpp_utils::il2cpp_type_check::il2cpp_no_arg_type<UnityW<T>> {
-  static inline const Il2CppType* get() {
+  static inline Il2CppType const* get() {
     // don't double cache here, just inline
     return ::il2cpp_utils::il2cpp_type_check::il2cpp_no_arg_type<T *>::get();
   }
