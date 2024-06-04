@@ -17,9 +17,29 @@
       },
       "args": [
         "--metadata",
-        "./global-metadata.dat",
+        "./stuff/bs1.34.2/global-metadata.dat",
         "--libil2cpp",
-        "./libil2cpp.so"
+        "./stuff/bs1.34.2/libil2cpp.so"
+      ],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug executable 'cordl' format",
+      "cargo": {
+        "args": ["build", "--bin=cordl", "--package=cordl"],
+        "filter": {
+          "name": "cordl",
+          "kind": "bin"
+        }
+      },
+      "args": [
+        "--metadata",
+        "./bs1.34.2/global-metadata.dat",
+        "--libil2cpp",
+        "./bs1.34.2/libil2cpp.so",
+        "--format"
       ],
       "cwd": "${workspaceFolder}"
     },

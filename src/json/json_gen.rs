@@ -177,6 +177,9 @@ fn make_type(td: &Il2CppTypeDefinition, tdi: TypeDefinitionIndex, metadata: &Met
 }
 
 pub fn make_json(metadata: &Metadata, _config: &GenerationConfig, file: PathBuf) -> Result<()> {
+    // we could use a map here but sorting 
+    // wouldn't be guaranteed
+    // we want sorting so diffs are more readable
     let json_objects = metadata
         .global_metadata
         .type_definitions
