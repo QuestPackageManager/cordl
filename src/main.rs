@@ -13,6 +13,7 @@ use itertools::Itertools;
 extern crate pretty_env_logger;
 use filesize::PathExt;
 use include_dir::{include_dir, Dir};
+use json::json_gen::make_json;
 use log::{error, info, trace, warn};
 use rayon::prelude::*;
 use walkdir::DirEntry;
@@ -32,6 +33,7 @@ mod data;
 mod generate;
 mod handlers;
 mod helpers;
+mod json;
 
 #[derive(Parser)]
 #[clap(author, version, about, long_about = None)]
@@ -43,6 +45,11 @@ struct Cli {
     /// The libil2cpp.so file to use
     #[clap(short, long, value_parser, value_name = "FILE")]
     libil2cpp: PathBuf,
+
+        /// The path to generated json file
+    #[clap(short, long, value_parser, value_name = "FILE")]
+    json: Option<PathBuf>,
+
     /// Whether to format with clang-format
     #[clap(short, long)]
     format: bool,
@@ -126,6 +133,13 @@ fn main() -> color_eyre::Result<()> {
     info!("Parsing metadata methods");
     metadata.parse();
     info!("Finished in {}ms", t.elapsed().as_millis());
+
+    if let Some(json) = cli.json {
+        println!("Writing json file {json:?}");
+        make_json(metadata.metadata, &STATIC_CONFIG, json)?;
+        return Ok(())
+    }
+
     let mut cpp_context_collection = CppContextCollection::new();
 
     // blacklist types
