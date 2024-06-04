@@ -177,7 +177,7 @@ fn make_type(td: &Il2CppTypeDefinition, tdi: TypeDefinitionIndex, metadata: &Met
 }
 
 pub fn make_json(metadata: &Metadata, _config: &GenerationConfig, file: PathBuf) -> Result<()> {
-    // we could use a map here but sorting 
+    // we could use a map here but sorting
     // wouldn't be guaranteed
     // we want sorting so diffs are more readable
     let json_objects = metadata
@@ -187,7 +187,14 @@ pub fn make_json(metadata: &Metadata, _config: &GenerationConfig, file: PathBuf)
         .iter()
         .enumerate()
         .map(|(i, t)| (TypeDefinitionIndex::new(i as u32), t))
-        .filter(|(_, t)| !t.name(metadata).contains("<>c__"))
+        // skip compiler generated types
+        .filter(|(_, t)| !t.name(metadata).contains("<>c__") && !t.name(metadata).contains(">d__"))
+        // skip other internal types
+        .filter(|(_, t)| {
+            t.parent_index != u32::MAX
+                || t.is_interface()
+                || t.full_name(metadata, true) == "System.Object"
+        })
         .map(|(tdi, td)| make_type(td, tdi, metadata))
         .sorted_by(|a, b| a.name.cmp(&b.name))
         .collect_vec();
