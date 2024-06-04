@@ -158,6 +158,7 @@ fn make_type(td: &Il2CppTypeDefinition, tdi: TypeDefinitionIndex, metadata: &Met
         .properties(metadata)
         .iter()
         .map(|f| make_property(f, td, tdi, metadata))
+        .sorted_by(|a, b| a.name.cmp(&b.name))
         .collect_vec();
     let methods = td
         .methods(metadata)
