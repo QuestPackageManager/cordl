@@ -189,6 +189,7 @@ pub fn make_json(metadata: &Metadata, _config: &GenerationConfig, file: PathBuf)
         .map(|(i, t)| (TypeDefinitionIndex::new(i as u32), t))
         // skip compiler generated types
         .filter(|(_, t)| !t.name(metadata).contains("<>c__") && !t.name(metadata).contains(">d__"))
+        .filter(|(_, t)| !t.name(metadata).contains("<PrivateImplementationDetails>"))
         // skip other internal types
         .filter(|(_, t)| {
             t.parent_index != u32::MAX
