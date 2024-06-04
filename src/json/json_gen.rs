@@ -192,7 +192,7 @@ pub fn make_json(metadata: &Metadata, _config: &GenerationConfig, file: PathBuf)
         .sorted_by(|a, b| a.name.cmp(&b.name))
         .collect_vec();
 
-    let file = File::open(file)?;
+    let file = File::create(file)?;
     let mut buf_writer = BufWriter::new(file);
 
     serde_json::to_writer_pretty(&mut buf_writer, &json_objects)?;
