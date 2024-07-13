@@ -18,6 +18,7 @@ pub const PARAM_ATTRIBUTE_OPTIONAL: u16 = 0x0010;
 pub const TYPE_ATTRIBUTE_INTERFACE: u32 = 0x00000020;
 pub const TYPE_ATTRIBUTE_NESTED_PUBLIC: u32 = 0x00000002;
 pub const TYPE_ATTRIBUTE_EXPLICIT_LAYOUT: u32 = 0x00000010;
+pub const TYPE_ATTRIBUTE_SPECIAL_NAME: u32 = 0x00000400;
 
 pub const FIELD_ATTRIBUTE_PUBLIC: u16 = 0x0006;
 pub const FIELD_ATTRIBUTE_PRIVATE: u16 = 0x0001;
@@ -170,6 +171,7 @@ impl TypeExtentions for Il2CppType {
 pub trait TypeDefinitionExtensions {
     fn is_value_type(&self) -> bool;
     fn is_enum_type(&self) -> bool;
+    fn is_compiler_generated(&self) -> bool;
     fn is_interface(&self) -> bool;
     fn is_explicit_layout(&self) -> bool;
     fn is_assignable_to(&self, other_td: &Il2CppTypeDefinition, metadata: &Metadata) -> bool;
@@ -197,6 +199,10 @@ impl TypeDefinitionExtensions for Il2CppTypeDefinition {
 
     fn is_enum_type(&self) -> bool {
         self.bitfield & 2 != 0
+    }
+
+    fn is_compiler_generated(&self) -> bool {
+        self.flags & TYPE_ATTRIBUTE_SPECIAL_NAME != 0
     }
 
     fn is_interface(&self) -> bool {

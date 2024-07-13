@@ -1,4 +1,8 @@
-use std::{fs::File, io::BufWriter, path::PathBuf};
+use std::{
+    fs::{self, File},
+    io::BufWriter,
+    path::PathBuf,
+};
 
 use brocolib::{
     global_metadata::{
@@ -9,6 +13,7 @@ use brocolib::{
 };
 use color_eyre::eyre::Result;
 use itertools::Itertools;
+use rayon::vec;
 use serde::{Deserialize, Serialize};
 
 use crate::generate::{
@@ -25,11 +30,14 @@ enum JsonFieldRef {
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 struct JsonType {
+    pub full_name: String,
     pub name: String,
+    pub namespace: String,
     pub value_type: bool,
     pub fields: Vec<JsonField>,
     pub properties: Vec<JsonProperty>,
     pub methods: Vec<JsonMethod>,
+    pub children: Vec<JsonType>,
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
@@ -167,13 +175,57 @@ fn make_type(td: &Il2CppTypeDefinition, tdi: TypeDefinitionIndex, metadata: &Met
         .sorted_by(|a, b| a.name.cmp(&b.name))
         .collect_vec();
 
+    let children = td
+        .nested_types(metadata)
+        .iter()
+        .map(|nested_tdi: &TypeDefinitionIndex| {
+            let nested_td = &metadata.global_metadata.type_definitions[*nested_tdi];
+
+            make_type(nested_td, tdi, metadata)
+        })
+        .sorted_by(|a, b| a.name.cmp(&b.name))
+        .collect_vec();
+
+    let namespace = td.namespace(metadata).to_string();
+    let name = td.name(metadata).to_string();
+
     JsonType {
-        name: td.full_name(metadata, true),
+        full_name: td.full_name(metadata, true),
+        namespace,
+        name,
         value_type: td.is_value_type(),
         fields,
         properties,
         methods,
+        children,
     }
+}
+
+///
+/// Essentially check if the type is compiler generated or
+/// not useful to emit
+///
+pub fn is_real_declaring_type(td: &Il2CppTypeDefinition, metadata: &Metadata) -> bool {
+    let condition1 = !td.name(metadata).contains("<>c__") && !td.name(metadata).contains(">d__");
+    let condition2 = !td
+        .full_name(metadata, true)
+        .contains("<PrivateImplementationDetails>");
+    let condition3 = td.parent_index != u32::MAX
+        || td.is_interface()
+        || td.full_name(metadata, true) == "System.Object";
+    let condition4 = !td.namespace(metadata).contains("$$struct");
+
+    // -1 if no declaring type, meaning root
+    let is_declaring_type = td.declaring_type_index == u32::MAX;
+
+    let is_compiler_generated = td.is_compiler_generated();
+
+    !is_compiler_generated
+        && is_declaring_type
+        && condition1
+        && condition2
+        && condition3
+        && condition4
 }
 
 pub fn make_json(metadata: &Metadata, _config: &GenerationConfig, file: PathBuf) -> Result<()> {
@@ -188,22 +240,60 @@ pub fn make_json(metadata: &Metadata, _config: &GenerationConfig, file: PathBuf)
         .enumerate()
         .map(|(i, t)| (TypeDefinitionIndex::new(i as u32), t))
         // skip compiler generated types
-        .filter(|(_, t)| !t.name(metadata).contains("<>c__") && !t.name(metadata).contains(">d__"))
-        .filter(|(_, t)| !t.namespace(metadata).contains("<PrivateImplementationDetails>"))
-        // skip other internal types
-        .filter(|(_, t)| {
-            t.parent_index != u32::MAX
-                || t.is_interface()
-                || t.full_name(metadata, true) == "System.Object"
-        })
+        .filter(|(_, t)| is_real_declaring_type(t, metadata))
         .map(|(tdi, td)| make_type(td, tdi, metadata))
-        .sorted_by(|a, b| a.name.cmp(&b.name))
+        .sorted_by(|a, b| a.full_name.cmp(&b.full_name))
         .collect_vec();
 
     let file = File::create(file)?;
     let mut buf_writer = BufWriter::new(file);
 
     serde_json::to_writer_pretty(&mut buf_writer, &json_objects)?;
+
+    Ok(())
+}
+
+pub fn make_json_folder(
+    metadata: &Metadata,
+    config: &GenerationConfig,
+    folder: PathBuf,
+) -> Result<()> {
+    // we could use a map here but sorting
+    // wouldn't be guaranteed
+    // we want sorting so diffs are more readable
+    metadata
+        .global_metadata
+        .type_definitions
+        .as_vec()
+        .iter()
+        .enumerate()
+        .map(|(i, t)| (TypeDefinitionIndex::new(i as u32), t))
+        // skip compiler generated types
+        .filter(|(_, t)| is_real_declaring_type(t, metadata))
+        .map(|(tdi, td)| make_type(td, tdi, metadata))
+        .sorted_by(|a, b| a.full_name.cmp(&b.full_name))
+        .try_for_each(|t| -> Result<()> {
+            let mut namespace_cpp = config.sanitize_to_cpp_name(&t.namespace);
+            let name_cpp = config.name_cpp(&t.name);
+
+            if namespace_cpp.is_empty() {
+                namespace_cpp = "GlobalNamespace".to_string();
+            }
+
+            let file: PathBuf = folder
+                .join(namespace_cpp)
+                .join(name_cpp)
+                .with_extension("json");
+
+            fs::create_dir_all(file.parent().unwrap())?;
+
+            let file = File::create(file)?;
+            let mut buf_writer = BufWriter::new(file);
+
+            serde_json::to_writer_pretty(&mut buf_writer, &t)?;
+
+            Ok(())
+        })?;
 
     Ok(())
 }

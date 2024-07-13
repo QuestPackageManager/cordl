@@ -13,7 +13,7 @@ use itertools::Itertools;
 extern crate pretty_env_logger;
 use filesize::PathExt;
 use include_dir::{include_dir, Dir};
-use json::json_gen::make_json;
+use json::json_gen::{make_json, make_json_folder};
 use log::{error, info, trace, warn};
 use rayon::prelude::*;
 use walkdir::DirEntry;
@@ -46,9 +46,13 @@ struct Cli {
     #[clap(short, long, value_parser, value_name = "FILE")]
     libil2cpp: PathBuf,
 
-        /// The path to generated json file
+    /// The path to generated json file
     #[clap(short, long, value_parser, value_name = "FILE")]
     json: Option<PathBuf>,
+
+    /// The path to the folder for the generated json files
+    #[clap(long, value_parser, value_name = "FILE")]
+    multi_json: Option<PathBuf>,
 
     /// Whether to format with clang-format
     #[clap(short, long)]
@@ -137,7 +141,12 @@ fn main() -> color_eyre::Result<()> {
     if let Some(json) = cli.json {
         println!("Writing json file {json:?}");
         make_json(metadata.metadata, &STATIC_CONFIG, json)?;
-        return Ok(())
+        return Ok(());
+    }
+    if let Some(json_folder) = cli.multi_json {
+        println!("Writing json file {json_folder:?}");
+        make_json_folder(metadata.metadata, &STATIC_CONFIG, json_folder)?;
+        return Ok(());
     }
 
     let mut cpp_context_collection = CppContextCollection::new();
