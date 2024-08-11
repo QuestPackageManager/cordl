@@ -1284,10 +1284,13 @@ pub trait CSType: Sized {
 
         // align the calculated size to the next multiple of natural_alignment, similiar to what happens when clang compiles our generated code
         // this comes down to adding our size, and removing any bits that make it more than the next multiple of alignment
+        #[cfg(feature = "il2cpp_v29")]
         let aligned_calculated_size = match size_info.natural_alignment as u32 {
             0 => size_info.calculated_instance_size,
             alignment => (size_info.calculated_instance_size + alignment) & !(alignment - 1),
         };
+        #[cfg(feature = "il2cpp_v31")]
+        let aligned_calculated_size = size_info.calculated_instance_size;
 
         // return if calculated layout size == metadata size
         if aligned_calculated_size == metadata_size_instance {

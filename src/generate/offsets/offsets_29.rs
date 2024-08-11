@@ -1,3 +1,8 @@
+use core::mem;
+
+use crate::generate::metadata::Metadata;
+use crate::generate::metadata::PointerSize;
+use crate::generate::type_extensions::TypeDefinitionExtensions;
 use crate::TypeDefinitionIndex;
 
 use brocolib::global_metadata::Il2CppTypeDefinition;
@@ -10,12 +15,7 @@ use log::debug;
 use log::warn;
 
 use crate::generate::type_extensions::TypeExtentions;
-use core::mem;
 
-use super::metadata::PointerSize;
-
-use super::metadata::Metadata;
-use super::type_extensions::TypeDefinitionExtensions;
 
 const IL2CPP_SIZEOF_STRUCT_WITH_NO_INSTANCE_FIELDS: u32 = 1;
 
