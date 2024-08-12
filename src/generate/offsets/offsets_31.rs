@@ -259,11 +259,13 @@ pub fn layout_fields(
     let has_references = declaring_ty_def
         .fields(metadata.metadata)
         .iter()
-        .any(|f| is_reference(&metadata.metadata_registration.types[f.type_index as usize]));
+        .map(|f| &metadata.metadata_registration.types[f.type_index as usize])
+        .filter(|f| !f.is_static())
+        .any(is_reference);
 
     // packing calculation based on RuntimeType::GetPacking
     let packing = if has_references {
-        None
+        Some(0)
     } else {
         get_type_def_packing(metadata, declaring_ty_def)
     };
