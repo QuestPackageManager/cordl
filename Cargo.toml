@@ -11,7 +11,8 @@ il2cpp_v31 = []
 il2cpp_v29 = []
 
 [dependencies]
-brocolib = { git = "https://github.com/Stackdoubleflow/brocolib.git", branch = "il2cpp_v31" }
+brocolib = { git = "https://github.com/Fernthedev/brocolib.git", branch = "il2cpp_v31_fix/codegen-modules" }
+# brocolib = { git = "https://github.com/Stackdoubleflow/brocolib.git", branch = "il2cpp_v31" }
 clap = { version = "4", features = ["derive"] }
 indent_write = { version = "*" }
 color-eyre = "0.6"
