@@ -265,7 +265,7 @@ pub fn layout_fields(
 
     // packing calculation based on RuntimeType::GetPacking
     let packing = if has_references {
-        Some(0)
+        None
     } else {
         get_type_def_packing(metadata, declaring_ty_def)
     };
@@ -410,12 +410,6 @@ fn layout_instance_fields(
         let mut alignment = sa.alignment;
         if packing.unwrap_or(0) > 0  {
             alignment = std::cmp::min(sa.alignment, packing.unwrap_or(0));
-        }
-
-        if let Some(packing) = packing
-            && packing != 0
-        {
-            alignment = std::cmp::min(sa.alignment, packing);
         }
 
         // explicit layout & we have a value in the offset table
