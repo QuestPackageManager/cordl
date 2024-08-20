@@ -188,6 +188,8 @@ fn get_packing(metadata: &Metadata<'_>, ty_def: &Il2CppTypeDefinition) -> Option
     if packing_is_default(ty_def.bitfield, metadata.packing_is_default_offset) {
         return None;
     }
+    // il2cpp::vm::GlobalMetadata::StructLayoutPackIsDefault uses packing_is_default_offset
+    // il2cpp::vm::GlobalMetadata::StructLayoutPack uses kSpecifiedPackingSize
     let packing = packing_value(ty_def.bitfield, metadata.specified_packing_field_offset);
 
     Some(packing)
@@ -260,7 +262,7 @@ pub fn layout_fields(
         .fields(metadata.metadata)
         .iter()
         .map(|f| &metadata.metadata_registration.types[f.type_index as usize])
-        .filter(|f| !f.is_static())
+        .filter(|f| !f.is_static() && !f.is_constant())
         .any(is_reference);
 
     // packing calculation based on RuntimeType::GetPacking
@@ -315,6 +317,8 @@ pub fn layout_fields(
             offsets.append(&mut local_offsets);
         }
 
+        instance_size = sa.size;
+
         if declaring_ty_def.is_value_type() && local_offsets.is_empty() {
             instance_size = (IL2CPP_SIZEOF_STRUCT_WITH_NO_INSTANCE_FIELDS
                 + metadata.object_size() as u32) as usize;
@@ -329,8 +333,6 @@ pub fn layout_fields(
             metadata,
         );
 
-        actual_size = sa.actual_size;
-        instance_size = sa.size;
         minimum_alignment = sa.alignment;
 
         if declaring_ty_def.generic_container_index.is_valid()
@@ -387,6 +389,10 @@ fn layout_instance_fields(
     let mut actual_size = actual_parent_size;
     let mut minimum_alignment = parent_alignment;
 
+    if declaring_ty_def.name(metadata.metadata) == "InputInteractionContext" {
+        println!("Test!");
+    }
+
     let is_explicit_layout = declaring_ty_def.is_explicit_layout();
 
     let mut offsets_opt = offsets;
@@ -408,13 +414,13 @@ fn layout_instance_fields(
 
         let sa = get_type_size_and_alignment(field_ty, generic_inst_types, metadata);
         let mut alignment = sa.alignment;
-        if packing.unwrap_or(0) > 0  {
+        if packing.unwrap_or(0) > 0 {
             alignment = std::cmp::min(sa.alignment, packing.unwrap_or(0));
         }
 
         // explicit layout & we have a value in the offset table
-        let mut offset = if 
-           is_explicit_layout && let Some(special_offset) = get_offset_of_type_table(metadata, declaring_tdi, i)
+        let mut offset = if is_explicit_layout
+            && let Some(special_offset) = get_offset_of_type_table(metadata, declaring_tdi, i)
         {
             special_offset
         } else {
@@ -423,8 +429,6 @@ fn layout_instance_fields(
 
         offset += (alignment - 1) as usize;
         offset &= !(alignment as usize - 1);
-
-
 
         if let Some(offsets) = offsets_opt.as_mut() {
             offsets.push(offset as u32);

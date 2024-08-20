@@ -1234,6 +1234,8 @@ pub trait CSType: Sized {
         if let Some(size) = cpp_type.size_info.as_ref().map(|s| s.instance_size) {
             let cpp_name = cpp_type.cpp_name_components.remove_pointer().combine_all();
 
+            assert!(!cpp_name.trim().is_empty(), "CPP Name cannot be empty!");
+
             let assert = CppStaticAssert {
                 condition: format!("::cordl_internals::size_check_v<{cpp_name}, 0x{size:x}>"),
                 message: Some("Size mismatch!".to_string()),
