@@ -815,7 +815,6 @@ pub trait CSType: Sized {
                 Some(FieldInfo {
                     cpp_field: cpp_field_decl,
                     field,
-                    declaring_cpp_packing: cpp_type.packing,
                     field_type: f_type,
                     is_constant: f_type.is_constant(),
                     is_static: f_type.is_static(),
