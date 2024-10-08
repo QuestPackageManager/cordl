@@ -343,6 +343,8 @@ pub trait CSType: Sized {
             self.create_size_assert();
         }
 
+        self.add_type_index_member(metadata);
+
         self.make_nested_types(metadata, ctx_collection, config, tdi);
         self.make_fields(metadata, ctx_collection, config, tdi);
         self.make_properties(metadata, ctx_collection, config, tdi);
@@ -2115,6 +2117,31 @@ pub trait CSType: Sized {
         cpp_type
             .implementations
             .push(CppMember::ConstructorImpl(default_ctor_impl).into());
+    }
+
+    fn add_type_index_member(&mut self, metadata: &Metadata) {
+        let cpp_type = self.get_mut_cpp_type();
+        let tdi: TypeDefinitionIndex = cpp_type.self_tag.get_tdi();
+        let td = &metadata.metadata.global_metadata.type_definitions[tdi];
+
+        
+
+        let il2cpp_metadata_type_index = CppFieldDecl {
+            cpp_name: "__IL2CPP_TYPE_INDEX".into(),
+            field_ty: "uint32_t".into(),
+            offset: u32::MAX,
+            instance: false,
+            readonly: true,
+            const_expr: true,
+            value: Some(td.byval_type_index.to_string()),
+            brief_comment: Some("IL2CPP Metadata Type Index".into()),
+            is_private: false,
+        };
+
+        cpp_type
+            .declarations
+            .push(CppMember::FieldDecl(il2cpp_metadata_type_index).into());
+
     }
 
     fn delete_default_ctor(&mut self) {
