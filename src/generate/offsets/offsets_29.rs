@@ -16,7 +16,6 @@ use log::warn;
 
 use crate::generate::type_extensions::TypeExtentions;
 
-
 const IL2CPP_SIZEOF_STRUCT_WITH_NO_INSTANCE_FIELDS: u32 = 1;
 
 #[derive(Debug, Clone)]

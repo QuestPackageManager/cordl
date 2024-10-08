@@ -257,7 +257,7 @@ fn value_type_convert(cpp_type: &mut CppType, il2cpp_t: &str) {
         is_virtual: false,
         is_implicit_operator: true,
         is_explicit_operator: false,
-        
+
         is_inline: true,
         is_no_except: true,
         parameters: vec![],

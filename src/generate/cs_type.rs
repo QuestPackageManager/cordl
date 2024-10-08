@@ -2122,7 +2122,6 @@ pub trait CSType: Sized {
     fn add_type_index_member(&mut self) {
         let cpp_type = self.get_mut_cpp_type();
         let tdi: TypeDefinitionIndex = cpp_type.self_tag.get_tdi();
-        
 
         let il2cpp_metadata_type_index = CppFieldDecl {
             cpp_name: "__IL2CPP_TYPE_DEFINITION_INDEX".into(),
@@ -2139,7 +2138,6 @@ pub trait CSType: Sized {
         cpp_type
             .declarations
             .push(CppMember::FieldDecl(il2cpp_metadata_type_index).into());
-
     }
 
     fn delete_default_ctor(&mut self) {
@@ -3110,9 +3108,9 @@ pub trait CSType: Sized {
             Il2CppTypeEnum::Object
             | Il2CppTypeEnum::Valuetype
             | Il2CppTypeEnum::Class
-            | Il2CppTypeEnum::Typedbyref 
+            | Il2CppTypeEnum::Typedbyref
             // ptr types
-            | Il2CppTypeEnum::I 
+            | Il2CppTypeEnum::I
             | Il2CppTypeEnum::U => {
                 let typ_cpp_tag: CppTypeTag = typ_tag.into();
 
