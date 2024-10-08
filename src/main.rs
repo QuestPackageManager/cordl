@@ -140,12 +140,12 @@ fn main() -> color_eyre::Result<()> {
 
     if let Some(json) = cli.json {
         println!("Writing json file {json:?}");
-        make_json(metadata.metadata, &STATIC_CONFIG, json)?;
+        make_json(&metadata, &STATIC_CONFIG, json)?;
         return Ok(());
     }
     if let Some(json_folder) = cli.multi_json {
         println!("Writing json file {json_folder:?}");
-        make_json_folder(metadata.metadata, &STATIC_CONFIG, json_folder)?;
+        make_json_folder(&metadata, &STATIC_CONFIG, json_folder)?;
         return Ok(());
     }
 

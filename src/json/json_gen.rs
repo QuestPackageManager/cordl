@@ -4,12 +4,9 @@ use std::{
     path::PathBuf,
 };
 
-use brocolib::{
-    global_metadata::{
-        Il2CppFieldDefinition, Il2CppMethodDefinition, Il2CppParameterDefinition,
-        Il2CppPropertyDefinition, Il2CppTypeDefinition, TypeDefinitionIndex,
-    },
-    Metadata,
+use brocolib::global_metadata::{
+    Il2CppFieldDefinition, Il2CppMethodDefinition, Il2CppParameterDefinition,
+    Il2CppPropertyDefinition, Il2CppTypeDefinition, TypeDefinitionIndex,
 };
 use color_eyre::eyre::Result;
 use itertools::Itertools;
@@ -18,6 +15,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::generate::{
     config::GenerationConfig,
+    metadata::Metadata,
+    offsets,
     type_extensions::{ParameterDefinitionExtensions, TypeDefinitionExtensions, TypeExtentions},
 };
 
@@ -38,12 +37,16 @@ struct JsonType {
     pub properties: Vec<JsonProperty>,
     pub methods: Vec<JsonMethod>,
     pub children: Vec<JsonType>,
+
+    pub size: u32,
+    pub packing: Option<u8>,
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 struct JsonField {
     pub name: String,
     pub ty_name: String,
+    pub offset: Option<u32>,
 }
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 struct JsonProperty {
@@ -71,15 +74,30 @@ struct JsonParam {
 
 fn make_field(
     field: &Il2CppFieldDefinition,
+    field_index: usize,
     td: &Il2CppTypeDefinition,
     tdi: TypeDefinitionIndex,
     metadata: &Metadata,
 ) -> JsonField {
-    let ty = metadata.runtime_metadata.metadata_registration.types[field.type_index as usize];
+    let ty = metadata
+        .metadata
+        .runtime_metadata
+        .metadata_registration
+        .types[field.type_index as usize];
+
+    let offset = metadata
+        .metadata
+        .runtime_metadata
+        .metadata_registration
+        .field_offsets
+        .as_ref()
+        .and_then(|f| f[tdi.index() as usize].get(field_index))
+        .copied();
 
     JsonField {
-        name: field.name(metadata).to_string(),
-        ty_name: ty.full_name(metadata),
+        name: field.name(metadata.metadata).to_string(),
+        ty_name: ty.full_name(metadata.metadata),
+        offset,
     }
 }
 fn make_property(
@@ -88,15 +106,16 @@ fn make_property(
     tdi: TypeDefinitionIndex,
     metadata: &Metadata,
 ) -> JsonProperty {
-    let p_setter = (property.set != u32::MAX).then(|| property.set_method(td, metadata));
-    let p_getter = (property.get != u32::MAX).then(|| property.get_method(td, metadata));
+    let p_setter = (property.set != u32::MAX).then(|| property.set_method(td, metadata.metadata));
+    let p_getter = (property.get != u32::MAX).then(|| property.get_method(td, metadata.metadata));
 
     let p_type_index = match p_getter {
         Some(g) => g.return_type as usize,
-        None => p_setter.unwrap().parameters(metadata)[0].type_index as usize,
+        None => p_setter.unwrap().parameters(metadata.metadata)[0].type_index as usize,
     };
 
     let p_type = metadata
+        .metadata
         .runtime_metadata
         .metadata_registration
         .types
@@ -104,8 +123,8 @@ fn make_property(
         .unwrap();
 
     JsonProperty {
-        name: property.name(metadata).to_string(),
-        ty_name: p_type.full_name(metadata),
+        name: property.name(metadata.metadata).to_string(),
+        ty_name: p_type.full_name(metadata.metadata),
         has_getter: property.get != u32::MAX,
         has_setter: property.set != u32::MAX,
     }
@@ -116,8 +135,11 @@ fn make_param(
     tdi: TypeDefinitionIndex,
     metadata: &Metadata,
 ) -> JsonParam {
-    let param_type =
-        metadata.runtime_metadata.metadata_registration.types[param.type_index as usize];
+    let param_type = metadata
+        .metadata
+        .runtime_metadata
+        .metadata_registration
+        .types[param.type_index as usize];
 
     let ref_mode = if param_type.is_param_in() {
         Some(JsonFieldRef::In)
@@ -130,8 +152,8 @@ fn make_param(
     };
 
     JsonParam {
-        name: param.name(metadata).to_string(),
-        ty: param_type.full_name(metadata),
+        name: param.name(metadata.metadata).to_string(),
+        ty: param_type.full_name(metadata.metadata),
         ref_mode,
     }
 }
@@ -141,56 +163,63 @@ fn make_method(
     tdi: TypeDefinitionIndex,
     metadata: &Metadata,
 ) -> JsonMethod {
-    let ret_ty = metadata.runtime_metadata.metadata_registration.types[method.return_type as usize];
+    let ret_ty = metadata
+        .metadata
+        .runtime_metadata
+        .metadata_registration
+        .types[method.return_type as usize];
 
     let params = method
-        .parameters(metadata)
+        .parameters(metadata.metadata)
         .iter()
         .map(|p| make_param(p, td, tdi, metadata))
         .collect_vec();
 
     JsonMethod {
-        name: method.name(metadata).to_string(),
+        name: method.name(metadata.metadata).to_string(),
         parameters: params,
-        ret: ret_ty.full_name(metadata),
+        ret: ret_ty.full_name(metadata.metadata),
     }
 }
 
 fn make_type(td: &Il2CppTypeDefinition, tdi: TypeDefinitionIndex, metadata: &Metadata) -> JsonType {
     let fields = td
-        .fields(metadata)
+        .fields(metadata.metadata)
         .iter()
-        .map(|f| make_field(f, td, tdi, metadata))
+        .enumerate()
+        .map(|(i, f)| make_field(f, i, td, tdi, metadata))
         .collect_vec();
     let properties = td
-        .properties(metadata)
+        .properties(metadata.metadata)
         .iter()
         .map(|f| make_property(f, td, tdi, metadata))
         .sorted_by(|a, b| a.name.cmp(&b.name))
         .collect_vec();
     let methods = td
-        .methods(metadata)
+        .methods(metadata.metadata)
         .iter()
         .map(|f| make_method(f, td, tdi, metadata))
         .sorted_by(|a, b| a.name.cmp(&b.name))
         .collect_vec();
 
     let children = td
-        .nested_types(metadata)
+        .nested_types(metadata.metadata)
         .iter()
         .map(|nested_tdi: &TypeDefinitionIndex| {
-            let nested_td = &metadata.global_metadata.type_definitions[*nested_tdi];
+            let nested_td = &metadata.metadata.global_metadata.type_definitions[*nested_tdi];
 
             make_type(nested_td, tdi, metadata)
         })
         .sorted_by(|a, b| a.name.cmp(&b.name))
         .collect_vec();
 
-    let namespace = td.namespace(metadata).to_string();
-    let name = td.name(metadata).to_string();
+    let namespace = td.namespace(metadata.metadata).to_string();
+    let name = td.name(metadata.metadata).to_string();
+
+    let (size, packing) = offsets::get_size_and_packing(td, tdi, None, metadata);
 
     JsonType {
-        full_name: td.full_name(metadata, true),
+        full_name: td.full_name(metadata.metadata, true),
         namespace,
         name,
         value_type: td.is_value_type(),
@@ -198,6 +227,8 @@ fn make_type(td: &Il2CppTypeDefinition, tdi: TypeDefinitionIndex, metadata: &Met
         properties,
         methods,
         children,
+        packing,
+        size,
     }
 }
 
@@ -206,14 +237,15 @@ fn make_type(td: &Il2CppTypeDefinition, tdi: TypeDefinitionIndex, metadata: &Met
 /// not useful to emit
 ///
 pub fn is_real_declaring_type(td: &Il2CppTypeDefinition, metadata: &Metadata) -> bool {
-    let condition1 = !td.name(metadata).contains("<>c__") && !td.name(metadata).contains(">d__");
+    let condition1 = !td.name(metadata.metadata).contains("<>c__")
+        && !td.name(metadata.metadata).contains(">d__");
     let condition2 = !td
-        .full_name(metadata, true)
+        .full_name(metadata.metadata, true)
         .contains("<PrivateImplementationDetails>");
     let condition3 = td.parent_index != u32::MAX
         || td.is_interface()
-        || td.full_name(metadata, true) == "System.Object";
-    let condition4 = !td.namespace(metadata).contains("$$struct");
+        || td.full_name(metadata.metadata, true) == "System.Object";
+    let condition4 = !td.namespace(metadata.metadata).contains("$$struct");
 
     // -1 if no declaring type, meaning root
     let is_declaring_type = td.declaring_type_index == u32::MAX;
@@ -233,6 +265,7 @@ pub fn make_json(metadata: &Metadata, _config: &GenerationConfig, file: PathBuf)
     // wouldn't be guaranteed
     // we want sorting so diffs are more readable
     let json_objects = metadata
+        .metadata
         .global_metadata
         .type_definitions
         .as_vec()
@@ -262,6 +295,7 @@ pub fn make_json_folder(
     // wouldn't be guaranteed
     // we want sorting so diffs are more readable
     metadata
+        .metadata
         .global_metadata
         .type_definitions
         .as_vec()
