@@ -195,6 +195,24 @@ fn main() -> color_eyre::Result<()> {
                                                              // blacklist_type("RpcHandler`1::<>c__DisplayClass17_0`3");
                                                              // blacklist_type("RpcHandler`1::<>c__DisplayClass18_0`4");
                                                              // blacklist_type("RpcHandler`1::<>c__DisplayClass19_0`5");
+
+        // Incorrect offsets / sizes due to il2cpp bug
+        blacklist_type("UnityEngine.InputSystem.InputInteractionContext");
+        blacklist_type("UnityEngine.InputSystem.IInputInteraction");
+        blacklist_type("UnityEngine.InputSystem.LowLevel.ActionEvent");
+        blacklist_type("UnityEngine.InputSystem.Interactions.HoldInteraction");
+        blacklist_type("UnityEngine.InputSystem.Interactions.MultiTapInteraction");
+        blacklist_type("UnityEngine.InputSystem.Interactions.PressInteraction");
+        blacklist_type("UnityEngine.InputSystem.Interactions.TapInteraction");
+        blacklist_type("UnityEngine.InputSystem.Interactions.SlowTapInteraction");
+        blacklist_type("UnityEngine.InputSystem.LowLevel.UseWindowsGamingInputCommand");
+        blacklist_type("UnityEngine.InputSystem.LowLevel.EnableIMECompositionCommand");
+        blacklist_type("UnityEngine.InputSystem.LowLevel.MouseState");
+        blacklist_type("UnityEngine.InputSystem.LowLevel.QueryCanRunInBackground");
+        blacklist_type("UnityEngine.InputSystem.LowLevel.QueryEnabledStateCommand");
+        blacklist_type("UnityEngine.InputSystem.Utilities.InputActionTrace");
+        blacklist_type("UnityEngine.InputSystem.Utilities.InputActionTrace::ActionEventPtr");
+        blacklist_type("UnityEngine.InputSystem.Utilities.InputActionTrace::Enumerator");
     }
     {
         let _blacklist_types = |full_name: &str| {
