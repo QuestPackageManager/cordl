@@ -39,7 +39,7 @@ fn system_object_handler(cpp_type: &mut CppType) {
     // Remove field because it does not size properly and is not necessary
     cpp_type
         .declarations
-        .retain(|t| !matches!(t.as_ref(), CppMember::FieldDecl(_)));
+        .retain(|t| !matches!(t.as_ref(), CppMember::FieldDecl(f) if f.instance));
 
     // remove size assert too because System::Object will be wrong due to include ordering
     // cpp_type
