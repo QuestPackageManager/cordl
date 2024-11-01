@@ -99,6 +99,18 @@ namespace cordl_internals {
     ::il2cpp_functions::field_static_get_value(field, static_cast<void*>(&val));
     return val;
   }
+
+  /// @brief method to set a field for a generic container type
+  template <template <typename T> typename Owner, std::size_t offset>
+  [[nodiscard]] CORDL_HIDDEN void setInstanceField(Owner* owner, T&& value) {
+
+    if constexpr (::il2cpp_utils::il2cpp_reference_type<T>) {
+      il2cpp_functions::gc_wbarrier_set_field(this, static_cast<void**>(static_cast<void*>(this + offset), cordl_internals::convert(std::forward<T>(value))));
+    } else {
+      *(owner + offset) = value;
+    }
+  }
+
 #pragma endregion // static field getters
 }
 } // end anonymous namespace
