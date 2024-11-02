@@ -213,6 +213,7 @@ fn main() -> color_eyre::Result<()> {
         blacklist_type("UnityEngine.InputSystem.Utilities.InputActionTrace");
         blacklist_type("UnityEngine.InputSystem.Utilities.InputActionTrace::ActionEventPtr");
         blacklist_type("UnityEngine.InputSystem.Utilities.InputActionTrace::Enumerator");
+        blacklist_type("System.MonoLimitationAttribute");
     }
     {
         let _blacklist_types = |full_name: &str| {

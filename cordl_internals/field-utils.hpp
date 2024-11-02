@@ -101,13 +101,16 @@ namespace cordl_internals {
   }
 
   /// @brief method to set a field for a generic container type
-  template <template <typename T> typename Owner, std::size_t offset>
-  [[nodiscard]] CORDL_HIDDEN void setInstanceField(Owner* owner, T&& value) {
 
+  /// @brief method to set a field for a generic container type
+  template <typename T>
+  CORDL_HIDDEN CORDL_ALWAYS_INLINE void setInstanceField(void* owner, T* pointer, std::type_identity_t<T> const& value) {
+    // if a ref type, use wbarrier
     if constexpr (::il2cpp_utils::il2cpp_reference_type<T>) {
-      il2cpp_functions::gc_wbarrier_set_field(this, static_cast<void**>(static_cast<void*>(this + offset), cordl_internals::convert(std::forward<T>(value))));
+      il2cpp_functions::gc_wbarrier_set_field(owner, static_cast<void**>(static_cast<void*>(pointer)), cordl_internals::convert(std::forward<T>(value)));
     } else {
-      *(owner + offset) = value;
+      // if a value type, normal assignment wokrs
+      *pointer = value;
     }
   }
 

@@ -572,6 +572,12 @@ pub(crate) fn prop_methods_from_fieldinfo(
     let setter_var_name = "value";
     // if the declaring type is a value type, we should not use wbarrier
     let setter_call = match !f_type.valuetype && declaring_is_ref {
+        // setter for generic type
+        true if template.as_ref().is_some_and(|s| !s.names.is_empty()) => {
+            format!(
+                "::cordl_internals::setInstanceField(this, &{field_access}, {setter_var_name});"
+            )
+        }
         // ref type field write on a ref type
         true => {
             format!("il2cpp_functions::gc_wbarrier_set_field(this, static_cast<void**>(static_cast<void*>(&{field_access})), cordl_internals::convert(std::forward<decltype({setter_var_name})>({setter_var_name})));")
