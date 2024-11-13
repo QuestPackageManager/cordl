@@ -549,6 +549,10 @@ impl Sortable for CppConstructorImpl {
 
 impl Writable for CppPropertyDecl {
     fn write(&self, writer: &mut super::writer::CppWriter) -> color_eyre::Result<()> {
+        if !self.instance {
+            return Ok(())
+        }
+        
         let mut prefix_modifiers: Vec<&str> = vec![];
         let suffix_modifiers: Vec<&str> = vec![];
 
@@ -559,10 +563,6 @@ impl Writable for CppPropertyDecl {
         }
         if let Some(setter) = &self.setter {
             property_vec.push(format!("put={setter}"));
-        }
-
-        if !self.instance {
-            prefix_modifiers.push("static");
         }
 
         let property = property_vec.join(", ");
