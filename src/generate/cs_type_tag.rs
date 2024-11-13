@@ -18,18 +18,18 @@ pub struct GenericInstantiation {
 
 // Unique identifier for a CppType
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-pub enum CppTypeTag {
+pub enum CsTypeTag {
     TypeDefinitionIndex(TypeDefinitionIndex),
     GenericInstantiation(GenericInstantiation),
 }
 
-impl From<TypeDefinitionIndex> for CppTypeTag {
+impl From<TypeDefinitionIndex> for CsTypeTag {
     fn from(value: TypeDefinitionIndex) -> Self {
-        CppTypeTag::TypeDefinitionIndex(value)
+        CsTypeTag::TypeDefinitionIndex(value)
     }
 }
 
-impl From<TypeData> for CppTypeTag {
+impl From<TypeData> for CsTypeTag {
     fn from(value: TypeData) -> Self {
         match value {
             TypeData::TypeDefinitionIndex(i) => i.into(),
@@ -38,27 +38,27 @@ impl From<TypeData> for CppTypeTag {
     }
 }
 
-impl From<CppTypeTag> for TypeData {
-    fn from(value: CppTypeTag) -> Self {
+impl From<CsTypeTag> for TypeData {
+    fn from(value: CsTypeTag) -> Self {
         match value {
-            CppTypeTag::TypeDefinitionIndex(i) => TypeData::TypeDefinitionIndex(i),
-            CppTypeTag::GenericInstantiation(gen) => TypeData::GenericClassIndex(gen.inst), // TODO:?
+            CsTypeTag::TypeDefinitionIndex(i) => TypeData::TypeDefinitionIndex(i),
+            CsTypeTag::GenericInstantiation(gen) => TypeData::GenericClassIndex(gen.inst), // TODO:?
             _ => panic!("Can't go from {value:?} to TypeData"),
         }
     }
 }
 
-impl From<CppTypeTag> for TypeDefinitionIndex {
-    fn from(value: CppTypeTag) -> Self {
+impl From<CsTypeTag> for TypeDefinitionIndex {
+    fn from(value: CsTypeTag) -> Self {
         match value {
-            CppTypeTag::TypeDefinitionIndex(i) => i,
-            CppTypeTag::GenericInstantiation(generic_inst) => generic_inst.tdi,
+            CsTypeTag::TypeDefinitionIndex(i) => i,
+            CsTypeTag::GenericInstantiation(generic_inst) => generic_inst.tdi,
             _ => panic!("Type is not a TDI! {value:?}"),
         }
     }
 }
 
-impl CppTypeTag {
+impl CsTypeTag {
     pub fn from_generic_class_index(
         generic_class_idx: usize,
         metadata: &brocolib::Metadata,
@@ -95,8 +95,8 @@ impl CppTypeTag {
 
     pub fn get_tdi(&self) -> TypeDefinitionIndex {
         match self {
-            CppTypeTag::TypeDefinitionIndex(tdi) => *tdi,
-            CppTypeTag::GenericInstantiation(gen_inst) => gen_inst.tdi,
+            CsTypeTag::TypeDefinitionIndex(tdi) => *tdi,
+            CsTypeTag::GenericInstantiation(gen_inst) => gen_inst.tdi,
         }
     }
 }

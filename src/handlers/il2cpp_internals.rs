@@ -6,9 +6,9 @@ use std::{
 };
 
 use crate::generate::{
-    cpp_type::CppType,
+    cs_type::CsType,
     cs_type::VALUE_TYPE_WRAPPER_SIZE,
-    members::{CppConstructorDecl, CppLine, CppMember, CppMethodDecl, CppParam},
+    members::{CsConstructor, CppLine, CsMember, CsMethodDecl, CsParam},
     metadata::{Il2cppFullName, Metadata},
 };
 
@@ -121,7 +121,7 @@ pub fn register_il2cpp_types(metadata: &mut Metadata) -> Result<()> {
     Ok(())
 }
 
-fn il2cpp_alias_handler(cpp_type: &mut CppType, cordl_t: &str, il2cpp_t: &str) {
+fn il2cpp_alias_handler(cpp_type: &mut CsType, cordl_t: &str, il2cpp_t: &str) {
     trace!("Replacing {cordl_t} for il2cpp il2cpp_t for type {il2cpp_t}");
 
     // there is an il2cpp api il2cpp_t configured for this type,
@@ -134,12 +134,12 @@ fn il2cpp_alias_handler(cpp_type: &mut CppType, cordl_t: &str, il2cpp_t: &str) {
     }
 }
 
-fn reference_type_convert(cpp_type: &mut CppType, il2cpp_t: &str) {
+fn reference_type_convert(cpp_type: &mut CsType, il2cpp_t: &str) {
     let cpp_name = cpp_type.cpp_name();
 
     let operator_body = format!("return static_cast<{il2cpp_t}*>(this->convert());");
-    let conversion_operator = CppMethodDecl {
-        cpp_name: Default::default(),
+    let conversion_operator = CsMethodDecl {
+        name: Default::default(),
         instance: true,
         return_type: format!("{il2cpp_t}*"),
 
@@ -160,8 +160,8 @@ fn reference_type_convert(cpp_type: &mut CppType, il2cpp_t: &str) {
     };
 
     let const_operator_body = format!("return static_cast<{il2cpp_t} const*>(this->convert());");
-    let const_conversion_operator = CppMethodDecl {
-        cpp_name: Default::default(),
+    let const_conversion_operator = CsMethodDecl {
+        name: Default::default(),
         instance: true,
         return_type: format!("{il2cpp_t} const*"),
 
@@ -181,9 +181,9 @@ fn reference_type_convert(cpp_type: &mut CppType, il2cpp_t: &str) {
         template: None,
     };
 
-    let il2cpp_t_constructor = CppConstructorDecl {
+    let il2cpp_t_constructor = CsConstructor {
         cpp_name: cpp_name.clone(),
-        parameters: vec![CppParam {
+        parameters: vec![CsParam {
             name: "il2cpp_ptr".to_string(),
             modifiers: "".to_string(),
             ty: format!("{il2cpp_t}*").to_string(),
@@ -208,23 +208,23 @@ fn reference_type_convert(cpp_type: &mut CppType, il2cpp_t: &str) {
     };
 
     cpp_type
-        .declarations
-        .push(CppMember::MethodDecl(conversion_operator).into());
+        .members
+        .push(CsMember::MethodDecl(conversion_operator).into());
     cpp_type
-        .declarations
-        .push(CppMember::MethodDecl(const_conversion_operator).into());
+        .members
+        .push(CsMember::MethodDecl(const_conversion_operator).into());
 
     cpp_type
-        .declarations
-        .push(CppMember::ConstructorDecl(il2cpp_t_constructor).into());
+        .members
+        .push(CsMember::ConstructorDecl(il2cpp_t_constructor).into());
 }
 
-fn value_type_convert(cpp_type: &mut CppType, il2cpp_t: &str) {
+fn value_type_convert(cpp_type: &mut CsType, il2cpp_t: &str) {
     let cpp_name = cpp_type.cpp_name();
 
     let operator_body = format!("return *static_cast<{il2cpp_t}*>(this->convert());");
-    let conversion_operator = CppMethodDecl {
-        cpp_name: Default::default(),
+    let conversion_operator = CsMethodDecl {
+        name: Default::default(),
         instance: true,
         return_type: il2cpp_t.to_string(),
 
@@ -245,8 +245,8 @@ fn value_type_convert(cpp_type: &mut CppType, il2cpp_t: &str) {
     };
 
     let const_operator_body = format!("return *static_cast<{il2cpp_t} const*>(this->convert());");
-    let const_conversion_operator = CppMethodDecl {
-        cpp_name: Default::default(),
+    let const_conversion_operator = CsMethodDecl {
+        name: Default::default(),
         instance: true,
         return_type: il2cpp_t.to_string(),
 
@@ -266,9 +266,9 @@ fn value_type_convert(cpp_type: &mut CppType, il2cpp_t: &str) {
         template: None,
     };
 
-    let il2cpp_t_constructor = CppConstructorDecl {
+    let il2cpp_t_constructor = CsConstructor {
         cpp_name: cpp_name.clone(),
-        parameters: vec![CppParam {
+        parameters: vec![CsParam {
             name: "il2cpp_eq".to_string(),
             modifiers: "".to_string(),
             ty: format!("{il2cpp_t} const&").to_string(),
@@ -292,13 +292,13 @@ fn value_type_convert(cpp_type: &mut CppType, il2cpp_t: &str) {
     };
 
     cpp_type
-        .declarations
-        .push(CppMember::MethodDecl(conversion_operator).into());
+        .members
+        .push(CsMember::MethodDecl(conversion_operator).into());
     cpp_type
-        .declarations
-        .push(CppMember::MethodDecl(const_conversion_operator).into());
+        .members
+        .push(CsMember::MethodDecl(const_conversion_operator).into());
 
     cpp_type
-        .declarations
-        .push(CppMember::ConstructorDecl(il2cpp_t_constructor).into());
+        .members
+        .push(CsMember::ConstructorDecl(il2cpp_t_constructor).into());
 }

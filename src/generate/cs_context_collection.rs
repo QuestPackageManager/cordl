@@ -1,7 +1,7 @@
 use brocolib::global_metadata::TypeDefinitionIndex;
 
 use super::{
-    context_collection::CppContextCollection, cpp_type_tag::CppTypeTag, metadata::Metadata,
+    context_collection::CppContextCollection, cs_type_tag::CsTypeTag, metadata::Metadata,
 };
 
 pub trait CsContextCollection {
@@ -11,7 +11,7 @@ pub trait CsContextCollection {
     fn alias_nested_types_il2cpp(
         &mut self,
         owner_ty: TypeDefinitionIndex,
-        root_tag: CppTypeTag,
+        root_tag: CsTypeTag,
         metadata: &Metadata,
         nested: bool,
     );
@@ -29,17 +29,17 @@ impl CsContextCollection for CppContextCollection {
     fn alias_nested_types_il2cpp(
         &mut self,
         owner_tdi: TypeDefinitionIndex,
-        root_tag: CppTypeTag,
+        root_tag: CsTypeTag,
         metadata: &Metadata,
         nested: bool,
     ) {
-        let owner_tag = CppTypeTag::TypeDefinitionIndex(owner_tdi);
+        let owner_tag = CsTypeTag::TypeDefinitionIndex(owner_tdi);
         let owner_ty = &metadata.metadata.global_metadata.type_definitions[owner_tdi];
 
         for nested_type_tdi in owner_ty.nested_types(metadata.metadata) {
             // let nested_type = &metadata.metadata.global_metadata.type_definitions[*nested_type_tdi];
 
-            let nested_tag = CppTypeTag::TypeDefinitionIndex(*nested_type_tdi);
+            let nested_tag = CsTypeTag::TypeDefinitionIndex(*nested_type_tdi);
 
             self.alias_type_to_context(nested_tag, root_tag, true, false);
             if nested {

@@ -7,8 +7,8 @@ use crate::{
     data::name_components::NameComponents,
     generate::{
         context_collection::CppContextCollection,
-        cpp_type::CppType,
-        members::{CppInclude, CppMember},
+        cs_type::CsType,
+        members::{CppInclude, CsMember},
         metadata::{Il2cppFullName, Metadata, TypeUsage},
         type_extensions::TypeDefinitionExtensions,
     },
@@ -56,7 +56,7 @@ fn register_unity_object_type_handler(metadata: &mut Metadata) -> Result<()> {
 
 fn unity_object_resolve_handler(
     original: NameComponents,
-    cpp_type: &CppType,
+    cpp_type: &CsType,
     _ctx_collection: &CppContextCollection,
     metadata: &Metadata,
     _typ: &Il2CppType,
@@ -91,7 +91,7 @@ fn unity_object_resolve_handler(
     }
 }
 
-fn unity_object_handler(cpp_type: &mut CppType) {
+fn unity_object_handler(cpp_type: &mut CsType) {
     info!("Found UnityEngine.Object type, adding UnityW!");
     cpp_type.inherit = vec!["bs_hook::UnityW".to_owned()];
 
@@ -103,11 +103,11 @@ fn unity_object_handler(cpp_type: &mut CppType) {
 
     // Fixup ctor call declarations
     cpp_type
-        .declarations
+        .members
         .iter_mut()
-        .filter(|t| matches!(t.as_ref(), CppMember::ConstructorDecl(_)))
+        .filter(|t| matches!(t.as_ref(), CsMember::ConstructorDecl(_)))
         .for_each(|d| {
-            let CppMember::ConstructorDecl(constructor) = Rc::get_mut(d).unwrap() else {
+            let CsMember::ConstructorDecl(constructor) = Rc::get_mut(d).unwrap() else {
                 panic!()
             };
 
@@ -119,9 +119,9 @@ fn unity_object_handler(cpp_type: &mut CppType) {
     cpp_type
         .implementations
         .iter_mut()
-        .filter(|t| matches!(t.as_ref(), CppMember::ConstructorImpl(_)))
+        .filter(|t| matches!(t.as_ref(), CsMember::ConstructorImpl(_)))
         .for_each(|d| {
-            let CppMember::ConstructorImpl(constructor) = Rc::get_mut(d).unwrap() else {
+            let CsMember::ConstructorImpl(constructor) = Rc::get_mut(d).unwrap() else {
                 panic!()
             };
 

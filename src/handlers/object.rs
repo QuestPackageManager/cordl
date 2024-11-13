@@ -2,9 +2,9 @@ use color_eyre::Result;
 use log::info;
 
 use crate::generate::{
-    cpp_type::CppType,
+    cs_type::CsType,
     cs_type::IL2CPP_OBJECT_TYPE,
-    members::CppMember,
+    members::CsMember,
     metadata::{Il2cppFullName, Metadata},
 };
 
@@ -30,7 +30,7 @@ fn register_system_object_type_handler(metadata: &mut Metadata) -> Result<()> {
     Ok(())
 }
 
-fn system_object_handler(cpp_type: &mut CppType) {
+fn system_object_handler(cpp_type: &mut CsType) {
     info!("Found System.Object type, adding systemW!");
     // clear inherit so that bs hook can dof include order shenanigans
     cpp_type.requirements.need_wrapper();
@@ -38,8 +38,8 @@ fn system_object_handler(cpp_type: &mut CppType) {
 
     // Remove field because it does not size properly and is not necessary
     cpp_type
-        .declarations
-        .retain(|t| !matches!(t.as_ref(), CppMember::FieldDecl(f) if f.instance));
+        .members
+        .retain(|t| !matches!(t.as_ref(), CsMember::FieldDecl(f) if f.instance));
 
     // remove size assert too because System::Object will be wrong due to include ordering
     // cpp_type

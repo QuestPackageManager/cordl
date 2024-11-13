@@ -37,7 +37,7 @@ impl Write for CppWriter {
     }
 }
 
-pub trait Writable: std::fmt::Debug {
+pub trait CppWritable: std::fmt::Debug {
     fn write(&self, writer: &mut CppWriter) -> color_eyre::Result<()>;
 }
 

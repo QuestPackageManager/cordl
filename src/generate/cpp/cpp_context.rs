@@ -1,22 +1,55 @@
-use std::collections::HashMap;
+use std::cmp::Ordering;
+use std::io::Write;
+use std::{
+    collections::{HashMap, HashSet},
+    fs::{create_dir_all, remove_file, File},
+    path::{Path, PathBuf},
+};
 
 use brocolib::global_metadata::TypeDefinitionIndex;
-use log::info;
 
+use color_eyre::eyre::ContextCompat;
+
+use itertools::Itertools;
+use log::{info, trace};
+use pathdiff::diff_paths;
+
+use crate::generate::cs_type::CORDL_NO_INCLUDE_IMPL_DEFINE;
+use crate::generate::members::CppForwardDeclare;
+use crate::generate::{members::CppInclude, type_extensions::TypeDefinitionExtensions};
+use crate::helpers::sorting::DependencyGraph;
+use crate::STATIC_CONFIG;
+
+use super::cpp_type_tag::CsTypeTag;
+use super::cs_type::IL2CPP_OBJECT_TYPE;
 use super::{
-    config::GenerationConfig, cs_type::CsType, cs_type_tag::CsTypeTag, metadata::Metadata,
+    config::GenerationConfig,
+    cpp_type::CsType,
+    cs_type::CSType,
+    members::CppUsingAlias,
+    metadata::Metadata,
+    writer::{CppWriter, CppWritable},
 };
 
 // Holds the contextual information for creating a C++ file
 // Will hold various metadata, such as includes, type definitions, and extraneous writes
 #[derive(Debug, Clone)]
-pub struct TypeContext {
+pub struct CppContext {
+    pub typedef_path: PathBuf,
+    pub type_impl_path: PathBuf,
+
+    // combined header
+    pub fundamental_path: PathBuf,
+
     // Types to write, typedef
     pub typedef_types: HashMap<CsTypeTag, CsType>,
+
+    // Namespace -> alias
+    pub typealias_types: HashSet<(String, CppUsingAlias)>,
 }
 
-impl TypeContext {
-    pub fn get_type_recursive_mut(
+impl CppContext {
+    pub fn get_cpp_type_recursive_mut(
         &mut self,
         root_tag: CsTypeTag,
         child_tag: CsTypeTag,
@@ -42,6 +75,10 @@ impl TypeContext {
         ty.and_then(|ty| ty.get_nested_type(child_tag))
     }
 
+    pub fn get_include_path(&self) -> &PathBuf {
+        &self.typedef_path
+    }
+
     pub fn get_types(&self) -> &HashMap<CsTypeTag, CsType> {
         &self.typedef_types
     }
@@ -53,7 +90,7 @@ impl TypeContext {
         tdi: TypeDefinitionIndex,
         tag: CsTypeTag,
         generic_inst: Option<&Vec<usize>>,
-    ) -> TypeContext {
+    ) -> CppContext {
         let t = &metadata.metadata.global_metadata.type_definitions[tdi];
 
         let components = t.get_name_components(metadata.metadata);
@@ -80,9 +117,31 @@ impl TypeContext {
             false => config.path_name(name),
         };
 
-        let mut x = TypeContext {
+        let mut x = CppContext {
+            typedef_path: config
+                .header_path
+                .join(format!("{path}zzzz__{path_name}_def.hpp")),
+            type_impl_path: config
+                .header_path
+                .join(format!("{path}zzzz__{path_name}_impl.hpp")),
+            fundamental_path: config.header_path.join(format!("{path}{path_name}.hpp")),
             typedef_types: Default::default(),
+            typealias_types: Default::default(),
         };
+
+        if metadata.blacklisted_types.contains(&tdi) {
+            if !t.is_value_type() {
+                x.typealias_types.insert((
+                    cpp_namespace,
+                    CppUsingAlias {
+                        alias: cpp_name.to_string(),
+                        result: IL2CPP_OBJECT_TYPE.to_string(),
+                        template: Default::default(),
+                    },
+                ));
+            }
+            return x;
+        }
 
         match CsType::make_cpp_type(metadata, config, tdi, tag, generic_inst) {
             Some(cpptype) => {

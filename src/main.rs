@@ -7,6 +7,7 @@
 #![feature(exit_status_error)]
 
 use brocolib::{global_metadata::TypeDefinitionIndex, runtime_metadata::TypeData};
+use byteorder::LittleEndian;
 use color_eyre::{eyre::Context, Result, Section};
 use generate::{config::GenerationConfig, metadata::Metadata};
 use itertools::Itertools;
@@ -24,8 +25,8 @@ use clap::{Parser, Subcommand};
 
 use crate::{
     generate::{
-        context_collection::CppContextCollection, cpp_type_tag::CppTypeTag,
-        cs_context_collection::CsContextCollection, members::CppMember,
+        context_collection::CppContextCollection, cs_type_tag::CsTypeTag,
+        cs_context_collection::CsContextCollection, members::CsMember,
     },
     handlers::{comment_omit::remove_coments, object, unity, value_type},
 };
@@ -83,6 +84,8 @@ pub static STATIC_CONFIG: LazyLock<GenerationConfig> = LazyLock::new(|| Generati
 });
 
 static INTERNALS_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/cordl_internals");
+
+pub type Endian = LittleEndian;
 
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
@@ -269,7 +272,7 @@ fn main() -> color_eyre::Result<()> {
             );
             cpp_context_collection.alias_nested_types_il2cpp(
                 tdi,
-                CppTypeTag::TypeDefinitionIndex(tdi),
+                CsTypeTag::TypeDefinitionIndex(tdi),
                 &metadata,
                 false,
             );
@@ -396,7 +399,7 @@ fn main() -> color_eyre::Result<()> {
             cpp_context_collection.fill(
                 &metadata,
                 &STATIC_CONFIG,
-                CppTypeTag::TypeDefinitionIndex(tdi),
+                CsTypeTag::TypeDefinitionIndex(tdi),
             );
         }
     }
@@ -437,7 +440,7 @@ fn main() -> color_eyre::Result<()> {
         cpp_context_collection
             .get()
             .iter()
-            .find(|(_, c)| c.get_types().iter().any(|(_, t)| t.cpp_template.is_some()))
+            .find(|(_, c)| c.get_types().iter().any(|(_, t)| t.generic_template.is_some()))
             .unwrap()
             .1
             .write(&STATIC_CONFIG)?;
@@ -511,7 +514,7 @@ fn main() -> color_eyre::Result<()> {
             .filter(|(_, c)| {
                 c.get_types().iter().any(|(_, t)| {
                     t.implementations.iter().any(|d| {
-                        if let CppMember::MethodImpl(m) = d.as_ref() {
+                        if let CsMember::MethodImpl(m) = d.as_ref() {
                             m.parameters.iter().any(|p| p.def_value.is_some())
                         } else {
                             false

@@ -3,9 +3,8 @@ use log::info;
 use std::rc::Rc;
 
 use crate::generate::{
-    context_collection::CppContextCollection,
-    cs_context_collection::CsContextCollection,
-    members::{CppMember, CppNonMember},
+    context_collection::CppContextCollection, cs_context_collection::CsContextCollection,
+    members::CsMember,
 };
 
 pub fn remove_coments(context_collection: &mut CppContextCollection) -> Result<()> {
@@ -22,16 +21,16 @@ pub fn remove_coments(context_collection: &mut CppContextCollection) -> Result<(
                 .iter_mut()
                 .try_for_each(|d| -> Result<()> {
                     match Rc::make_mut(d) {
-                        CppMember::FieldDecl(cpp_field_decl) => {
+                        CsMember::FieldDecl(cpp_field_decl) => {
                             cpp_field_decl.brief_comment = None;
                         }
-                        CppMember::Property(cpp_property_decl) => {
+                        CsMember::Property(cpp_property_decl) => {
                             cpp_property_decl.brief_comment = None;
                         }
-                        CppMember::MethodDecl(cpp_method_decl) => {
+                        CsMember::MethodDecl(cpp_method_decl) => {
                             cpp_method_decl.brief = None;
                         }
-                        CppMember::ConstructorDecl(cpp_constructor_decl) => {
+                        CsMember::ConstructorDecl(cpp_constructor_decl) => {
                             cpp_constructor_decl.brief = None;
                         }
                         _ => {

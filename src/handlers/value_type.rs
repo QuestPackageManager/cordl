@@ -3,9 +3,8 @@ use std::rc::Rc;
 use color_eyre::Result;
 
 use crate::generate::{
-    cpp_type::CppType,
-    cs_type::{ENUM_WRAPPER_TYPE, VALUE_WRAPPER_TYPE},
-    members::CppMember,
+    cs_type::CsType,
+    members::CsMember,
     metadata::{Il2cppFullName, Metadata},
 };
 
@@ -41,20 +40,20 @@ fn register_value_type_object_handler(metadata: &mut Metadata) -> Result<()> {
     Ok(())
 }
 
-fn unified_type_handler(cpp_type: &mut CppType, _base_ctor: &str) {
+fn unified_type_handler(cpp_type: &mut CsType, _base_ctor: &str) {
     // We don't replace parent anymore
     // cpp_type.inherit = vec![base_ctor.to_string()];
 
     // Fixup ctor call
     cpp_type
         .implementations
-        .retain_mut(|d| !matches!(d.as_ref(), CppMember::ConstructorImpl(_)));
+        .retain_mut(|d| !matches!(d.as_ref(), CsMember::ConstructorImpl(_)));
     cpp_type
-        .declarations
+        .members
         .iter_mut()
-        .filter(|t| matches!(t.as_ref(), CppMember::ConstructorDecl(_)))
+        .filter(|t| matches!(t.as_ref(), CsMember::ConstructorDecl(_)))
         .for_each(|d| {
-            let CppMember::ConstructorDecl(constructor) = Rc::get_mut(d).unwrap() else {
+            let CsMember::ConstructorDecl(constructor) = Rc::get_mut(d).unwrap() else {
                 panic!()
             };
 
@@ -66,17 +65,17 @@ fn unified_type_handler(cpp_type: &mut CppType, _base_ctor: &str) {
 
     // remove all method decl/impl
     cpp_type
-        .declarations
-        .retain(|t| !matches!(t.as_ref(), CppMember::MethodDecl(_)));
+        .members
+        .retain(|t| !matches!(t.as_ref(), CsMember::MethodDecl(_)));
     // remove all method decl/impl
     cpp_type
         .implementations
-        .retain(|t| !matches!(t.as_ref(), CppMember::MethodImpl(_)));
+        .retain(|t| !matches!(t.as_ref(), CsMember::MethodImpl(_)));
 
     // Remove method size structs
     cpp_type.nonmember_implementations.clear();
 }
-fn value_type_handler(cpp_type: &mut CppType) {
+fn value_type_handler(cpp_type: &mut CsType) {
     info!("Found System.ValueType, removing inheritance!");
     unified_type_handler(
         cpp_type,
@@ -91,7 +90,7 @@ fn value_type_handler(cpp_type: &mut CppType) {
         .as_str(),
     );
 }
-fn enum_type_handler(cpp_type: &mut CppType) {
+fn enum_type_handler(cpp_type: &mut CsType) {
     info!("Found System.Enum type, removing inheritance!");
     unified_type_handler(
         cpp_type,
