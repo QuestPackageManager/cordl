@@ -9,26 +9,19 @@ use brocolib::runtime_metadata::Il2CppType;
 use itertools::Itertools;
 use log::warn;
 
-use std::sync::Arc;
-
-use brocolib::runtime_metadata::Il2CppTypeEnum;
-
 use brocolib::global_metadata::TypeDefinitionIndex;
 
 use super::cs_context_collection::TypeContextCollection;
 use super::cs_members::CsField;
 use super::cs_members::CsFieldLayout;
-use super::cs_members::CsGenericTemplate;
+
 use super::cs_members::CsMember;
-use super::cs_members::CsMethodDecl;
-use super::cs_members::CsParam;
-use super::cs_members::CsPropertyDecl;
+
 use super::cs_type_tag::CsTypeTag;
 use super::metadata::Metadata;
 use super::type_extensions::Il2CppTypeEnumExtensions;
 use super::type_extensions::TypeDefinitionExtensions;
 use super::type_extensions::TypeExtentions;
-use super::writer::CppWritable;
 
 #[derive(Clone, Debug)]
 pub struct FieldInfo<'a> {
@@ -58,7 +51,7 @@ impl<'a> FieldInfoSet<'a> {
 pub(crate) fn handle_const_fields(
     cpp_type: &mut CsType,
     fields: &[FieldInfo],
-    ctx_collection: &TypeContextCollection,
+    _ctx_collection: &TypeContextCollection,
     metadata: &Metadata,
     tdi: TypeDefinitionIndex,
 ) {
@@ -69,7 +62,7 @@ pub(crate) fn handle_const_fields(
         return;
     }
 
-    let declaring_cpp_template = if cpp_type
+    let _declaring_cpp_template = if cpp_type
         .generic_template
         .as_ref()
         .is_some_and(|t| !t.names.is_empty())
@@ -97,7 +90,7 @@ pub(crate) fn handle_const_fields(
                     readonly: f_type.is_constant(),
                     value: None,
                     const_expr: false,
-                    brief_comment: Some(format!("Field {f_name} value: {def_value}")),
+                    brief_comment: Some(format!("Field {f_name} value: {def_value:#?}")),
                     ..field_info.cs_field.clone()
                 };
 
@@ -192,7 +185,7 @@ pub(crate) fn handle_referencetype_fields(
     if t.is_explicit_layout() {
         warn!(
             "Reference type with explicit layout: {}",
-            cpp_type.cpp_name_components.combine_all()
+            cpp_type.cs_name_components.combine_all()
         );
     }
 
@@ -222,20 +215,24 @@ pub fn handle_static_fields(
     for field_info in fields.iter().filter(|f| f.is_static && !f.is_constant) {
         let f_type = field_info.field_type;
         let f_name = field_info.field.name(metadata.metadata);
-        let f_offset = field_info.offset.unwrap_or(u32::MAX);
-        let f_size = field_info.size;
-        let field_ty_cpp_name = &field_info.cs_field.field_ty;
+        let _f_offset = field_info.offset.unwrap_or(u32::MAX);
+        let _f_size = field_info.size;
+        let _field_ty_cpp_name = &field_info.cs_field.field_ty;
+        let f_tag = CsTypeTag::from_type_data(f_type.data, metadata.metadata);
 
-        cpp_type.members.push(CsMember::FieldDecl(CsField {
-            name: f_name.to_string(),
-            field_ty: f_type,
-            instance: false,
-            readonly: false,
-            const_expr: true,
-            offset: None,
-            value: None,
-            brief_comment: (),
-        }));
+        cpp_type.members.push(
+            CsMember::FieldDecl(CsField {
+                name: f_name.to_string(),
+                field_ty: f_tag,
+                instance: false,
+                readonly: false,
+                const_expr: true,
+                offset: None,
+                value: None,
+                brief_comment: None,
+            })
+            .into(),
+        );
     }
 }
 
@@ -295,8 +292,8 @@ pub(crate) fn field_into_offset_structs(_min_offset: u32, field: FieldInfo) -> C
     CsFieldLayout {
         // #pragma pack(push, tp, 1)
         field: field.cs_field,
-        padding,                  // create field with size padding
-        alignment: actual_offset, // create field with size padding
+        padding: *padding,         // create field with size padding
+        alignment: *actual_offset, // create field with size padding
     }
 }
 

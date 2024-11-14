@@ -1,6 +1,18 @@
 use std::path::PathBuf;
 
-pub struct GenerationConfig {
+
+
+pub static STATIC_CONFIG: LazyLock<CppGenerationConfig> = LazyLock::new(|| CppGenerationConfig {
+    header_path: PathBuf::from("./codegen/include"),
+    source_path: PathBuf::from("./codegen/src"),
+    dst_internals_path: PathBuf::from("./codegen/include/cordl_internals"),
+    dst_header_internals_file: PathBuf::from(
+        "./codegen/include/cordl_internals/cordl_internals.hpp",
+    ),
+    use_anonymous_namespace: false,
+});
+
+pub struct CppGenerationConfig {
     pub source_path: PathBuf,
     pub header_path: PathBuf,
     pub dst_internals_path: PathBuf,
@@ -8,7 +20,7 @@ pub struct GenerationConfig {
     pub use_anonymous_namespace: bool,
 }
 
-impl GenerationConfig {
+impl CppGenerationConfig {
     pub fn namespace_cpp(&self, string: &str) -> String {
         let final_ns = if string.is_empty() {
             "GlobalNamespace".to_owned()

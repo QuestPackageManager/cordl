@@ -10,11 +10,10 @@ use brocolib::global_metadata::{
 };
 use color_eyre::eyre::Result;
 use itertools::Itertools;
-use rayon::vec;
+
 use serde::{Deserialize, Serialize};
 
 use crate::generate::{
-    config::GenerationConfig,
     metadata::Metadata,
     offsets,
     type_extensions::{ParameterDefinitionExtensions, TypeDefinitionExtensions, TypeExtentions},
@@ -75,7 +74,7 @@ struct JsonParam {
 fn make_field(
     field: &Il2CppFieldDefinition,
     field_index: usize,
-    td: &Il2CppTypeDefinition,
+    _td: &Il2CppTypeDefinition,
     tdi: TypeDefinitionIndex,
     metadata: &Metadata,
 ) -> JsonField {
@@ -103,7 +102,7 @@ fn make_field(
 fn make_property(
     property: &Il2CppPropertyDefinition,
     td: &Il2CppTypeDefinition,
-    tdi: TypeDefinitionIndex,
+    _tdi: TypeDefinitionIndex,
     metadata: &Metadata,
 ) -> JsonProperty {
     let p_setter = (property.set != u32::MAX).then(|| property.set_method(td, metadata.metadata));
@@ -131,8 +130,8 @@ fn make_property(
 }
 fn make_param(
     param: &Il2CppParameterDefinition,
-    td: &Il2CppTypeDefinition,
-    tdi: TypeDefinitionIndex,
+    _td: &Il2CppTypeDefinition,
+    _tdi: TypeDefinitionIndex,
     metadata: &Metadata,
 ) -> JsonParam {
     let param_type = metadata
@@ -260,7 +259,7 @@ pub fn is_real_declaring_type(td: &Il2CppTypeDefinition, metadata: &Metadata) ->
         && condition4
 }
 
-pub fn make_json(metadata: &Metadata, _config: &GenerationConfig, file: PathBuf) -> Result<()> {
+pub fn make_json(metadata: &Metadata, file: PathBuf) -> Result<()> {
     // we could use a map here but sorting
     // wouldn't be guaranteed
     // we want sorting so diffs are more readable
@@ -286,11 +285,7 @@ pub fn make_json(metadata: &Metadata, _config: &GenerationConfig, file: PathBuf)
     Ok(())
 }
 
-pub fn make_json_folder(
-    metadata: &Metadata,
-    config: &GenerationConfig,
-    folder: PathBuf,
-) -> Result<()> {
+pub fn make_json_folder(metadata: &Metadata, folder: PathBuf) -> Result<()> {
     // we could use a map here but sorting
     // wouldn't be guaranteed
     // we want sorting so diffs are more readable
@@ -307,17 +302,14 @@ pub fn make_json_folder(
         .map(|(tdi, td)| make_type(td, tdi, metadata))
         .sorted_by(|a, b| a.full_name.cmp(&b.full_name))
         .try_for_each(|t| -> Result<()> {
-            let mut namespace_cpp = config.sanitize_to_cpp_name(&t.namespace);
-            let name_cpp = config.name_cpp(&t.name);
+            let mut namespace = t.namespace.clone();
+            let name = t.name.clone();
 
-            if namespace_cpp.is_empty() {
-                namespace_cpp = "GlobalNamespace".to_string();
+            if namespace.is_empty() {
+                namespace = "GlobalNamespace".to_string();
             }
 
-            let file: PathBuf = folder
-                .join(namespace_cpp)
-                .join(name_cpp)
-                .with_extension("json");
+            let file: PathBuf = folder.join(namespace).join(name).with_extension("json");
 
             fs::create_dir_all(file.parent().unwrap())?;
 

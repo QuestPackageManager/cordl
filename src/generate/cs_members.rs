@@ -1,22 +1,10 @@
 use bitflags::bitflags;
 use bytes::Bytes;
 use itertools::Itertools;
-use pathdiff::diff_paths;
 
-use crate::STATIC_CONFIG;
+use super::{cs_type_tag::CsTypeTag, writer::CppWritable};
 
-use super::{
-    context::TypeContext, cs_fields::FieldInfo, cs_type::CsType, cs_type_tag::CsTypeTag,
-    writer::CppWritable,
-};
-
-use std::{
-    collections::HashMap,
-    hash::Hash,
-    path::{Path, PathBuf},
-    rc::Rc,
-    sync::Arc,
-};
+use std::{hash::Hash, rc::Rc, sync::Arc};
 
 #[derive(Debug, Eq, Hash, PartialEq, Clone, Default, PartialOrd, Ord)]
 pub struct CsGenericTemplate {
@@ -118,9 +106,10 @@ pub struct CsMethodSizeData {
     pub slot: Option<u16>,
 }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Debug, PartialEq, PartialOrd)]
 pub enum CsValue {
     String(String),
+    Bool(bool),
     Num(usize),
     FloatingNum(f64),
     Object(Bytes),
@@ -128,7 +117,7 @@ pub enum CsValue {
     Null,
 }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Debug, PartialEq, PartialOrd)]
 pub struct CsField {
     pub name: String,
     pub field_ty: CsTypeTag,
@@ -145,8 +134,8 @@ pub struct CsField {
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct CsPropertyDecl {
-    pub cpp_name: String,
-    pub prop_ty: String,
+    pub name: String,
+    pub prop_ty: CsTypeTag,
     pub instance: bool,
     pub getter: Option<String>,
     pub setter: Option<String>,
@@ -156,14 +145,15 @@ pub struct CsPropertyDecl {
 }
 
 bitflags! {
-    struct CsParamFlags: u8 {
+    #[derive(Debug, Clone, Hash, PartialEq, PartialOrd, Eq, Ord)]
+    pub struct CsParamFlags: u8 {
         const A = 1;
         const B = 1 << 1;
         const C = 0b0000_0100;
     }
 }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Debug, PartialEq, PartialOrd)]
 pub struct CsParam {
     pub name: String,
     pub il2cpp_ty: CsTypeTag,
@@ -175,7 +165,7 @@ pub struct CsParam {
     // &
     // &&
     pub modifiers: CsParamFlags,
-    pub def_value: Option<String>,
+    pub def_value: Option<CsValue>,
 }
 
 bitflags! {
@@ -214,14 +204,6 @@ impl PartialEq for CsConstructor {
         self.cpp_name == other.cpp_name
             && self.parameters == other.parameters
             && self.template == other.template
-            && self.is_constexpr == other.is_constexpr
-            && self.is_explicit == other.is_explicit
-            && self.is_default == other.is_default
-            && self.is_no_except == other.is_no_except
-            && self.is_delete == other.is_delete
-            && self.is_protected == other.is_protected
-            && self.base_ctor == other.base_ctor
-            && self.initialized_values == other.initialized_values
             && self.brief == other.brief
             // can't guarantee equality
             && self.body.is_some() == other.body.is_some()
@@ -255,5 +237,5 @@ pub struct CsFieldLayout {
     // make struct with size [padding, field] packed with 1
     pub padding: u32,
     // make struct with size [alignment, field_size] default packed
-    pub alignment: usize,
+    pub alignment: u32,
 }

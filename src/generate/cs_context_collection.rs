@@ -1,22 +1,16 @@
 use core::panic;
-use std::{
-    collections::{HashMap, HashSet},
-    fs::File,
-    io::Write,
-};
+use std::collections::{HashMap, HashSet};
 
 use brocolib::{
     global_metadata::TypeDefinitionIndex,
     runtime_metadata::{Il2CppMethodSpec, TypeData},
 };
 use itertools::Itertools;
-use log::{info, trace, warn};
-use pathdiff::diff_paths;
+use log::{info, warn};
 
-use crate::{generate::cs_type::CsType, STATIC_CONFIG};
+use crate::generate::cs_type::CsType;
 
 use super::{
-    config::GenerationConfig,
     context::TypeContext,
     cs_type_tag::{CsTypeTag, GenericInstantiation},
     metadata::Metadata,
@@ -34,12 +28,7 @@ pub struct TypeContextCollection {
 }
 
 impl TypeContextCollection {
-    pub fn fill_cpp_type(
-        &mut self,
-        cpp_type: &mut CsType,
-        metadata: &Metadata,
-        config: &GenerationConfig,
-    ) {
+    pub fn fill_cpp_type(&mut self, cpp_type: &mut CsType, metadata: &Metadata) {
         let tag = cpp_type.self_tag;
 
         if self.filled_types.contains(&tag) {
@@ -52,15 +41,13 @@ impl TypeContextCollection {
         // Move ownership to local
         self.filling_types.insert(tag);
 
-        cpp_type.fill_from_il2cpp(metadata, config, self);
+        cpp_type.fill_from_il2cpp(metadata, self);
 
         self.filled_types.insert(tag);
         self.filling_types.remove(&tag.clone());
     }
 
-    pub fn fill(&mut self, metadata: &Metadata, config: &GenerationConfig, type_tag: CsTypeTag) {
-        let _tdi = CsType::get_cpp_tag_tdi(type_tag);
-
+    pub fn fill(&mut self, metadata: &Metadata, type_tag: CsTypeTag) {
         let context_tag = self.get_context_root_tag(type_tag);
 
         if self.filled_types.contains(&type_tag) {
@@ -83,7 +70,7 @@ impl TypeContextCollection {
         if let Some((_t, mut cpp_type)) = cpp_type_entry {
             assert!(!cpp_type.nested, "Cannot fill a nested type!");
 
-            self.fill_cpp_type(&mut cpp_type, metadata, config);
+            self.fill_cpp_type(&mut cpp_type, metadata);
 
             // Move ownership back up
             self.all_contexts
@@ -95,7 +82,7 @@ impl TypeContextCollection {
 
     ///
     /// Generate the aliases for the nested types through il2cpp
-    /// 
+    ///
     /// If nested is true, aliases all nested types to their root type
     ///
     pub fn alias_nested_types_il2cpp(
@@ -151,37 +138,6 @@ impl TypeContextCollection {
         self.alias_nested_type_to_parent.insert(src, dest);
     }
 
-    pub fn fill_nested_types(
-        &mut self,
-        metadata: &Metadata,
-        config: &GenerationConfig,
-        owner_ty: CsTypeTag,
-    ) {
-        let owner_type_tag = owner_ty;
-        let owner = self
-            .get_cpp_type_mut(owner_type_tag)
-            .unwrap_or_else(|| panic!("Owner does not exist {owner_type_tag:?}"));
-
-        // we clone, then write later
-        // since we're modifying only 1 type exclusively
-        // and we don't rely on any other type at this time
-        // we can clone
-
-        // sad inefficient memory usage but oh well
-        let nested_types: HashMap<CsTypeTag, CsType> = owner
-            .nested_types
-            .clone()
-            .into_iter()
-            .map(|(nested_tag, mut nested_type)| {
-                self.fill_cpp_type(&mut nested_type, metadata, config);
-
-                (nested_tag, nested_type)
-            })
-            .collect();
-
-        self.get_cpp_type_mut(owner_type_tag).unwrap().nested_types = nested_types;
-    }
-
     pub fn get_context_root_tag(&self, ty: CsTypeTag) -> CsTypeTag {
         self.alias_context
             .get(&ty)
@@ -200,13 +156,12 @@ impl TypeContextCollection {
     pub fn make_nested_from(
         &mut self,
         metadata: &Metadata<'_>,
-        config: &GenerationConfig,
         tdi: TypeDefinitionIndex,
         generic_inst: Option<&Vec<usize>>,
     ) -> Option<&mut TypeContext> {
-        let ty_data = CsTypeTag::TypeDefinitionIndex(tdi);
+        let ty_tag = CsTypeTag::TypeDefinitionIndex(tdi);
         let ty_def = &metadata.metadata.global_metadata.type_definitions[tdi];
-        let context_root_tag = self.get_context_root_tag(ty_data);
+        let context_root_tag = self.get_context_root_tag(ty_tag);
 
         if self.filling_types.contains(&context_root_tag) {
             panic!("Currently filling type {context_root_tag:?}, cannot fill")
@@ -214,15 +169,15 @@ impl TypeContextCollection {
 
         // Why is the borrow checker so dumb?
         // Using entries causes borrow checker to die :(
-        if self.filled_types.contains(&ty_data) {
+        if self.filled_types.contains(&ty_tag) {
             return Some(self.all_contexts.get_mut(&context_root_tag).unwrap());
         }
 
-        if self.get_cpp_type(ty_data).is_some() {
-            return self.get_context_mut(ty_data);
+        if self.get_cpp_type(ty_tag).is_some() {
+            return self.get_context_mut(ty_tag);
         }
 
-        let context_tag = self.get_context_root_tag(ty_data);
+        let context_tag = self.get_context_root_tag(ty_tag);
         let context_type_data: TypeDefinitionIndex = context_tag.into();
         let context_td = &metadata.metadata.global_metadata.type_definitions[context_type_data];
 
@@ -246,22 +201,20 @@ impl TypeContextCollection {
         match nested_inherits_declaring {
             true => {
                 // If a nested type inherits its declaring type, move it to its own CppContext
-
-                let context = TypeContext::make(metadata, config, tdi, ty_data, generic_inst);
+                let context = TypeContext::make(metadata, tdi, ty_tag, generic_inst);
 
                 // Unnest type does not alias to another context or type
-                self.alias_context.remove(&ty_data);
-                self.alias_nested_type_to_parent.remove(&ty_data);
+                self.alias_context.remove(&ty_tag);
+                self.alias_nested_type_to_parent.remove(&ty_tag);
 
-                self.all_contexts.insert(ty_data, context);
-                self.all_contexts.get_mut(&ty_data)
+                self.all_contexts.insert(ty_tag, context);
+                self.all_contexts.get_mut(&ty_tag)
             }
             false => {
-                let new_cpp_type =
-                    CsType::make_cpp_type(metadata, config, tdi, ty_data, generic_inst)
-                        .expect("Failed to make nested type");
+                let new_cpp_type = CsType::make_cs_type(metadata, tdi, ty_tag, generic_inst)
+                    .expect("Failed to make nested type");
 
-                let context = self.get_context_mut(ty_data).unwrap();
+                let context = self.get_context_mut(ty_tag).unwrap();
                 // self.alias_type_to_context(new_cpp_type.self_tag, context_root_tag, true);
 
                 // context.insert_cpp_type(stub);
@@ -279,7 +232,6 @@ impl TypeContextCollection {
         &mut self,
         method_spec: &Il2CppMethodSpec,
         metadata: &mut Metadata,
-        config: &GenerationConfig,
     ) -> Option<&mut TypeContext> {
         // Not a generic class, no type needed
         if method_spec.class_inst_index == u32::MAX {
@@ -338,16 +290,8 @@ impl TypeContextCollection {
             return self.get_context_mut(generic_class_ty_data);
         }
 
-        // make original type a stub
-        self.borrow_cpp_type(type_data, |_, mut cpptype| {
-            cpptype.is_stub = true;
-
-            cpptype
-        });
-
-        let mut new_cpp_type = CsType::make_cpp_type(
+        let mut new_cpp_type = CsType::make_cs_type(
             metadata,
-            config,
             tdi,
             generic_class_ty_data,
             Some(&generic_inst.types),
@@ -384,7 +328,6 @@ impl TypeContextCollection {
         &mut self,
         method_spec: &Il2CppMethodSpec,
         metadata: &mut Metadata,
-        config: &GenerationConfig,
     ) -> Option<&mut TypeContext> {
         if method_spec.method_inst_index == u32::MAX {
             return None;
@@ -431,7 +374,7 @@ impl TypeContextCollection {
         self.borrow_cpp_type(generic_class_ty_data, |collection, mut cpp_type| {
             let method_index = method_spec.method_definition_index;
             cpp_type.add_method_generic_inst(method_spec, metadata);
-            cpp_type.create_method(ty_def, method_index, metadata, collection, config, true);
+            cpp_type.create_method(ty_def, method_index, metadata, collection, true);
 
             cpp_type
         });
@@ -443,7 +386,6 @@ impl TypeContextCollection {
         &mut self,
         method_spec: &Il2CppMethodSpec,
         metadata: &mut Metadata,
-        config: &GenerationConfig,
     ) -> Option<&mut TypeContext> {
         if method_spec.class_inst_index == u32::MAX {
             return None;
@@ -492,7 +434,7 @@ impl TypeContextCollection {
 
         self.borrow_cpp_type(generic_class_ty_data, |collection, mut cpp_type| {
             // cpp_type.make_generics_args(metadata, collection);
-            collection.fill_cpp_type(&mut cpp_type, metadata, config);
+            collection.fill_cpp_type(&mut cpp_type, metadata);
 
             cpp_type
         });
@@ -503,14 +445,13 @@ impl TypeContextCollection {
     pub fn make_from(
         &mut self,
         metadata: &Metadata,
-        config: &GenerationConfig,
-        type_tag: TypeData,
+
+        type_data: TypeData,
         generic_inst: Option<&Vec<usize>>,
     ) -> &mut TypeContext {
+        let type_tag = CsType::get_tag_tdi(type_data);
         assert!(
-            !metadata
-                .child_to_parent_map
-                .contains_key(&CsType::get_tag_tdi(type_tag)),
+            !metadata.child_to_parent_map.contains_key(&type_tag),
             "Cannot create context for nested type",
         );
         let context_root_tag = self.get_context_root_tag(type_tag.into());
@@ -529,11 +470,14 @@ impl TypeContextCollection {
             return self.all_contexts.get_mut(&context_root_tag).unwrap();
         }
 
-        let tdi = CsType::get_cpp_tag_tdi(context_root_tag);
-        let context = TypeContext::make(metadata, config, tdi, context_root_tag, generic_inst);
+        let tdi = context_root_tag.get_tdi();
+        let context = TypeContext::make(metadata, tdi, context_root_tag, generic_inst);
         // Now do children
         for cpp_type in context.typedef_types.values() {
-            self.alias_nested_types(cpp_type, cpp_type.self_tag);
+            for n in &cpp_type.nested_types {
+                self.alias_type_to_parent(*n, cpp_type.self_tag);
+                self.alias_type_to_context(*n, context_root_tag);
+            }
         }
         self.all_contexts.insert(context_root_tag, context);
         self.all_contexts.get_mut(&context_root_tag).unwrap()
@@ -543,23 +487,21 @@ impl TypeContextCollection {
     /// By default will only look for nested types of the context, ignoring other CppTypes
     ///
     pub fn get_cpp_type(&self, ty: CsTypeTag) -> Option<&CsType> {
-        let tag = ty;
-        let context_root_tag = self.get_context_root_tag(tag);
-        let parent_root_tag = self.get_parent_or_self_tag(tag);
+        let context_root_tag = self.get_context_root_tag(ty);
+        let _parent_root_tag = self.get_parent_or_self_tag(ty);
 
         self.get_context(context_root_tag)
-            .and_then(|c| c.get_cpp_type_recursive(parent_root_tag, tag))
+            .and_then(|c| c.get_types().get(&ty))
     }
 
     ///
     /// By default will only look for nested types of the context, ignoring other CppTypes
     ///
     pub fn get_cpp_type_mut(&mut self, ty: CsTypeTag) -> Option<&mut CsType> {
-        let tag = ty;
-        let context_root_tag = self.get_context_root_tag(tag);
-        let parent_root_tag = self.get_parent_or_self_tag(tag);
+        let context_root_tag = self.get_context_root_tag(ty);
+        let _parent_root_tag = self.get_parent_or_self_tag(ty);
         self.get_context_mut(context_root_tag)
-            .and_then(|c| c.get_cpp_type_recursive_mut(parent_root_tag, tag))
+            .and_then(|c| c.get_types_mut().get_mut(&ty))
     }
 
     pub fn borrow_cpp_type<F>(&mut self, ty: CsTypeTag, func: F)
@@ -573,48 +515,23 @@ impl TypeContextCollection {
 
         let declaring_ty = self.get_parent_or_self_tag(ty);
 
-        let (result_cpp_type, old_tag);
-
-        {
-            let context = self.all_contexts.get_mut(&context_ty).unwrap();
-
-            // TODO: Needed?
-            // self.borrowing_types.insert(context_ty);
-
-            // search in root
-            // clone to avoid failing il2cpp_name
-            let declaring_cpp_type = context.typedef_types.get(&declaring_ty).cloned();
-            (result_cpp_type, old_tag) = match declaring_cpp_type {
-                Some(old_cpp_type) => {
-                    let old_tag = old_cpp_type.self_tag;
-                    let new_cpp_ty = func(self, old_cpp_type);
-
-                    (new_cpp_ty, Some(old_tag))
-                }
-                None => {
-                    let mut declaring_ty = context
-                        .typedef_types
-                        .get(&declaring_ty)
-                        .expect("Parent ty not found in context")
-                        .clone();
-
-                    let found = declaring_ty.borrow_nested_type_mut(ty, self, &func);
-
-                    if !found {
-                        panic!("No nested or parent type found for type {ty:?}!");
-                    }
-
-                    (declaring_ty, None)
-                }
-            };
-        }
-
-        // avoid the borrow checker's wrath
         let context = self.all_contexts.get_mut(&context_ty).unwrap();
-        if let Some(old_tag) = old_tag {
-            context.typedef_types.remove(&old_tag);
-        }
-        context.insert_cpp_type(result_cpp_type);
+
+        // TODO: Needed?
+        // self.borrowing_types.insert(context_ty);
+
+        // search in root
+        // clone to avoid failing il2cpp_name
+        let Some(declaring_cpp_type) = context.typedef_types.get(&declaring_ty).cloned() else {
+            panic!("No type {declaring_ty:#?} found!")
+        };
+        let _old_tag = declaring_cpp_type.self_tag;
+        let new_cpp_ty = func(self, declaring_cpp_type);
+
+        let context = self.all_contexts.get_mut(&context_ty).unwrap();
+
+        context.insert_cpp_type(new_cpp_ty);
+
         self.borrowing_types.remove(&context_ty);
     }
 
