@@ -1,7 +1,7 @@
 use core::panic;
 
 use brocolib::{
-    global_metadata::{Il2CppMethodDefinition, Il2CppTypeDefinition},
+    global_metadata::{Il2CppMethodDefinition, Il2CppTypeDefinition, TypeDefinitionIndex},
     runtime_metadata::{Il2CppType, Il2CppTypeEnum, TypeData},
     Metadata,
 };
@@ -439,5 +439,15 @@ impl Il2CppTypeEnumExtensions for Il2CppTypeEnum {
                 | Il2CppTypeEnum::Pinned
                 | Il2CppTypeEnum::Enum
         )
+    }
+}
+
+pub trait TypeDefinitionIndexExtensions {
+    fn get_type_definition(&self, metadata: &Metadata) -> &Il2CppTypeDefinition;
+}
+
+impl TypeDefinitionIndexExtensions for TypeDefinitionIndex {
+    fn get_type_definition(&self, metadata: &Metadata) -> &Il2CppTypeDefinition {
+        &metadata.global_metadata.type_definitions[*self]
     }
 }

@@ -1,10 +1,11 @@
 use std::collections::HashMap;
 
 use crate::generate::cpp::cpp_type::CORDL_ACCESSOR_FIELD_PREFIX;
+use crate::generate::cs_type::CsType;
 use crate::generate::cs_type_tag::CsTypeTag;
+use crate::generate::type_extensions::{Il2CppTypeEnumExtensions, TypeDefinitionExtensions, TypeDefinitionIndexExtensions, TypeExtentions};
 use crate::generate::writer::CppWritable;
 use crate::generate::{cs_members::CsNestedUnion, metadata::Metadata};
-use crate::generate::cs_type::CsType;
 use brocolib::global_metadata::Il2CppFieldDefinition;
 use brocolib::runtime_metadata::Il2CppType;
 use itertools::Itertools;
@@ -16,9 +17,15 @@ use brocolib::runtime_metadata::Il2CppTypeEnum;
 
 use brocolib::global_metadata::TypeDefinitionIndex;
 
-use super::cpp_members::{CppFieldDecl, CppFieldImpl, CppInclude, CppNestedStruct, CppNestedUnion, CppNonMember, CppStaticAssert, CppTemplate};
-use super::cpp_type::CORDL_METHOD_HELPER_NAMESPACE;
-use super::{cpp_context_collection::CppContextCollection, cpp_members::{CppLine, CppMember, CppMethodDecl, CppMethodImpl, CppParam, CppPropertyDecl}};
+use super::cpp_members::{
+    CppFieldDecl, CppFieldImpl, CppInclude, CppNestedStruct, CppNestedUnion, CppNonMember,
+    CppStaticAssert, CppTemplate,
+};
+use super::cpp_type::{CppType, CORDL_METHOD_HELPER_NAMESPACE};
+use super::{
+    cpp_context_collection::CppContextCollection,
+    cpp_members::{CppLine, CppMember, CppMethodDecl, CppMethodImpl, CppParam, CppPropertyDecl},
+};
 
 #[derive(Clone, Debug)]
 pub struct FieldInfo<'a> {
@@ -46,12 +53,12 @@ impl<'a> FieldInfoSet<'a> {
 }
 
 pub fn handle_static_fields(
-    cpp_type: &mut CsType,
+    cpp_type: &mut CppType,
     fields: &[FieldInfo],
     metadata: &Metadata,
     tdi: TypeDefinitionIndex,
 ) {
-    let t = CsType::get_type_definition(metadata, tdi);
+    let t = tdi.get_type_definition(metadata.metadata);
 
     // if no fields, skip
     if t.field_count == 0 {
@@ -70,7 +77,7 @@ pub fn handle_static_fields(
         // non const field
         // instance field access on ref types is special
         // ref type instance fields are specially named because the field getters are supposed to be used
-        let f_cpp_name = field_info.cpp_field.name.clone();
+        let f_cpp_name = field_info.cpp_field.cpp_name.clone();
 
         let klass_resolver = cpp_type.classof_cpp_name();
 
@@ -84,7 +91,7 @@ pub fn handle_static_fields(
         // don't get a template that has no names
         let useful_template =
             cpp_type
-                .generic_template
+                .cpp_template
                 .clone()
                 .and_then(|t| match t.names.is_empty() {
                     true => None,
@@ -164,8 +171,8 @@ pub fn handle_static_fields(
             cpp_name: f_cpp_name,
             prop_ty: field_ty_cpp_name.clone(),
             instance: !f_type.is_static() && !f_type.is_constant(),
-            getter: getter_decl.name.clone().into(),
-            setter: setter_decl.name.clone().into(),
+            getter: getter_decl.cpp_name.clone().into(),
+            setter: setter_decl.cpp_name.clone().into(),
             indexable: false,
             brief_comment: Some(format!(
                 "Field {f_name}, offset 0x{f_offset:x}, size 0x{f_size:x} "
@@ -173,15 +180,17 @@ pub fn handle_static_fields(
         };
 
         // only push accessors if declaring ref type, or if static field
-        cpp_type.members.push(CppMember::Property(prop_decl).into());
+        cpp_type
+            .declarations
+            .push(CppMember::Property(prop_decl).into());
 
         // decl
         cpp_type
-            .members
+            .declarations
             .push(CppMember::MethodDecl(setter_decl).into());
 
         cpp_type
-            .members
+            .declarations
             .push(CppMember::MethodDecl(getter_decl).into());
 
         // impl
@@ -196,13 +205,13 @@ pub fn handle_static_fields(
 }
 
 pub(crate) fn handle_const_fields(
-    cpp_type: &mut CsType,
+    cpp_type: &mut CppType,
     fields: &[FieldInfo],
     ctx_collection: &CppContextCollection,
     metadata: &Metadata,
     tdi: TypeDefinitionIndex,
 ) {
-    let t = CsType::get_type_definition(metadata, tdi);
+    let t = tdi.get_type_definition(metadata.metadata);
 
     // if no fields, skip
     if t.field_count == 0 {
@@ -210,11 +219,11 @@ pub(crate) fn handle_const_fields(
     }
 
     let declaring_cpp_template = if cpp_type
-        .generic_template
+        .cpp_template
         .as_ref()
         .is_some_and(|t| !t.names.is_empty())
     {
-        cpp_type.generic_template.clone()
+        cpp_type.cpp_template.clone()
     } else {
         None
     };
@@ -271,7 +280,7 @@ pub(crate) fn handle_const_fields(
                 }
 
                 cpp_type
-                    .members
+                    .declarations
                     .push(CppMember::FieldDecl(field_decl).into());
                 cpp_type
                     .implementations
@@ -292,7 +301,7 @@ pub(crate) fn handle_const_fields(
                 };
 
                 cpp_type
-                    .members
+                    .declarations
                     .push(CppMember::FieldDecl(field_decl).into());
             }
         }
@@ -300,12 +309,12 @@ pub(crate) fn handle_const_fields(
 }
 
 pub(crate) fn handle_instance_fields(
-    cpp_type: &mut CsType,
+    cpp_type: &mut CppType,
     fields: &[FieldInfo],
     metadata: &Metadata,
     tdi: TypeDefinitionIndex,
 ) {
-    let t = CsType::get_type_definition(metadata, tdi);
+    let t = tdi.get_type_definition(metadata.metadata);
 
     // if no fields, skip
     if t.field_count == 0 {
@@ -319,7 +328,7 @@ pub(crate) fn handle_instance_fields(
         .collect_vec();
 
     let property_exists = |to_find: &str| {
-        cpp_type.members.iter().any(|d| match d.as_ref() {
+        cpp_type.declarations.iter().any(|d| match d.as_ref() {
             CppMember::Property(p) => p.cpp_name == to_find,
             _ => false,
         })
@@ -329,8 +338,8 @@ pub(crate) fn handle_instance_fields(
         .into_iter()
         .map(|d| {
             let mut f = d.cpp_field;
-            if property_exists(&f.name) {
-                f.name = format!("_cordl_{}", &f.name);
+            if property_exists(&f.cpp_name) {
+                f.cpp_name = format!("_cordl_{}", &f.cpp_name);
 
                 // make private if a property with this name exists
                 f.is_private = true;
@@ -344,7 +353,7 @@ pub(crate) fn handle_instance_fields(
     if t.is_explicit_layout() {
         // oh no! the fields are unionizing! don't tell elon musk!
         let u = pack_fields_into_single_union(resulting_fields);
-        cpp_type.members.push(CppMember::NestedUnion(u).into());
+        cpp_type.declarations.push(CppMember::NestedUnion(u).into());
     } else {
         // TODO: Make field offset asserts for explicit layouts!
         add_field_offset_asserts(cpp_type, &resulting_fields);
@@ -352,11 +361,11 @@ pub(crate) fn handle_instance_fields(
         resulting_fields
             .into_iter()
             .map(|member| CppMember::FieldDecl(member.cpp_field))
-            .for_each(|member| cpp_type.members.push(member.into()));
+            .for_each(|member| cpp_type.declarations.push(member.into()));
     };
 }
 
-fn add_field_offset_asserts(cpp_type: &mut CsType, fields: &[FieldInfo]) {
+fn add_field_offset_asserts(cpp_type: &mut CppType, fields: &[FieldInfo]) {
     // let cpp_name = if let Some(cpp_template) = &cpp_type.cpp_template {
     //     // We don't handle generic instantiations since we can't tell if a ge
     //     let mut name_components = cpp_type.cpp_name_components.clone();
@@ -379,13 +388,13 @@ fn add_field_offset_asserts(cpp_type: &mut CsType, fields: &[FieldInfo]) {
     // };
 
     // Skip generics for now
-    if cpp_type.generic_template.is_some() {
+    if cpp_type.cpp_template.is_some() {
         return;
     }
 
     let cpp_name = cpp_type.cpp_name_components.remove_pointer().combine_all();
     for field in fields {
-        let field_name = &field.cpp_field.name;
+        let field_name = &field.cpp_field.cpp_name;
         let offset = field.offset.unwrap_or(u32::MAX);
 
         let assert = CppStaticAssert {
@@ -407,13 +416,13 @@ pub(crate) fn fixup_backing_field(fieldname: &str) -> String {
 }
 
 pub(crate) fn handle_valuetype_fields(
-    cpp_type: &mut CsType,
+    cpp_type: &mut CppType,
     fields: &[FieldInfo],
     metadata: &Metadata,
     tdi: TypeDefinitionIndex,
 ) {
     // Value types only need getter fixes for explicit layout types
-    let t = CsType::get_type_definition(metadata, tdi);
+    let t = tdi.get_type_definition(metadata.metadata);
 
     // if no fields, skip
     if t.field_count == 0 {
@@ -424,14 +433,13 @@ pub(crate) fn handle_valuetype_fields(
     if t.is_explicit_layout() {
         for field_info in fields.iter().filter(|f| !f.is_constant && !f.is_static) {
             // don't get a template that has no names
-            let template =
-                cpp_type
-                    .generic_template
-                    .clone()
-                    .and_then(|t| match t.names.is_empty() {
-                        true => None,
-                        false => Some(t),
-                    });
+            let template = cpp_type
+                .cpp_template
+                .clone()
+                .and_then(|t| match t.names.is_empty() {
+                    true => None,
+                    false => Some(t),
+                });
 
             let declaring_cpp_full_name =
                 cpp_type.cpp_name_components.remove_pointer().combine_all();
@@ -440,10 +448,12 @@ pub(crate) fn handle_valuetype_fields(
             let (accessor_decls, accessor_impls) =
                 prop_methods_from_fieldinfo(field_info, template, declaring_cpp_full_name, false);
 
-            cpp_type.members.push(CppMember::Property(prop).into());
+            cpp_type.declarations.push(CppMember::Property(prop).into());
 
             accessor_decls.into_iter().for_each(|method| {
-                cpp_type.members.push(CppMember::MethodDecl(method).into());
+                cpp_type
+                    .declarations
+                    .push(CppMember::MethodDecl(method).into());
             });
 
             accessor_impls.into_iter().for_each(|method| {
@@ -457,7 +467,7 @@ pub(crate) fn handle_valuetype_fields(
             .iter()
             .cloned()
             .map(|mut f| {
-                f.cpp_field.name = fixup_backing_field(&f.cpp_field.name);
+                f.cpp_field.cpp_name = fixup_backing_field(&f.cpp_field.cpp_name);
                 f
             })
             .collect_vec();
@@ -482,12 +492,12 @@ pub(crate) fn prop_decl_from_fieldinfo(
     let f_size = field_info.size;
     let field_ty_cpp_name = &field_info.cpp_field.field_ty;
 
-    let f_cpp_name = &field_info.cpp_field.name;
+    let f_cpp_name = &field_info.cpp_field.cpp_name;
 
     let (getter_name, setter_name) = method_names_from_fieldinfo(f_cpp_name);
 
     CppPropertyDecl {
-        cpp_name: f_cpp_name.to_owned(),
+        cpp_name: f_cpp_name.clone(),
         prop_ty: field_ty_cpp_name.clone(),
         instance: !field_info.is_static,
         getter: Some(getter_name),
@@ -515,7 +525,7 @@ pub(crate) fn prop_methods_from_fieldinfo(
     let f_type = field_info.field_type;
     let field_ty_cpp_name = &field_info.cpp_field.field_ty;
 
-    let f_cpp_name = &field_info.cpp_field.name;
+    let f_cpp_name = &field_info.cpp_field.cpp_name;
     let cordl_field_name = fixup_backing_field(f_cpp_name);
     let field_access = format!("this->{cordl_field_name}");
 
@@ -637,25 +647,25 @@ pub(crate) fn prop_methods_from_fieldinfo(
     };
 
     // construct getter and setter bodies
-    let getter_body: Vec<Arc<dyn CppWritable>> =
-        if let Some(instance_null_check) = instance_null_check {
-            vec![
-                Arc::new(CppLine::make(instance_null_check.into())),
-                Arc::new(CppLine::make(getter_call)),
-            ]
-        } else {
-            vec![Arc::new(CppLine::make(getter_call))]
-        };
+    let getter_body: Vec<Arc<dyn CppWritable>> = if let Some(instance_null_check) = instance_null_check
+    {
+        vec![
+            Arc::new(CppLine::make(instance_null_check.into())),
+            Arc::new(CppLine::make(getter_call)),
+        ]
+    } else {
+        vec![Arc::new(CppLine::make(getter_call))]
+    };
 
-    let setter_body: Vec<Arc<dyn CppWritable>> =
-        if let Some(instance_null_check) = instance_null_check {
-            vec![
-                Arc::new(CppLine::make(instance_null_check.into())),
-                Arc::new(CppLine::make(setter_call)),
-            ]
-        } else {
-            vec![Arc::new(CppLine::make(setter_call))]
-        };
+    let setter_body: Vec<Arc<dyn CppWritable>> = if let Some(instance_null_check) = instance_null_check
+    {
+        vec![
+            Arc::new(CppLine::make(instance_null_check.into())),
+            Arc::new(CppLine::make(setter_call)),
+        ]
+    } else {
+        vec![Arc::new(CppLine::make(setter_call))]
+    };
 
     let getter_impl = CppMethodImpl {
         body: getter_body.clone(),
@@ -688,12 +698,12 @@ pub(crate) fn prop_methods_from_fieldinfo(
 }
 
 pub(crate) fn handle_referencetype_fields(
-    cpp_type: &mut CsType,
+    cpp_type: &mut CppType,
     fields: &[FieldInfo],
     metadata: &Metadata,
     tdi: TypeDefinitionIndex,
 ) {
-    let t = CsType::get_type_definition(metadata, tdi);
+    let t = tdi.get_type_definition(metadata.metadata);
 
     if t.is_explicit_layout() {
         warn!(
@@ -710,7 +720,7 @@ pub(crate) fn handle_referencetype_fields(
     for field_info in fields.iter().filter(|f| !f.is_constant && !f.is_static) {
         // don't get a template that has no names
         let template = cpp_type
-            .generic_template
+            .cpp_template
             .clone()
             .and_then(|t| match t.names.is_empty() {
                 true => None,
@@ -723,10 +733,12 @@ pub(crate) fn handle_referencetype_fields(
         let (accessor_decls, accessor_impls) =
             prop_methods_from_fieldinfo(field_info, template, declaring_cpp_full_name, true);
 
-        cpp_type.members.push(CppMember::Property(prop).into());
+        cpp_type.declarations.push(CppMember::Property(prop).into());
 
         accessor_decls.into_iter().for_each(|method| {
-            cpp_type.members.push(CppMember::MethodDecl(method).into());
+            cpp_type
+                .declarations
+                .push(CppMember::MethodDecl(method).into());
         });
 
         accessor_impls.into_iter().for_each(|method| {
@@ -740,7 +752,7 @@ pub(crate) fn handle_referencetype_fields(
         .iter()
         .cloned()
         .map(|mut f| {
-            f.cpp_field.name = fixup_backing_field(&f.cpp_field.name);
+            f.cpp_field.cpp_name = fixup_backing_field(&f.cpp_field.cpp_name);
             f
         })
         .collect_vec();
@@ -765,7 +777,7 @@ pub(crate) fn field_collision_check(instance_fields: &[FieldInfo]) -> bool {
 }
 
 // inspired by what il2cpp does for explicitly laid out types
-pub(crate) fn pack_fields_into_single_union(fields: Vec<FieldInfo>) -> CsNestedUnion {
+pub(crate) fn pack_fields_into_single_union(fields: Vec<FieldInfo>) -> CppNestedUnion {
     // get the min offset to use as a base for the packed structs
     let min_offset = fields.iter().map(|f| f.offset.unwrap()).min().unwrap_or(0);
 
@@ -806,19 +818,19 @@ pub(crate) fn field_into_offset_structs(
 
     let padding = actual_offset;
 
-    let packed_padding_cpp_name = format!("{}_padding[0x{padding:x}]", field.cpp_field.name);
+    let packed_padding_cpp_name = format!("{}_padding[0x{padding:x}]", field.cpp_field.cpp_name);
     let alignment_padding_cpp_name = format!(
         "{}_padding_forAlignment[0x{padding:x}]",
-        field.cpp_field.name
+        field.cpp_field.cpp_name
     );
-    let alignment_cpp_name = format!("{}_forAlignment", field.cpp_field.name);
+    let alignment_cpp_name = format!("{}_forAlignment", field.cpp_field.cpp_name);
 
     let packed_padding_field = CppFieldDecl {
         brief_comment: Some(format!("Padding field 0x{padding:x}")),
         const_expr: false,
         cpp_name: packed_padding_cpp_name,
         field_ty: "uint8_t".into(),
-        offset: *actual_offset,
+        offset: Some(*actual_offset),
         instance: true,
         is_private: false,
         readonly: false,
@@ -830,7 +842,7 @@ pub(crate) fn field_into_offset_structs(
         const_expr: false,
         cpp_name: alignment_padding_cpp_name,
         field_ty: "uint8_t".into(),
-        offset: *actual_offset,
+        offset: Some(*actual_offset),
         instance: true,
         is_private: false,
         readonly: false,

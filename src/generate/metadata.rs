@@ -78,7 +78,6 @@ pub struct Metadata<'a> {
 
     //
     pub custom_type_handler: HashMap<TypeDefinitionIndex, TypeHandlerFn>,
-    pub custom_type_resolve_handler: Vec<TypeResolveHandlerFn>,
     pub name_to_tdi: HashMap<Il2cppFullName<'a>, TypeDefinitionIndex>,
     pub blacklisted_types: HashSet<TypeDefinitionIndex>,
 

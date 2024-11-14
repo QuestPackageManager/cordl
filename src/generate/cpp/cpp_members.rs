@@ -11,7 +11,11 @@ use std::{
     sync::Arc,
 };
 
-use super::{config::STATIC_CONFIG, cpp_context::CppContext, cpp_type::{CppType, CORDL_REFERENCE_TYPE_CONSTRAINT}};
+use super::{
+    config::STATIC_CONFIG,
+    cpp_context::CppContext,
+    cpp_type::{CppType, CORDL_REFERENCE_TYPE_CONSTRAINT},
+};
 
 #[derive(Debug, Eq, Hash, PartialEq, Clone, Default, PartialOrd, Ord)]
 pub struct CppTemplate {
@@ -166,7 +170,7 @@ pub struct CppMethodSizeStruct {
 pub struct CppFieldDecl {
     pub cpp_name: String,
     pub field_ty: String,
-    pub offset: u32,
+    pub offset: Option<u32>,
     pub instance: bool,
     pub readonly: bool,
     pub const_expr: bool,
@@ -574,11 +578,7 @@ impl CppForwardDeclare {
         Self::from_cpp_type_long(cpp_type, false)
     }
     pub fn from_cpp_type_long(cpp_type: &CppType, force_generics: bool) -> Self {
-        let ns = if !cpp_type.nested {
-            Some(cpp_type.cpp_namespace().to_string())
-        } else {
-            None
-        };
+        let ns = cpp_type.cpp_namespace().to_string();
 
         assert!(
             cpp_type.cpp_name_components.declaring_types.is_none(),
@@ -586,7 +586,7 @@ impl CppForwardDeclare {
         );
 
         // literals should only be added for generic specializations
-        let literals = if cpp_type.generic_instantiations_args_types.is_some() || force_generics {
+        let literals = if force_generics {
             cpp_type.cpp_name_components.generics.clone()
         } else {
             None
@@ -594,7 +594,7 @@ impl CppForwardDeclare {
 
         Self {
             is_struct: cpp_type.is_value_type,
-            cpp_namespace: ns,
+            cpp_namespace: Some(ns),
             cpp_name: cpp_type.cpp_name().clone(),
             templates: cpp_type.cpp_template.clone(),
             literals,

@@ -58,8 +58,6 @@ impl CppContextCollection {
 
         // In some occasions, the CppContext can be empty
         if let Some((_t, mut cpp_type)) = cpp_type_entry {
-            assert!(!cpp_type.nested, "Cannot fill a nested type!");
-
             self.fill_cpp_type(&mut cpp_type, metadata);
 
             // Move ownership back up
@@ -75,7 +73,6 @@ impl CppContextCollection {
     ///
     pub fn get_cpp_type(&self, ty: CsTypeTag) -> Option<&CppType> {
         let context_root_tag = self.get_context_root_tag(ty);
-        let _parent_root_tag = self.get_parent_or_self_tag(ty);
 
         self.get_context(context_root_tag)
             .and_then(|c| c.get_types().get(&ty))
@@ -86,7 +83,7 @@ impl CppContextCollection {
     ///
     pub fn get_cpp_type_mut(&mut self, ty: CsTypeTag) -> Option<&mut CppType> {
         let context_root_tag = self.get_context_root_tag(ty);
-        let _parent_root_tag = self.get_parent_or_self_tag(ty);
+
         self.get_context_mut(context_root_tag)
             .and_then(|c| c.get_types_mut().get_mut(&ty))
     }
@@ -100,8 +97,6 @@ impl CppContextCollection {
             panic!("Already borrowing this context!");
         }
 
-        let declaring_ty = self.get_parent_or_self_tag(ty);
-
         let context = self.all_contexts.get_mut(&context_ty).unwrap();
 
         // TODO: Needed?
@@ -109,8 +104,8 @@ impl CppContextCollection {
 
         // search in root
         // clone to avoid failing il2cpp_name
-        let Some(declaring_cpp_type) = context.typedef_types.get(&declaring_ty).cloned() else {
-            panic!("No type {declaring_ty:#?} found!")
+        let Some(declaring_cpp_type) = context.typedef_types.get(&ty).cloned() else {
+            panic!("No type {context_ty:#?} found!")
         };
         let _old_tag = declaring_cpp_type.self_tag;
         let new_cpp_ty = func(self, declaring_cpp_type);
@@ -136,5 +131,13 @@ impl CppContextCollection {
         }
         self.all_contexts
             .get_mut(&self.get_context_root_tag(context_tag))
+    }
+
+    pub fn get_context_root_tag(&self, ty: CsTypeTag) -> CsTypeTag {
+        self.alias_context
+            .get(&ty)
+            .cloned()
+            // .map(|t| self.get_context_root_tag(*t))
+            .unwrap_or(ty)
     }
 }

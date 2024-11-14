@@ -19,7 +19,8 @@ use crate::generate::cpp::cpp_members::{CppForwardDeclare, CppInclude};
 use crate::generate::cpp::cpp_type::CORDL_NO_INCLUDE_IMPL_DEFINE;
 use crate::generate::cs_type_tag::CsTypeTag;
 use crate::generate::metadata::Metadata;
-use crate::generate::writer::CppWriter;
+use crate::generate::type_extensions::TypeDefinitionExtensions;
+use crate::generate::writer::{CppWritable, CppWriter};
 use crate::helpers::sorting::DependencyGraph;
 
 use super::config::CppGenerationConfig;
@@ -44,30 +45,15 @@ pub struct CppContext {
 }
 
 impl CppContext {
-    pub fn get_cpp_type_recursive_mut(
-        &mut self,
-        root_tag: CsTypeTag,
-        child_tag: CsTypeTag,
-    ) -> Option<&mut CppType> {
+    pub fn get_cpp_type_recursive_mut(&mut self, root_tag: CsTypeTag) -> Option<&mut CppType> {
         let ty = self.typedef_types.get_mut(&root_tag);
-        if root_tag == child_tag {
-            return ty;
-        }
 
-        ty.and_then(|ty| ty.get_nested_type_mut(child_tag))
+        ty
     }
-    pub fn get_cpp_type_recursive(
-        &self,
-        root_tag: CsTypeTag,
-        child_tag: CsTypeTag,
-    ) -> Option<&CppType> {
+    pub fn get_cpp_type_recursive(&self, root_tag: CsTypeTag) -> Option<&CppType> {
         let ty = self.typedef_types.get(&root_tag);
-        // if a root type
-        if root_tag == child_tag {
-            return ty;
-        }
 
-        ty.and_then(|ty| ty.get_nested_type(child_tag))
+        ty
     }
 
     pub fn get_include_path(&self) -> &PathBuf {
@@ -76,6 +62,10 @@ impl CppContext {
 
     pub fn get_types(&self) -> &HashMap<CsTypeTag, CppType> {
         &self.typedef_types
+    }
+    
+    pub fn get_types_mut(&mut self) -> &mut HashMap<CsTypeTag, CppType> {
+        &mut self.typedef_types
     }
 
     // TODO: Move out, this is CSContext
@@ -138,28 +128,10 @@ impl CppContext {
             return x;
         }
 
-        match CppType::make_cpp_type(metadata, config, tdi, tag, generic_inst) {
-            Some(cpptype) => {
-                x.insert_cpp_type(cpptype);
-            }
-            None => {
-                info!(
-                    "Unable to create valid CppContext for type: {}!",
-                    t.full_name(metadata.metadata, true)
-                );
-            }
-        }
-
         x
     }
 
     pub fn insert_cpp_type(&mut self, cpp_type: CppType) {
-        if cpp_type.nested {
-            panic!(
-                "Cannot have a root type as a nested type! {}",
-                &cpp_type.cpp_name_components.combine_all()
-            );
-        }
         self.typedef_types.insert(cpp_type.self_tag, cpp_type);
     }
 
@@ -239,10 +211,6 @@ impl CppContext {
         let typedef_types = self
             .typedef_types
             .values()
-            .flat_map(|t: &CppType| -> Vec<&CppType> {
-                t.nested_types_flattened().values().copied().collect_vec()
-            })
-            .chain(self.typedef_types.values())
             .sorted_by(|a, b| a.cpp_name_components.cmp(&b.cpp_name_components))
             // Enums go after stubs
             .sorted_by(|a, b| {
@@ -253,20 +221,6 @@ impl CppContext {
                 if a.is_enum_type {
                     Ordering::Less
                 } else if b.is_enum_type {
-                    Ordering::Greater
-                } else {
-                    Ordering::Equal
-                }
-            })
-            // Stubs are first
-            .sorted_by(|a, b| {
-                if a.is_stub == b.is_stub {
-                    return Ordering::Equal;
-                }
-
-                if a.is_stub {
-                    Ordering::Less
-                } else if b.is_stub {
                     Ordering::Greater
                 } else {
                     Ordering::Equal
@@ -432,32 +386,9 @@ impl CppContext {
                     }
                     Ok(())
                 })?;
-
-            // This is likely not necessary
-            // self.typedef_types
-            //     .values()
-            //     .flat_map(|t| &t.requirements.forward_declares)
-            //     .map(|(_, i)| i)
-            //     .unique()
-            //     // TODO: Check forward declare is not of own type
-            //     .try_for_each(|i| i.write(&mut typeimpl_writer))?;
         }
 
         for t in &typedef_root_types_sorted {
-            if t.nested {
-                panic!(
-                    "Cannot have a root type as a nested type! {}",
-                    &t.cpp_name_components.combine_all()
-                );
-            }
-            // if t.generic_instantiation_args.is_none() || true {
-            //     t.write_def(&mut typedef_writer)?;
-            //     t.write_impl(&mut typeimpl_writer)?;
-            // } else {
-            //     t.write_def(&mut typeimpl_writer)?;
-            //     t.write_impl(&mut typeimpl_writer)?;
-            // }
-
             t.write_def(&mut typedef_writer)?;
             t.write_impl(&mut typeimpl_writer)?;
         }
@@ -491,22 +422,18 @@ impl CppContext {
         Ok(())
     }
 
-    fn write_il2cpp_arg_macros(
-        ty: &CppType,
-        writer: &mut CppWriter,
-    ) -> color_eyre::Result<()> {
+    fn write_il2cpp_arg_macros(ty: &CppType, writer: &mut CppWriter) -> color_eyre::Result<()> {
         let is_generic_instantiation = ty.generic_instantiations_args_types.is_some();
         if is_generic_instantiation {
             return Ok(());
         }
 
-        let template_container_type = ty.is_stub
-            || ty
-                .generic_template
-                .as_ref()
-                .is_some_and(|t| !t.names.is_empty());
+        let template_container_type = ty
+            .cpp_template
+            .as_ref()
+            .is_some_and(|t| !t.names.is_empty());
 
-        if !ty.is_value_type && !ty.is_stub && !template_container_type && !is_generic_instantiation
+        if !ty.is_value_type && !template_container_type && !is_generic_instantiation
         {
             // reference types need no boxing
             writeln!(
@@ -517,13 +444,6 @@ impl CppContext {
                     .remove_generics()
                     .remove_pointer()
                     .combine_all()
-            )?;
-        }
-
-        if ty.nested {
-            writeln!(
-                writer,
-                "// TODO: Nested type, check correct definition print!"
             )?;
         }
 

@@ -29,6 +29,28 @@ pub struct TypeContextCollection {
 
 impl TypeContextCollection {
     
+fn fill_cpp_type(
+        &mut self,
+        cpp_type: &mut CsType,
+        metadata: &Metadata,
+    ) {
+        let tag = cpp_type.self_tag;
+
+        if self.filled_types.contains(&tag) {
+            return;
+        }
+        if self.filling_types.contains(&tag) {
+            panic!("Currently filling type {tag:?}, cannot fill")
+        }
+
+        // Move ownership to local
+        self.filling_types.insert(tag);
+
+        cpp_type.fill_from_il2cpp(metadata);
+
+        self.filled_types.insert(tag);
+        self.filling_types.remove(&tag.clone());
+    }
 
     ///
     /// Generate the aliases for the nested types through il2cpp
@@ -382,7 +404,7 @@ impl TypeContextCollection {
             type_data
         };
 
-        self.borrow_cs_type(generic_class_ty_data, |collection, mut cpp_type| {
+        self.borrow_cs_type(generic_class_ty_data, |collection: &mut TypeContextCollection, mut cpp_type| {
             // cpp_type.make_generics_args(metadata, collection);
             collection.fill_cpp_type(&mut cpp_type, metadata);
 
