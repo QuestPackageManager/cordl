@@ -533,6 +533,9 @@ fn fill_cpp_type(
             borrowing_types: Default::default(),
         }
     }
+    pub fn take(self) -> HashMap<CsTypeTag, TypeContext> {
+        self.all_contexts
+    }
     pub fn get(&self) -> &HashMap<CsTypeTag, TypeContext> {
         &self.all_contexts
     }

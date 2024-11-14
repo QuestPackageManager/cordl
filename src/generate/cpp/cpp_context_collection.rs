@@ -1,9 +1,12 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::generate::{cs_type_tag::CsTypeTag, metadata::Metadata};
+use crate::generate::{
+    cs_context_collection::TypeContextCollection, cs_type_tag::CsTypeTag, metadata::Metadata,
+};
 
-use super::{cpp_context::CppContext, cpp_type::CppType};
+use super::{config::CppGenerationConfig, cpp_context::CppContext, cpp_type::CppType};
 
+#[derive(Default)]
 pub struct CppContextCollection {
     // Should always be a TypeDefinitionIndex
     all_contexts: HashMap<CsTypeTag, CppContext>,
@@ -14,8 +17,21 @@ pub struct CppContextCollection {
 }
 
 impl CppContextCollection {
-    pub fn from_cs_collection(collection: CppContextCollection) -> CppContextCollection {
-        todo!()
+    pub fn from_cs_collection(
+        collection: TypeContextCollection,
+        metadata: &Metadata,
+        config: &CppGenerationConfig
+    ) -> CppContextCollection {
+        let mut cpp_collection = CppContextCollection::default();
+
+        for (tag, context) in collection.take() {
+            cpp_collection
+                .all_contexts
+                .insert(tag, CppContext::make(tag, context, metadata, config));
+        }
+        cpp_collection.alias_context = collection.alias_context;
+
+        cpp_collection
     }
 
     fn fill_cpp_type(&mut self, cpp_type: &mut CppType, metadata: &Metadata) {
@@ -31,7 +47,7 @@ impl CppContextCollection {
         // Move ownership to local
         self.filling_types.insert(tag);
 
-        cpp_type.fill_from_il2cpp(metadata);
+        cpp_type.fill_from_il2cpp(metadata, self);
 
         self.filled_types.insert(tag);
         self.filling_types.remove(&tag.clone());

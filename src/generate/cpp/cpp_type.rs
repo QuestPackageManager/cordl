@@ -369,6 +369,14 @@ impl CppType {
         Ok(())
     }
 
+    pub fn make_cpp_type(metadata: &Metadata<'_>, tag: CsTypeTag, ty: CsType) -> CppType {
+        todo!()
+    }
+
+    pub fn fill_from_il2cpp(&self, metadata: &Metadata<'_>, ctx_collection: &CppContextCollection) {
+        todo!()
+    }
+
     fn parent_joined_cpp_name(metadata: &Metadata, tdi: TypeDefinitionIndex) -> String {
         let ty_def = &metadata.metadata.global_metadata.type_definitions[tdi];
 
@@ -1883,9 +1891,7 @@ to_incl_cpp_ty.cpp_name_components.clone()
         };
         let cpp_name = cpp_type.cpp_name().clone();
 
-        let base_type = cpp_type
-            .parent
-            .expect("No parent for interface type?");
+        let base_type = cpp_type.parent.expect("No parent for interface type?");
 
         cpp_type.declarations.push(
             CppMember::ConstructorDecl(CppConstructorDecl {
@@ -2214,6 +2220,7 @@ to_incl_cpp_ty.cpp_name_components.clone()
     fn name(&self) -> &String {
         &self.cpp_name_components.name
     }
+    
 }
 
 fn wrapper_type_for_tdi(td: &Il2CppTypeDefinition) -> &str {

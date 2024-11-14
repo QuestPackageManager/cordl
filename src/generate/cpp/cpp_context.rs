@@ -14,9 +14,11 @@ use itertools::Itertools;
 use log::{info, trace};
 use pathdiff::diff_paths;
 
+use crate::generate::context::TypeContext;
 use crate::generate::cpp::config::STATIC_CONFIG;
 use crate::generate::cpp::cpp_members::{CppForwardDeclare, CppInclude};
 use crate::generate::cpp::cpp_type::CORDL_NO_INCLUDE_IMPL_DEFINE;
+use crate::generate::cs_type::CsType;
 use crate::generate::cs_type_tag::CsTypeTag;
 use crate::generate::metadata::Metadata;
 use crate::generate::type_extensions::TypeDefinitionExtensions;
@@ -63,19 +65,19 @@ impl CppContext {
     pub fn get_types(&self) -> &HashMap<CsTypeTag, CppType> {
         &self.typedef_types
     }
-    
+
     pub fn get_types_mut(&mut self) -> &mut HashMap<CsTypeTag, CppType> {
         &mut self.typedef_types
     }
 
-    // TODO: Move out, this is CSContext
+
     pub fn make(
+        context_tag: CsTypeTag,
+        context: TypeContext,
         metadata: &Metadata,
-        config: &CppGenerationConfig,
-        tdi: TypeDefinitionIndex,
-        tag: CsTypeTag,
-        generic_inst: Option<&Vec<usize>>,
+        config: &CppGenerationConfig
     ) -> CppContext {
+        let tdi = context_tag.get_tdi();
         let t = &metadata.metadata.global_metadata.type_definitions[tdi];
 
         let components = t.get_name_components(metadata.metadata);
@@ -114,18 +116,8 @@ impl CppContext {
             typealias_types: Default::default(),
         };
 
-        if metadata.blacklisted_types.contains(&tdi) {
-            if !t.is_value_type() {
-                x.typealias_types.insert((
-                    cpp_namespace,
-                    CppUsingAlias {
-                        alias: cpp_name.to_string(),
-                        result: IL2CPP_OBJECT_TYPE.to_string(),
-                        template: Default::default(),
-                    },
-                ));
-            }
-            return x;
+        for (tag, ty) in context.typedef_types {
+            x.typedef_types.insert(tag, CppType::make_cpp_type(metadata, tag, ty));
         }
 
         x
