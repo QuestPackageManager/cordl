@@ -425,70 +425,6 @@ impl CsType {
         }
     }
 
-    fn make_generics_args(
-        &mut self,
-        metadata: &Metadata,
-        ctx_collection: &CppContextCollection,
-        tdi: TypeDefinitionIndex,
-    ) {
-        if self.generic_instantiations_args_types.is_none() {
-            return;
-        }
-
-        let generic_instantiations_args_types =
-            self.generic_instantiations_args_types.clone().unwrap();
-
-        let td = &metadata.metadata.global_metadata.type_definitions[tdi];
-        let _ty = &metadata.metadata_registration.types[td.byval_type_index as usize];
-        let generic_container = td.generic_container(metadata.metadata);
-
-        let mut template_args: Vec<(String, String)> = vec![];
-
-        let generic_instantiation_args: Vec<String> = generic_instantiations_args_types
-            .iter()
-            .enumerate()
-            .map(|(gen_param_idx, u)| {
-                let t = metadata.metadata_registration.types.get(*u).unwrap();
-
-                let gen_param = generic_container
-                    .generic_parameters(metadata.metadata)
-                    .iter()
-                    .find(|p| p.num as usize == gen_param_idx)
-                    .expect("No generic parameter found for this index!");
-
-                (t, gen_param)
-            })
-            .map(|(t, gen_param)| {
-                let gen_name = gen_param.name(metadata.metadata).to_string();
-
-                parse_generic_arg(
-                    t,
-                    gen_name,
-                    self,
-                    ctx_collection,
-                    metadata,
-                    &mut template_args,
-                )
-            })
-            .map(|n| n.combine_all())
-            .collect();
-
-        // Handle nested types
-        // Assumes these nested types exist,
-        // which are created in the make_generic type func
-        // TODO: Base off a CppType the alias path
-
-        // Add template constraint
-        // get all args with constraints
-        if !template_args.is_empty() {
-            self.generic_template = Some(GenericTemplate {
-                names: template_args,
-            });
-        }
-
-        self.cpp_name_components.generics =
-            Some(generic_instantiation_args.into_iter().collect_vec());
-    }
 
     fn make_parameters(
         &mut self,
@@ -609,7 +545,7 @@ impl CsType {
         }
         let mut offset_iter = offsets.iter();
 
-        let get_offset = |field: &Il2CppFieldDefinition, i: usize, iter: &mut Iter<u32>| {
+        let get_offset = |field: &Il2CppFieldDefinition, i: usize, iter| {
             let f_type = metadata
                 .metadata_registration
                 .types
@@ -797,10 +733,6 @@ impl CsType {
         ctx_collection: &CppContextCollection,
         tdi: TypeDefinitionIndex,
     ) {
-        let self = {
-            let this = &mut *self;
-            this
-        };
         let t = &metadata.metadata.global_metadata.type_definitions[tdi];
 
         let ns = t.namespace(metadata.metadata);
@@ -929,8 +861,6 @@ impl CsType {
         if t.nested_type_count == 0 {
             return;
         }
-
-        let generic_instantiation_args = self.cpp_name_components.generics.clone();
 
         let aliases = t
             .nested_types(metadata.metadata)
