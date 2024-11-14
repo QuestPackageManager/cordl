@@ -120,7 +120,7 @@ fn main() -> color_eyre::Result<()> {
         return Ok(());
     }
 
-    let mut cpp_context_collection = TypeContextCollection::new();
+    let mut cs_context_collection = TypeContextCollection::new();
 
     // blacklist types
     {
@@ -233,8 +233,8 @@ fn main() -> color_eyre::Result<()> {
                 "Making types {:.4}% ({tdi_u64}/{total})",
                 (tdi_u64 as f64 / total as f64 * 100.0)
             );
-            cpp_context_collection.make_from(&metadata, TypeData::TypeDefinitionIndex(tdi), None);
-            cpp_context_collection.alias_nested_types_il2cpp(
+            cs_context_collection.make_from(&metadata, TypeData::TypeDefinitionIndex(tdi), None);
+            cs_context_collection.alias_nested_types_il2cpp(
                 tdi,
                 CsTypeTag::TypeDefinitionIndex(tdi),
                 &metadata,
@@ -260,7 +260,7 @@ fn main() -> color_eyre::Result<()> {
                 "Making nested types {:.4}% ({tdi_u64}/{total})",
                 (tdi_u64 as f64 / total as f64 * 100.0)
             );
-            cpp_context_collection.make_nested_from(&metadata, tdi, None);
+            cs_context_collection.make_nested_from(&metadata, tdi, None);
         }
     }
 
@@ -332,7 +332,7 @@ fn main() -> color_eyre::Result<()> {
                 .get(generic_class.generic_method_index as usize)
                 .unwrap();
 
-            cpp_context_collection.fill_generic_method_inst(method_spec, &mut metadata);
+            cs_context_collection.fill_generic_method_inst(method_spec, &mut metadata);
         }
     }
 
@@ -358,7 +358,7 @@ fn main() -> color_eyre::Result<()> {
                 (tdi_u64 as f64 / total as f64 * 100.0)
             );
 
-            cpp_context_collection.fill(&metadata, CsTypeTag::TypeDefinitionIndex(tdi));
+            cs_context_collection.fill(&metadata, CsTypeTag::TypeDefinitionIndex(tdi));
         }
     }
 

@@ -48,7 +48,7 @@ pub struct CsCommentedString {
 }
 
 #[derive(Debug, Hash, PartialEq, Eq, PartialOrd, Ord, Clone)]
-pub struct CppUsingAlias {
+pub struct CsUsingAlias {
     pub result: String,
     pub alias: String,
     pub template: Option<CsGenericTemplate>,
@@ -62,7 +62,7 @@ pub enum CsMember {
     ConstructorDecl(CsConstructor),
     NestedUnion(CsNestedUnion),
     NestedStruct(CsNestedStruct),
-    CppUsingAlias(CppUsingAlias),
+    CppUsingAlias(CsUsingAlias),
     Comment(CsCommentedString),
     FieldLayout(CsFieldLayout),
 }

@@ -14,22 +14,17 @@ use itertools::Itertools;
 use log::{info, trace};
 use pathdiff::diff_paths;
 
-use crate::generate::cs_members::CppForwardDeclare;
-use crate::generate::cs_type::CORDL_NO_INCLUDE_IMPL_DEFINE;
-use crate::generate::{cs_members::CppInclude, type_extensions::TypeDefinitionExtensions};
+use crate::generate::cpp::config::STATIC_CONFIG;
+use crate::generate::cpp::cpp_members::{CppForwardDeclare, CppInclude};
+use crate::generate::cpp::cpp_type::CORDL_NO_INCLUDE_IMPL_DEFINE;
+use crate::generate::cs_type_tag::CsTypeTag;
+use crate::generate::metadata::Metadata;
+use crate::generate::writer::CppWriter;
 use crate::helpers::sorting::DependencyGraph;
-use crate::STATIC_CONFIG;
 
-use super::cpp_type_tag::CsTypeTag;
-use super::cs_type::IL2CPP_OBJECT_TYPE;
-use super::{
-    config::GenerationConfig,
-    cpp_type::CsType,
-    cs_type::CSType,
-    members::CppUsingAlias,
-    metadata::Metadata,
-    writer::{CppWritable, CppWriter},
-};
+use super::config::CppGenerationConfig;
+use super::cpp_members::CppUsingAlias;
+use super::cpp_type::{CppType, IL2CPP_OBJECT_TYPE};
 
 // Holds the contextual information for creating a C++ file
 // Will hold various metadata, such as includes, type definitions, and extraneous writes
@@ -42,7 +37,7 @@ pub struct CppContext {
     pub fundamental_path: PathBuf,
 
     // Types to write, typedef
-    pub typedef_types: HashMap<CsTypeTag, CsType>,
+    pub typedef_types: HashMap<CsTypeTag, CppType>,
 
     // Namespace -> alias
     pub typealias_types: HashSet<(String, CppUsingAlias)>,
@@ -53,7 +48,7 @@ impl CppContext {
         &mut self,
         root_tag: CsTypeTag,
         child_tag: CsTypeTag,
-    ) -> Option<&mut CsType> {
+    ) -> Option<&mut CppType> {
         let ty = self.typedef_types.get_mut(&root_tag);
         if root_tag == child_tag {
             return ty;
@@ -65,7 +60,7 @@ impl CppContext {
         &self,
         root_tag: CsTypeTag,
         child_tag: CsTypeTag,
-    ) -> Option<&CsType> {
+    ) -> Option<&CppType> {
         let ty = self.typedef_types.get(&root_tag);
         // if a root type
         if root_tag == child_tag {
@@ -79,14 +74,14 @@ impl CppContext {
         &self.typedef_path
     }
 
-    pub fn get_types(&self) -> &HashMap<CsTypeTag, CsType> {
+    pub fn get_types(&self) -> &HashMap<CsTypeTag, CppType> {
         &self.typedef_types
     }
 
     // TODO: Move out, this is CSContext
     pub fn make(
         metadata: &Metadata,
-        config: &GenerationConfig,
+        config: &CppGenerationConfig,
         tdi: TypeDefinitionIndex,
         tag: CsTypeTag,
         generic_inst: Option<&Vec<usize>>,
@@ -143,7 +138,7 @@ impl CppContext {
             return x;
         }
 
-        match CsType::make_cpp_type(metadata, config, tdi, tag, generic_inst) {
+        match CppType::make_cpp_type(metadata, config, tdi, tag, generic_inst) {
             Some(cpptype) => {
                 x.insert_cpp_type(cpptype);
             }
@@ -158,7 +153,7 @@ impl CppContext {
         x
     }
 
-    pub fn insert_cpp_type(&mut self, cpp_type: CsType) {
+    pub fn insert_cpp_type(&mut self, cpp_type: CppType) {
         if cpp_type.nested {
             panic!(
                 "Cannot have a root type as a nested type! {}",
@@ -168,7 +163,7 @@ impl CppContext {
         self.typedef_types.insert(cpp_type.self_tag, cpp_type);
     }
 
-    pub fn write(&self, config: &GenerationConfig) -> color_eyre::Result<()> {
+    pub fn write(&self, config: &CppGenerationConfig) -> color_eyre::Result<()> {
         // Write typedef file first
         if Path::exists(self.typedef_path.as_path()) {
             remove_file(self.typedef_path.as_path())?;
@@ -244,7 +239,7 @@ impl CppContext {
         let typedef_types = self
             .typedef_types
             .values()
-            .flat_map(|t: &CsType| -> Vec<&CsType> {
+            .flat_map(|t: &CppType| -> Vec<&CppType> {
                 t.nested_types_flattened().values().copied().collect_vec()
             })
             .chain(self.typedef_types.values())
@@ -497,8 +492,8 @@ impl CppContext {
     }
 
     fn write_il2cpp_arg_macros(
-        ty: &CsType,
-        writer: &mut super::writer::CppWriter,
+        ty: &CppType,
+        writer: &mut CppWriter,
     ) -> color_eyre::Result<()> {
         let is_generic_instantiation = ty.generic_instantiations_args_types.is_some();
         if is_generic_instantiation {

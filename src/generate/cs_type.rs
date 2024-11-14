@@ -261,19 +261,19 @@ impl CsType {
     pub fn fill_from_il2cpp(
         &mut self,
         metadata: &Metadata,
-        ctx_collection: &TypeContextCollection,
+        
     ) {
         let tdi: TypeDefinitionIndex = self.self_tag.into();
 
         let _t = &metadata.metadata.global_metadata.type_definitions[tdi];
 
-        self.make_parents(metadata, ctx_collection, tdi);
-        self.make_interfaces(metadata, ctx_collection, tdi);
+        self.make_parents(metadata, tdi);
+        self.make_interfaces(metadata, tdi);
 
-        self.make_nested_types(metadata, ctx_collection, tdi);
-        self.make_fields(metadata, ctx_collection, tdi);
-        self.make_properties(metadata, ctx_collection, tdi);
-        self.make_methods(metadata, ctx_collection, tdi);
+        self.make_nested_types(metadata, tdi);
+        self.make_fields(metadata, tdi);
+        self.make_properties(metadata, tdi);
+        self.make_methods(metadata, tdi);
 
         if let Some(func) = metadata.custom_type_handler.get(&tdi) {
             func(self)
@@ -321,13 +321,7 @@ impl CsType {
         }
     }
 
-    fn make_methods(
-        &mut self,
-        metadata: &Metadata,
-
-        ctx_collection: &TypeContextCollection,
-        tdi: TypeDefinitionIndex,
-    ) {
+    fn make_methods(&mut self, metadata: &Metadata, tdi: TypeDefinitionIndex) {
         let t = Self::get_type_definition(metadata, tdi);
 
         // Then, handle methods
@@ -339,7 +333,7 @@ impl CsType {
             // Then, for each method, write it out
             for (i, _method) in t.methods(metadata.metadata).iter().enumerate() {
                 let method_index = MethodIndex::new(t.method_start.index() + i as u32);
-                self.create_method(t, method_index, metadata, ctx_collection, false);
+                self.create_method(t, method_index, metadata, false);
             }
         }
     }
@@ -347,8 +341,6 @@ impl CsType {
     fn make_fields(
         &mut self,
         metadata: &Metadata,
-        ctx_collection: &TypeContextCollection,
-
         tdi: TypeDefinitionIndex,
     ) {
         let t = Self::get_type_definition(metadata, tdi);
@@ -388,7 +380,7 @@ impl CsType {
             field: &Il2CppFieldDefinition,
             i: usize,
             mut iter: impl Iterator<Item = &'a u32>,
-            field_offsets: &Vec<u32>,
+            field_offsets: &[u32],
             metadata: &Metadata<'_>,
             t: &Il2CppTypeDefinition,
         ) -> Option<u32> {
@@ -442,7 +434,7 @@ impl CsType {
                 .get(field.type_index as usize)
                 .unwrap();
 
-            let sa = offsets::get_il2cpptype_sa(*metadata, f_type, gen_args);
+            let sa = offsets::get_il2cpptype_sa(metadata, f_type, gen_args);
 
             sa.size
         }
@@ -504,24 +496,6 @@ impl CsType {
             })
             .collect_vec();
 
-        for field_info in fields.iter() {
-            let f_type = field_info.field_type;
-
-            // only push def dependency if valuetype field & not a primitive builtin
-            if f_type.valuetype && !f_type.ty.is_primitive_builtin() {
-                let field_cpp_tag: CsTypeTag =
-                    CsTypeTag::from_type_data(f_type.data, metadata.metadata);
-                let field_cpp_td_tag: CsTypeTag = field_cpp_tag.get_tdi().into();
-                let field_self = ctx_collection.get_cpp_type(field_cpp_td_tag);
-
-                if field_self.is_some() {
-                    let _field_cpp_context = ctx_collection
-                        .get_context(field_cpp_td_tag)
-                        .expect("No context for cpp value type");
-                }
-            }
-        }
-
         if t.is_value_type() || t.is_enum_type() {
             handle_valuetype_fields(self, &fields, metadata, tdi);
         } else {
@@ -529,15 +503,10 @@ impl CsType {
         }
 
         handle_static_fields(self, &fields, metadata, tdi);
-        handle_const_fields(self, &fields, ctx_collection, metadata, tdi);
+        handle_const_fields(self, &fields, metadata, tdi);
     }
 
-    fn make_parents(
-        &mut self,
-        metadata: &Metadata,
-        ctx_collection: &TypeContextCollection,
-        tdi: TypeDefinitionIndex,
-    ) {
+    fn make_parents(&mut self, metadata: &Metadata, tdi: TypeDefinitionIndex) {
         let t = &metadata.metadata.global_metadata.type_definitions[tdi];
 
         let ns = t.namespace(metadata.metadata);
@@ -574,34 +543,11 @@ impl CsType {
             );
             assert!(is_ref_type, "Not a class, object or generic inst!");
 
-            if is_ref_type {
-                // TODO: Figure out why some generic insts don't work here
-                let parent_tdi: TypeDefinitionIndex = parent_ty.into();
-
-                let _base_type_context = ctx_collection
-                    .get_context(parent_ty)
-                    .or_else(|| ctx_collection.get_context(parent_tdi.into()))
-                    .unwrap_or_else(|| {
-                        panic!("No CppContext for base type. Using tag {parent_ty:?}")
-                    });
-
-                let _base_type_self = ctx_collection
-                    .get_cpp_type(parent_ty)
-                    .or_else(|| ctx_collection.get_cpp_type(parent_tdi.into()))
-                    .unwrap_or_else(|| panic!("No CppType for base type. Using tag {parent_ty:?}"));
-            }
-
             self.parent = Some(parent_ty);
         }
     }
 
-    fn make_interfaces(
-        &mut self,
-        metadata: &Metadata<'_>,
-        _ctx_collection: &TypeContextCollection,
-
-        tdi: TypeDefinitionIndex,
-    ) {
+    fn make_interfaces(&mut self, metadata: &Metadata<'_>, tdi: TypeDefinitionIndex) {
         let t = &metadata.metadata.global_metadata.type_definitions[tdi];
 
         for &interface_index in t.interfaces(metadata.metadata) {
@@ -612,12 +558,7 @@ impl CsType {
         }
     }
 
-    fn make_nested_types(
-        &mut self,
-        metadata: &Metadata,
-        _ctx_collection: &TypeContextCollection,
-        tdi: TypeDefinitionIndex,
-    ) {
+    fn make_nested_types(&mut self, metadata: &Metadata, tdi: TypeDefinitionIndex) {
         let t = &metadata.metadata.global_metadata.type_definitions[tdi];
 
         if t.nested_type_count == 0 {
@@ -629,20 +570,13 @@ impl CsType {
             .iter()
             .map(|nested_tdi| {
                 let _nested_td = &metadata.metadata.global_metadata.type_definitions[*nested_tdi];
-                let nested_tag = CsTypeTag::TypeDefinitionIndex(*nested_tdi);
 
-                nested_tag
+                CsTypeTag::TypeDefinitionIndex(*nested_tdi)
             })
             .collect();
     }
 
-    fn make_properties(
-        &mut self,
-        metadata: &Metadata,
-        _ctx_collection: &TypeContextCollection,
-
-        tdi: TypeDefinitionIndex,
-    ) {
+    fn make_properties(&mut self, metadata: &Metadata, tdi: TypeDefinitionIndex) {
         let t = Self::get_type_definition(metadata, tdi);
 
         // Then, handle properties
@@ -711,8 +645,6 @@ impl CsType {
         method_index: MethodIndex,
 
         metadata: &Metadata,
-        ctx_collection: &TypeContextCollection,
-
         is_generic_method_inst: bool,
     ) {
         let method = &metadata.metadata.global_metadata.methods[method_index];
@@ -784,13 +716,7 @@ impl CsType {
                 .collect_vec()
         });
 
-        let _declaring_type = method.declaring_type(metadata.metadata);
-        let tag = CsTypeTag::TypeDefinitionIndex(method.declaring_type);
-
         let method_calc = metadata.method_calculations.get(&method_index);
-
-        // generic methods don't have definitions if not an instantiation
-        let _method_stub = !is_generic_method_inst && template.is_some();
 
         let mut method_decl = CsMethodDecl {
             brief: format!(
@@ -803,35 +729,11 @@ impl CsType {
             )
             .into(),
             name: m_name.to_string(),
-            return_type: m_ret_tag.clone(),
+            return_type: m_ret_tag,
             parameters: m_params_no_def.clone(),
             instance: !method.is_static_method(),
             template: template.clone(),
             method_data: None,
-        };
-
-        let _instance_ptr: String = if method.is_static_method() {
-            "nullptr".into()
-        } else {
-            "this".into()
-        };
-
-        const METHOD_INFO_VAR_NAME: &str = "___internal_method";
-
-        // instance methods should resolve slots if this is an interface, or if this is a virtual/abstract method, and not a final method
-        // static methods can't be virtual or interface anyway so checking for that here is irrelevant
-        let _should_resolve_slot = self.is_interface
-            || ((method.is_virtual_method() || method.is_abstract_method())
-                && !method.is_final_method());
-
-        // check if declaring type is the current type or the interface
-        // we check TDI because if we are a generic instantiation
-        // we just use ourselves if the declaring type is also the same TDI
-        let _interface_declaring_self: Option<&CsType> = if tag.get_tdi() == self.self_tag.get_tdi()
-        {
-            Some(self)
-        } else {
-            ctx_collection.get_cpp_type(tag)
         };
 
         // if type is a generic
@@ -872,7 +774,6 @@ impl CsType {
 
         let mut cursor = Cursor::new(data);
 
-        const UNSIGNED_SUFFIX: &str = "u";
         match ty.ty {
             Il2CppTypeEnum::Boolean => CsValue::Bool(data[0] != 0),
             Il2CppTypeEnum::I1 => CsValue::Num(cursor.read_i8().unwrap().try_into().unwrap()),

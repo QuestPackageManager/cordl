@@ -1,9 +1,11 @@
 use itertools::Itertools;
 use std::io::Write;
 
-use crate::generate::writer::CppWritable;
+use crate::generate::writer::{CppWritable, CppWriter, SortLevel, Sortable};
 
-impl CppWritable for GenericTemplate {
+use super::cpp_members::{CppCommentedString, CppConstructorDecl, CppConstructorImpl, CppFieldDecl, CppFieldImpl, CppForwardDeclare, CppInclude, CppLine, CppMember, CppMethodDecl, CppMethodImpl, CppMethodSizeStruct, CppNestedStruct, CppNestedUnion, CppNonMember, CppParam, CppPropertyDecl, CppStaticAssert, CppTemplate, CppUsingAlias};
+
+impl CppWritable for CppTemplate {
     fn write(&self, writer: &mut CppWriter) -> color_eyre::Result<()> {
         writeln!(
             writer,
@@ -109,7 +111,7 @@ impl Sortable for CppUsingAlias {
 }
 
 impl CppWritable for CppFieldDecl {
-    fn write(&self, writer: &mut super::writer::CppWriter) -> color_eyre::Result<()> {
+    fn write(&self, writer: &mut CppWriter) -> color_eyre::Result<()> {
         if let Some(comment) = &self.brief_comment {
             writeln!(writer, "/// @brief {comment}")?;
         }
@@ -156,7 +158,7 @@ impl Sortable for CppFieldDecl {
 }
 
 impl CppWritable for CppFieldImpl {
-    fn write(&self, writer: &mut super::writer::CppWriter) -> color_eyre::Result<()> {
+    fn write(&self, writer: &mut CppWriter) -> color_eyre::Result<()> {
         if let Some(template) = &self.declaring_type_template {
             template.write(writer)?;
         }
@@ -196,7 +198,7 @@ impl Sortable for CppFieldImpl {
 
 impl CppWritable for CppMethodDecl {
     // declaration
-    fn write(&self, writer: &mut super::writer::CppWriter) -> color_eyre::Result<()> {
+    fn write(&self, writer: &mut CppWriter) -> color_eyre::Result<()> {
         if let Some(brief) = &self.brief {
             writeln!(writer, "/// @brief {brief}")?;
         }
@@ -291,7 +293,7 @@ impl Sortable for CppMethodDecl {
 
 impl CppWritable for CppMethodImpl {
     // declaration
-    fn write(&self, writer: &mut super::writer::CppWriter) -> color_eyre::Result<()> {
+    fn write(&self, writer: &mut CppWriter) -> color_eyre::Result<()> {
         if let Some(brief) = &self.brief {
             writeln!(writer, "/// @brief {brief}")?;
         }
@@ -378,7 +380,7 @@ impl Sortable for CppMethodImpl {
 
 impl CppWritable for CppConstructorDecl {
     // declaration
-    fn write(&self, writer: &mut super::writer::CppWriter) -> color_eyre::Result<()> {
+    fn write(&self, writer: &mut CppWriter) -> color_eyre::Result<()> {
         // I'm lazy
         if self.is_protected {
             writeln!(writer, "protected:")?;
@@ -477,7 +479,7 @@ impl Sortable for CppConstructorDecl {
 
 impl CppWritable for CppConstructorImpl {
     // declaration
-    fn write(&self, writer: &mut super::writer::CppWriter) -> color_eyre::Result<()> {
+    fn write(&self, writer: &mut CppWriter) -> color_eyre::Result<()> {
         writeln!(writer, "// Ctor Parameters {:?}", self.parameters)?;
 
         // Constructor
@@ -545,7 +547,7 @@ impl Sortable for CppConstructorImpl {
 }
 
 impl CppWritable for CppPropertyDecl {
-    fn write(&self, writer: &mut super::writer::CppWriter) -> color_eyre::Result<()> {
+    fn write(&self, writer: &mut CppWriter) -> color_eyre::Result<()> {
         let mut prefix_modifiers: Vec<&str> = vec![];
         let suffix_modifiers: Vec<&str> = vec![];
 
@@ -594,7 +596,7 @@ impl Sortable for CppPropertyDecl {
 }
 
 impl CppWritable for CppMethodSizeStruct {
-    fn write(&self, writer: &mut super::writer::CppWriter) -> color_eyre::Result<()> {
+    fn write(&self, writer: &mut CppWriter) -> color_eyre::Result<()> {
         writeln!(
             writer,
             "//  Writing Method size for method: {}.{}",
@@ -680,7 +682,7 @@ impl CppWritable for CppLine {
 }
 
 impl CppWritable for CppNestedStruct {
-    fn write(&self, writer: &mut super::writer::CppWriter) -> color_eyre::Result<()> {
+    fn write(&self, writer: &mut CppWriter) -> color_eyre::Result<()> {
         if self.is_private {
             writeln!(writer, "private:")?;
         }
@@ -735,7 +737,7 @@ impl Sortable for CppNestedStruct {
 }
 
 impl CppWritable for CppNestedUnion {
-    fn write(&self, writer: &mut super::writer::CppWriter) -> color_eyre::Result<()> {
+    fn write(&self, writer: &mut CppWriter) -> color_eyre::Result<()> {
         if self.is_private {
             writeln!(writer, "private:")?;
         }
@@ -767,7 +769,7 @@ impl Sortable for CppNestedUnion {
 }
 
 impl CppWritable for CppMember {
-    fn write(&self, writer: &mut super::writer::CppWriter) -> color_eyre::Result<()> {
+    fn write(&self, writer: &mut CppWriter) -> color_eyre::Result<()> {
         match self {
             CppMember::FieldDecl(f) => f.write(writer),
             CppMember::FieldImpl(f) => f.write(writer),
@@ -787,7 +789,7 @@ impl CppWritable for CppMember {
 }
 
 impl CppWritable for CppNonMember {
-    fn write(&self, writer: &mut super::writer::CppWriter) -> color_eyre::Result<()> {
+    fn write(&self, writer: &mut CppWriter) -> color_eyre::Result<()> {
         match self {
             CppNonMember::SizeStruct(ss) => ss.write(writer),
             CppNonMember::Comment(c) => c.write(writer),

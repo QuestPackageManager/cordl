@@ -28,57 +28,7 @@ pub struct TypeContextCollection {
 }
 
 impl TypeContextCollection {
-    pub fn fill_cpp_type(&mut self, cpp_type: &mut CsType, metadata: &Metadata) {
-        let tag = cpp_type.self_tag;
-
-        if self.filled_types.contains(&tag) {
-            return;
-        }
-        if self.filling_types.contains(&tag) {
-            panic!("Currently filling type {tag:?}, cannot fill")
-        }
-
-        // Move ownership to local
-        self.filling_types.insert(tag);
-
-        cpp_type.fill_from_il2cpp(metadata, self);
-
-        self.filled_types.insert(tag);
-        self.filling_types.remove(&tag.clone());
-    }
-
-    pub fn fill(&mut self, metadata: &Metadata, type_tag: CsTypeTag) {
-        let context_tag = self.get_context_root_tag(type_tag);
-
-        if self.filled_types.contains(&type_tag) {
-            return;
-        }
-
-        if self.borrowing_types.contains(&context_tag) {
-            panic!("Borrowing context {context_tag:?}");
-        }
-
-        // Move ownership to local
-        let cpp_type_entry = self
-            .all_contexts
-            .get_mut(&context_tag)
-            .expect("No cpp context")
-            .typedef_types
-            .remove_entry(&type_tag);
-
-        // In some occasions, the CppContext can be empty
-        if let Some((_t, mut cpp_type)) = cpp_type_entry {
-            assert!(!cpp_type.nested, "Cannot fill a nested type!");
-
-            self.fill_cpp_type(&mut cpp_type, metadata);
-
-            // Move ownership back up
-            self.all_contexts
-                .get_mut(&context_tag)
-                .expect("No cpp context")
-                .insert_cpp_type(cpp_type);
-        }
-    }
+    
 
     ///
     /// Generate the aliases for the nested types through il2cpp
@@ -173,7 +123,7 @@ impl TypeContextCollection {
             return Some(self.all_contexts.get_mut(&context_root_tag).unwrap());
         }
 
-        if self.get_cpp_type(ty_tag).is_some() {
+        if self.get_cs_type(ty_tag).is_some() {
             return self.get_context_mut(ty_tag);
         }
 
@@ -286,7 +236,7 @@ impl TypeContextCollection {
             return Some(self.all_contexts.get_mut(&context_root_tag).unwrap());
         }
 
-        if self.get_cpp_type(generic_class_ty_data).is_some() {
+        if self.get_cs_type(generic_class_ty_data).is_some() {
             return self.get_context_mut(generic_class_ty_data);
         }
 
@@ -371,10 +321,10 @@ impl TypeContextCollection {
             type_data
         };
 
-        self.borrow_cpp_type(generic_class_ty_data, |collection, mut cpp_type| {
+        self.borrow_cs_type(generic_class_ty_data, |collection, mut cpp_type| {
             let method_index = method_spec.method_definition_index;
             cpp_type.add_method_generic_inst(method_spec, metadata);
-            cpp_type.create_method(ty_def, method_index, metadata, collection, true);
+            cpp_type.create_method(ty_def, method_index, metadata, true);
 
             cpp_type
         });
@@ -432,7 +382,7 @@ impl TypeContextCollection {
             type_data
         };
 
-        self.borrow_cpp_type(generic_class_ty_data, |collection, mut cpp_type| {
+        self.borrow_cs_type(generic_class_ty_data, |collection, mut cpp_type| {
             // cpp_type.make_generics_args(metadata, collection);
             collection.fill_cpp_type(&mut cpp_type, metadata);
 
@@ -486,7 +436,7 @@ impl TypeContextCollection {
     ///
     /// By default will only look for nested types of the context, ignoring other CppTypes
     ///
-    pub fn get_cpp_type(&self, ty: CsTypeTag) -> Option<&CsType> {
+    pub fn get_cs_type(&self, ty: CsTypeTag) -> Option<&CsType> {
         let context_root_tag = self.get_context_root_tag(ty);
         let _parent_root_tag = self.get_parent_or_self_tag(ty);
 
@@ -497,14 +447,14 @@ impl TypeContextCollection {
     ///
     /// By default will only look for nested types of the context, ignoring other CppTypes
     ///
-    pub fn get_cpp_type_mut(&mut self, ty: CsTypeTag) -> Option<&mut CsType> {
+    pub fn get_cs_type_mut(&mut self, ty: CsTypeTag) -> Option<&mut CsType> {
         let context_root_tag = self.get_context_root_tag(ty);
         let _parent_root_tag = self.get_parent_or_self_tag(ty);
         self.get_context_mut(context_root_tag)
             .and_then(|c| c.get_types_mut().get_mut(&ty))
     }
 
-    pub fn borrow_cpp_type<F>(&mut self, ty: CsTypeTag, func: F)
+    pub fn borrow_cs_type<F>(&mut self, ty: CsTypeTag, func: F)
     where
         F: Fn(&mut Self, CsType) -> CsType,
     {
@@ -566,52 +516,5 @@ impl TypeContextCollection {
     }
     pub fn get_mut(&mut self) -> &mut HashMap<CsTypeTag, TypeContext> {
         &mut self.all_contexts
-    }
-}
-
-// Get root parent for a reference type, which is System.Object
-// for generic sharing
-fn get_root_parent<'a>(
-    metadata: &mut Metadata<'a>,
-    ty_def: &'a brocolib::global_metadata::Il2CppTypeDefinition,
-) -> Option<&'a brocolib::global_metadata::Il2CppTypeDefinition> {
-    // is reference type
-    // only make generic spatialization
-    if ty_def.is_value_type() || ty_def.is_enum_type() {
-        return Some(ty_def);
-    }
-
-    let mut parent_index = ty_def.parent_index;
-    loop {
-        if parent_index == u32::MAX {
-            break;
-        }
-
-        let parent_ty = metadata
-            .metadata_registration
-            .types
-            .get(parent_index as usize)
-            .unwrap();
-        if let TypeData::TypeDefinitionIndex(parent_tdi) = parent_ty.data {
-            let parent_ty_def = &metadata.metadata.global_metadata.type_definitions[parent_tdi];
-
-            parent_index = parent_ty_def.parent_index;
-        } else {
-            break;
-        }
-    }
-    if parent_index == u32::MAX {
-        return Some(ty_def);
-    }
-
-    let parent_ty = metadata
-        .metadata_registration
-        .types
-        .get(parent_index as usize)
-        .unwrap();
-    if let TypeData::TypeDefinitionIndex(parent_tdi) = parent_ty.data {
-        Some(&metadata.metadata.global_metadata.type_definitions[parent_tdi])
-    } else {
-        Some(ty_def)
     }
 }

@@ -1,20 +1,21 @@
-use std::{collections::HashSet, sync::Arc};
+use std::{collections::{HashMap, HashSet}, rc::Rc, sync::Arc};
 
-use brocolib::{global_metadata::Il2CppTypeDefinition, runtime_metadata::Il2CppType};
+use brocolib::{
+    global_metadata::{FieldIndex, Il2CppTypeDefinition, MethodIndex, TypeDefinitionIndex},
+    runtime_metadata::{Il2CppType, Il2CppTypeEnum, TypeData},
+};
+use log::warn;
 
 use crate::{
     data::name_components::NameComponents,
     generate::{
-        cs_context_collection::TypeContextCollection,
-        cs_members::{CppForwardDeclare, CppInclude},
-        cs_type::CsType,
-        cs_type_tag::CsTypeTag,
-        metadata::{Metadata, TypeUsage},
-        writer::CppWriter,
+        cpp::cpp_members::CppStaticAssert, cs_context_collection::TypeContextCollection, cs_members::CsMember, cs_type::CsType, cs_type_tag::CsTypeTag, metadata::{Metadata, TypeUsage}, offsets, writer::{CppWritable, CppWriter}
     },
 };
 
-use super::cpp_members::{CppMember, CppNonMember};
+use super::{config::CppGenerationConfig, cpp_members::{
+    CppConstructorDecl, CppConstructorImpl, CppFieldDecl, CppForwardDeclare, CppInclude, CppLine, CppMember, CppMethodDecl, CppMethodImpl, CppNestedStruct, CppNonMember, CppParam, CppTemplate, CppUsingAlias
+}};
 
 pub const CORDL_TYPE_MACRO: &str = "CORDL_TYPE";
 pub const __CORDL_IS_VALUE_TYPE: &str = "__IL2CPP_IS_VALUE_TYPE";
@@ -59,6 +60,7 @@ pub struct CppType {
     pub implementation_members: Vec<Arc<CppMember>>,
     pub implementation_non_members: Vec<Arc<CppNonMember>>,
 
+    pub generic_template: Option<CppTemplate>,
     pub cpp_name_components: NameComponents,
     pub tag: CsTypeTag,
 }
@@ -213,14 +215,14 @@ impl CppType {
 
                     let a_offset = match a.as_ref() {
                         CsMember::FieldDecl(f) => f.offset,
-                        CsMember::NestedUnion(u) => u.offset,
-                        _ => u32::MAX,
+                        CsMember::NestedUnion(u) => Some(u.offset),
+                        _ => None,
                     };
 
                     let b_offset = match b.as_ref() {
                         CsMember::FieldDecl(f) => f.offset,
-                        CsMember::NestedUnion(u) => u.offset,
-                        _ => u32::MAX,
+                        CsMember::NestedUnion(u) => Some(u.offset),
+                        _ => None,
                     };
 
                     a_offset.cmp(&b_offset)
@@ -425,7 +427,7 @@ impl CppType {
     /// [declaring_generic_inst_types] the generic instantiation of the declaring type
     fn cppify_name_il2cpp_recurse(
         &self,
-        requirements: &mut CsTypeRequirements,
+        requirements: &mut CppTypeRequirements,
         ctx_collection: &TypeContextCollection,
         metadata: &Metadata,
         typ: &Il2CppType,
@@ -543,7 +545,7 @@ impl CppType {
                 let typedef_incl = CppInclude::new_context_typedef(to_incl);
                 let typeimpl_incl = CppInclude::new_context_typeimpl(to_incl);
                 let to_incl_cpp_ty = ctx_collection
-                    .get_cpp_type(typ.data.into())
+                    .get_cs_type(typ.data.into())
                     .unwrap_or_else(|| panic!("Unable to get type to include {:?}", typ.data));
 
                 let own_context = other_context_ty == own_context_ty;
@@ -924,7 +926,7 @@ impl CppType {
         let interface_cpp_name = interface_name_il2cpp.remove_pointer().combine_all();
         let interface_cpp_pointer = interface_name_il2cpp.as_pointer().combine_all();
 
-        let operator_method_decl = CsMethodDecl {
+        let operator_method_decl = CppMethodDecl {
             brief: Some(format!("Convert operator to {interface_cpp_name:?}")),
             cpp_name: interface_cpp_pointer.clone(),
             return_type: "".to_string(),
@@ -932,7 +934,7 @@ impl CppType {
             parameters: vec![],
             template: None,
         };
-        let helper_method_decl = CsMethodDecl {
+        let helper_method_decl = CppMethodDecl {
             brief: Some(format!("Convert to {interface_cpp_name:?}")),
             return_type: interface_cpp_pointer.clone(),
             cpp_name: format!("i_{}", config.sanitize_to_cpp_name(&interface_cpp_name)),
@@ -1095,8 +1097,8 @@ impl CppType {
         }
 
         cpp_type.members.push(
-            CsMember::FieldDecl(CsField {
-                name: format!("_cordl_size_padding[0x{packed_remaining_size:x}]").to_string(),
+            CsMember::FieldDecl(CppFieldDecl {
+                cpp_name: format!("_cordl_size_padding[0x{packed_remaining_size:x}]").to_string(),
                 field_ty: "uint8_t".into(),
                 offset: size_info.instance_size,
                 instance: true,
@@ -1117,8 +1119,8 @@ impl CppType {
         let cpp_type = self;
         if let Some(size) = cpp_type.size_info.as_ref().map(|s| s.instance_size) {
             cpp_type.members.push(
-                CsMember::FieldDecl(CsField {
-                    name: REFERENCE_TYPE_WRAPPER_SIZE.to_string(),
+                CsMember::FieldDecl(CppFieldDecl {
+                    cpp_name: REFERENCE_TYPE_WRAPPER_SIZE.to_string(),
                     field_ty: "auto".to_string(),
                     offset: None,
                     instance: false,
@@ -1138,8 +1140,8 @@ impl CppType {
             };
 
             cpp_type.members.push(
-                CsMember::FieldDecl(CsField {
-                    name: format!("{REFERENCE_TYPE_FIELD_SIZE}[{fixup_size}]"),
+                CsMember::FieldDecl(CppFieldDecl {
+                    cpp_name: format!("{REFERENCE_TYPE_FIELD_SIZE}[{fixup_size}]"),
                     field_ty: "uint8_t".to_string(),
                     offset: u32::MAX,
                     instance: true,
@@ -1263,7 +1265,7 @@ impl CppType {
             .push(CsMember::NestedStruct(nested_struct).into());
 
         let operator_body = format!("return static_cast<{unwrapped_name}>(this->value__);");
-        let unwrapped_operator_decl = CsMethodDecl {
+        let unwrapped_operator_decl = CppMethodDecl {
             cpp_name: Default::default(),
             instance: true,
             return_type: unwrapped_name,
@@ -1284,7 +1286,7 @@ impl CppType {
         };
         // convert to proper backing type
         let backing_operator_body = format!("return static_cast<{enum_base}>(this->value__);");
-        let backing_operator_decl = CsMethodDecl {
+        let backing_operator_decl = CppMethodDecl {
             brief: Some("Conversion into unwrapped enum value".to_string()),
             return_type: enum_base,
             body: Some(vec![Arc::new(CppLine::make(backing_operator_body))]),
@@ -1317,8 +1319,8 @@ impl CppType {
 
         cpp_type.requirements.needs_byte_include();
         cpp_type.members.push(
-            CsMember::FieldDecl(CsField {
-                name: VALUE_TYPE_WRAPPER_SIZE.to_string(),
+            CsMember::FieldDecl(CppFieldDecl {
+                cpp_name: VALUE_TYPE_WRAPPER_SIZE.to_string(),
                 field_ty: "auto".to_string(),
                 offset: u32::MAX,
                 instance: false,
@@ -1365,7 +1367,7 @@ impl CppType {
         &mut self,
         metadata: &Metadata,
         ctx_collection: &TypeContextCollection,
-        config: &GenerationConfig,
+        config: &CppGenerationConfig,
         tdi: TypeDefinitionIndex,
     ) {
         let cpp_type = {
@@ -1403,7 +1405,7 @@ impl CppType {
                     &[cpp_type.cpp_name().as_str()],
                 );
 
-                Some(CsParam {
+                Some(CppParam {
                     name: f_cpp_name,
                     ty: f_type_cpp_name,
                     modifiers: "".to_string(),
@@ -1502,7 +1504,7 @@ impl CppType {
 
         let move_ctor = CppConstructorDecl {
             cpp_name: cpp_name.clone(),
-            parameters: vec![CsParam {
+            parameters: vec![CppParam {
                 ty: cpp_name.clone(),
                 name: "".to_string(),
                 modifiers: "&&".to_string(),
@@ -1523,7 +1525,7 @@ impl CppType {
 
         let copy_ctor = CppConstructorDecl {
             cpp_name: cpp_name.clone(),
-            parameters: vec![CsParam {
+            parameters: vec![CppParam {
                 ty: cpp_name.clone(),
                 name: "".to_string(),
                 modifiers: "const &".to_string(),
@@ -1542,10 +1544,10 @@ impl CppType {
             body: None,
         };
 
-        let move_operator_eq = CsMethodDecl {
+        let move_operator_eq = CppMethodDecl {
             cpp_name: "operator=".to_string(),
             return_type: format!("{cpp_name}&"),
-            parameters: vec![CsParam {
+            parameters: vec![CppParam {
                 ty: cpp_name.clone(),
                 name: "o".to_string(),
                 modifiers: "&&".to_string(),
@@ -1572,10 +1574,10 @@ impl CppType {
             ]),
         };
 
-        let copy_operator_eq = CsMethodDecl {
+        let copy_operator_eq = CppMethodDecl {
             cpp_name: "operator=".to_string(),
             return_type: format!("{cpp_name}&"),
-            parameters: vec![CsParam {
+            parameters: vec![CppParam {
                 ty: cpp_name.clone(),
                 name: "o".to_string(),
                 modifiers: "const &".to_string(),
@@ -1646,7 +1648,7 @@ impl CppType {
         };
         let copy_ctor = CppConstructorDecl {
             cpp_name: cpp_name.clone(),
-            parameters: vec![CsParam {
+            parameters: vec![CppParam {
                 name: "".to_string(),
                 modifiers: " const&".to_string(),
                 ty: cpp_name.clone(),
@@ -1667,7 +1669,7 @@ impl CppType {
         };
         let move_ctor = CppConstructorDecl {
             cpp_name: cpp_name.clone(),
-            parameters: vec![CsParam {
+            parameters: vec![CppParam {
                 name: "".to_string(),
                 modifiers: "&&".to_string(),
                 ty: cpp_name.clone(),
@@ -1747,7 +1749,7 @@ impl CppType {
         cpp_type.members.push(
             CsMember::ConstructorDecl(CppConstructorDecl {
                 cpp_name: cpp_name.clone(),
-                parameters: vec![CsParam {
+                parameters: vec![CppParam {
                     name: "ptr".to_string(),
                     modifiers: "".to_string(),
                     ty: "void*".to_string(),
@@ -1820,7 +1822,7 @@ impl CppType {
 
         let move_ctor = CppConstructorDecl {
             cpp_name: t.clone(),
-            parameters: vec![CsParam {
+            parameters: vec![CppParam {
                 def_value: None,
                 modifiers: "&&".to_string(),
                 name: "".to_string(),
@@ -1853,7 +1855,7 @@ impl CppType {
 
         let move_ctor = CppConstructorDecl {
             cpp_name: t.clone(),
-            parameters: vec![CsParam {
+            parameters: vec![CppParam {
                 def_value: None,
                 modifiers: "const&".to_string(),
                 name: "".to_string(),
@@ -1923,8 +1925,8 @@ impl CppType {
         };
         let tdi: TypeDefinitionIndex = cpp_type.self_tag.get_tdi();
 
-        let il2cpp_metadata_type_index = CsField {
-            name: "__IL2CPP_TYPE_DEFINITION_INDEX".into(),
+        let il2cpp_metadata_type_index = CppFieldDecl {
+            cpp_name: "__IL2CPP_TYPE_DEFINITION_INDEX".into(),
             field_ty: "uint32_t".into(),
             offset: u32::MAX,
             instance: false,
@@ -1974,8 +1976,8 @@ impl CppType {
     fn create_ref_constructor(
         cpp_type: &mut CsType,
         declaring_type: &Il2CppTypeDefinition,
-        m_params: &[CsParam],
-        template: &Option<GenericTemplate>,
+        m_params: &[CppParam],
+        template: &Option<CppTemplate>,
     ) {
         if declaring_type.is_value_type() || declaring_type.is_enum_type() {
             return;
@@ -1992,7 +1994,7 @@ impl CppType {
 
         let ty_full_cpp_name = cpp_type.cpp_name_components.combine_all();
 
-        let decl: CsMethodDecl = CsMethodDecl {
+        let decl: CppMethodDecl = CppMethodDecl {
             cpp_name: "New_ctor".into(),
             return_type: ty_full_cpp_name.clone(),
             parameters: params_no_default,
@@ -2013,7 +2015,7 @@ impl CppType {
         };
 
         // To avoid trailing ({},)
-        let base_ctor_params = CsParam::params_names(&decl.parameters).join(", ");
+        let base_ctor_params = CppParam::params_names(&decl.parameters).join(", ");
 
         let allocate_call = format!(
             "THROW_UNLESS(::il2cpp_utils::NewSpecific<{ty_full_cpp_name}>({base_ctor_params}))"

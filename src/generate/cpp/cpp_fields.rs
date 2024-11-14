@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
-use crate::generate::cs_members::CppLine;
-use crate::generate::cs_members::CsNestedUnion;
+use crate::generate::cpp::cpp_type::CORDL_ACCESSOR_FIELD_PREFIX;
+use crate::generate::cs_type_tag::CsTypeTag;
+use crate::generate::writer::CppWritable;
+use crate::generate::{cs_members::CsNestedUnion, metadata::Metadata};
 use crate::generate::cs_type::CsType;
-use crate::generate::cs_type::CORDL_ACCESSOR_FIELD_PREFIX;
-
 use brocolib::global_metadata::Il2CppFieldDefinition;
 use brocolib::runtime_metadata::Il2CppType;
 use itertools::Itertools;
@@ -16,31 +16,13 @@ use brocolib::runtime_metadata::Il2CppTypeEnum;
 
 use brocolib::global_metadata::TypeDefinitionIndex;
 
-use super::context_collection::CppContextCollection;
-use super::cs_type::CSType;
-use super::cs_type::CORDL_METHOD_HELPER_NAMESPACE;
-use super::cs_type_tag::CsTypeTag;
-use super::members::CppFieldImpl;
-use super::members::CppInclude;
-use super::members::CppMethodImpl;
-use super::members::CppNestedStruct;
-use super::members::CppNonMember;
-use super::members::CppStaticAssert;
-use super::members::CsField;
-use super::members::CsMember;
-use super::members::CsMethodDecl;
-use super::members::CsParam;
-use super::members::CsPropertyDecl;
-use super::members::GenericTemplate;
-use super::metadata::Metadata;
-use super::type_extensions::Il2CppTypeEnumExtensions;
-use super::type_extensions::TypeDefinitionExtensions;
-use super::type_extensions::TypeExtentions;
-use super::writer::CppWritable;
+use super::cpp_members::{CppFieldDecl, CppFieldImpl, CppInclude, CppNestedStruct, CppNestedUnion, CppNonMember, CppStaticAssert, CppTemplate};
+use super::cpp_type::CORDL_METHOD_HELPER_NAMESPACE;
+use super::{cpp_context_collection::CppContextCollection, cpp_members::{CppLine, CppMember, CppMethodDecl, CppMethodImpl, CppParam, CppPropertyDecl}};
 
 #[derive(Clone, Debug)]
 pub struct FieldInfo<'a> {
-    pub cpp_field: CsField,
+    pub cpp_field: CppFieldDecl,
     pub field: &'a Il2CppFieldDefinition,
     pub field_type: &'a Il2CppType,
     pub is_constant: bool,
@@ -114,8 +96,8 @@ pub fn handle_static_fields(
 
         let get_return_type = field_ty_cpp_name.clone();
 
-        let getter_decl = CsMethodDecl {
-            name: getter_name.clone(),
+        let getter_decl = CppMethodDecl {
+            cpp_name: getter_name.clone(),
             instance: false,
             return_type: get_return_type,
 
@@ -135,8 +117,8 @@ pub fn handle_static_fields(
             template: None,
         };
 
-        let setter_decl = CsMethodDecl {
-            name: setter_name,
+        let setter_decl = CppMethodDecl {
+            cpp_name: setter_name,
             instance: false,
             return_type: "void".to_string(),
 
@@ -149,7 +131,7 @@ pub fn handle_static_fields(
             is_implicit_operator: false,
             is_explicit_operator: false,
             is_no_except: false, // TODO:
-            parameters: vec![CsParam {
+            parameters: vec![CppParam {
                 def_value: None,
                 modifiers: "".to_string(),
                 name: setter_var_name.to_string(),
@@ -178,7 +160,7 @@ pub fn handle_static_fields(
 
         // instance fields on a ref type should declare a cpp property
 
-        let prop_decl = CsPropertyDecl {
+        let prop_decl = CppPropertyDecl {
             cpp_name: f_cpp_name,
             prop_ty: field_ty_cpp_name.clone(),
             instance: !f_type.is_static() && !f_type.is_constant(),
@@ -191,25 +173,25 @@ pub fn handle_static_fields(
         };
 
         // only push accessors if declaring ref type, or if static field
-        cpp_type.members.push(CsMember::Property(prop_decl).into());
+        cpp_type.members.push(CppMember::Property(prop_decl).into());
 
         // decl
         cpp_type
             .members
-            .push(CsMember::MethodDecl(setter_decl).into());
+            .push(CppMember::MethodDecl(setter_decl).into());
 
         cpp_type
             .members
-            .push(CsMember::MethodDecl(getter_decl).into());
+            .push(CppMember::MethodDecl(getter_decl).into());
 
         // impl
         cpp_type
             .implementations
-            .push(CsMember::MethodImpl(setter_impl).into());
+            .push(CppMember::MethodImpl(setter_impl).into());
 
         cpp_type
             .implementations
-            .push(CsMember::MethodImpl(getter_impl).into());
+            .push(CppMember::MethodImpl(getter_impl).into());
     }
 }
 
@@ -250,7 +232,7 @@ pub(crate) fn handle_const_fields(
         match f_type.ty.is_primitive_builtin() {
             false => {
                 // other type
-                let field_decl = CsField {
+                let field_decl = CppFieldDecl {
                     instance: false,
                     readonly: f_type.is_constant(),
                     value: None,
@@ -290,14 +272,14 @@ pub(crate) fn handle_const_fields(
 
                 cpp_type
                     .members
-                    .push(CsMember::FieldDecl(field_decl).into());
+                    .push(CppMember::FieldDecl(field_decl).into());
                 cpp_type
                     .implementations
-                    .push(CsMember::FieldImpl(field_impl).into());
+                    .push(CppMember::FieldImpl(field_impl).into());
             }
             true => {
                 // primitive type
-                let field_decl = CsField {
+                let field_decl = CppFieldDecl {
                     instance: false,
                     const_expr: true,
                     readonly: f_type.is_constant(),
@@ -311,7 +293,7 @@ pub(crate) fn handle_const_fields(
 
                 cpp_type
                     .members
-                    .push(CsMember::FieldDecl(field_decl).into());
+                    .push(CppMember::FieldDecl(field_decl).into());
             }
         }
     }
@@ -338,7 +320,7 @@ pub(crate) fn handle_instance_fields(
 
     let property_exists = |to_find: &str| {
         cpp_type.members.iter().any(|d| match d.as_ref() {
-            CsMember::Property(p) => p.cpp_name == to_find,
+            CppMember::Property(p) => p.cpp_name == to_find,
             _ => false,
         })
     };
@@ -362,14 +344,14 @@ pub(crate) fn handle_instance_fields(
     if t.is_explicit_layout() {
         // oh no! the fields are unionizing! don't tell elon musk!
         let u = pack_fields_into_single_union(resulting_fields);
-        cpp_type.members.push(CsMember::NestedUnion(u).into());
+        cpp_type.members.push(CppMember::NestedUnion(u).into());
     } else {
         // TODO: Make field offset asserts for explicit layouts!
         add_field_offset_asserts(cpp_type, &resulting_fields);
 
         resulting_fields
             .into_iter()
-            .map(|member| CsMember::FieldDecl(member.cpp_field))
+            .map(|member| CppMember::FieldDecl(member.cpp_field))
             .for_each(|member| cpp_type.members.push(member.into()));
     };
 }
@@ -458,16 +440,16 @@ pub(crate) fn handle_valuetype_fields(
             let (accessor_decls, accessor_impls) =
                 prop_methods_from_fieldinfo(field_info, template, declaring_cpp_full_name, false);
 
-            cpp_type.members.push(CsMember::Property(prop).into());
+            cpp_type.members.push(CppMember::Property(prop).into());
 
             accessor_decls.into_iter().for_each(|method| {
-                cpp_type.members.push(CsMember::MethodDecl(method).into());
+                cpp_type.members.push(CppMember::MethodDecl(method).into());
             });
 
             accessor_impls.into_iter().for_each(|method| {
                 cpp_type
                     .implementations
-                    .push(CsMember::MethodImpl(method).into());
+                    .push(CppMember::MethodImpl(method).into());
             });
         }
 
@@ -490,7 +472,7 @@ pub(crate) fn handle_valuetype_fields(
 pub(crate) fn prop_decl_from_fieldinfo(
     metadata: &Metadata,
     field_info: &FieldInfo,
-) -> CsPropertyDecl {
+) -> CppPropertyDecl {
     if field_info.is_static {
         panic!("Can't turn static fields into declspec properties!");
     }
@@ -504,8 +486,8 @@ pub(crate) fn prop_decl_from_fieldinfo(
 
     let (getter_name, setter_name) = method_names_from_fieldinfo(f_cpp_name);
 
-    CsPropertyDecl {
-        cpp_name: f_cpp_name.clone(),
+    CppPropertyDecl {
+        cpp_name: f_cpp_name.to_owned(),
         prop_ty: field_ty_cpp_name.clone(),
         instance: !field_info.is_static,
         getter: Some(getter_name),
@@ -526,10 +508,10 @@ fn method_names_from_fieldinfo(f_cpp_name: &str) -> (String, String) {
 
 pub(crate) fn prop_methods_from_fieldinfo(
     field_info: &FieldInfo,
-    template: Option<GenericTemplate>,
+    template: Option<CppTemplate>,
     declaring_cpp_name: String,
     declaring_is_ref: bool,
-) -> (Vec<CsMethodDecl>, Vec<CppMethodImpl>) {
+) -> (Vec<CppMethodDecl>, Vec<CppMethodImpl>) {
     let f_type = field_info.field_type;
     let field_ty_cpp_name = &field_info.cpp_field.field_ty;
 
@@ -584,8 +566,8 @@ pub(crate) fn prop_methods_from_fieldinfo(
         }
     };
 
-    let getter_decl = CsMethodDecl {
-        name: getter_name.clone(),
+    let getter_decl = CppMethodDecl {
+        cpp_name: getter_name.clone(),
         instance: true,
         return_type: get_return_type,
 
@@ -606,8 +588,8 @@ pub(crate) fn prop_methods_from_fieldinfo(
         template: None,
     };
 
-    let const_getter_decl = CsMethodDecl {
-        name: getter_name,
+    let const_getter_decl = CppMethodDecl {
+        cpp_name: getter_name,
         instance: true,
         return_type: const_get_return_type,
 
@@ -628,8 +610,8 @@ pub(crate) fn prop_methods_from_fieldinfo(
         template: None,
     };
 
-    let setter_decl = CsMethodDecl {
-        name: setter_name,
+    let setter_decl = CppMethodDecl {
+        cpp_name: setter_name,
         instance: true,
         return_type: "void".to_string(),
 
@@ -643,7 +625,7 @@ pub(crate) fn prop_methods_from_fieldinfo(
         is_explicit_operator: false,
 
         is_no_except: false, // TODO:
-        parameters: vec![CsParam {
+        parameters: vec![CppParam {
             def_value: None,
             modifiers: "".to_string(),
             name: setter_var_name.to_string(),
@@ -741,16 +723,16 @@ pub(crate) fn handle_referencetype_fields(
         let (accessor_decls, accessor_impls) =
             prop_methods_from_fieldinfo(field_info, template, declaring_cpp_full_name, true);
 
-        cpp_type.members.push(CsMember::Property(prop).into());
+        cpp_type.members.push(CppMember::Property(prop).into());
 
         accessor_decls.into_iter().for_each(|method| {
-            cpp_type.members.push(CsMember::MethodDecl(method).into());
+            cpp_type.members.push(CppMember::MethodDecl(method).into());
         });
 
         accessor_impls.into_iter().for_each(|method| {
             cpp_type
                 .implementations
-                .push(CsMember::MethodImpl(method).into());
+                .push(CppMember::MethodImpl(method).into());
         });
     }
 
@@ -799,10 +781,10 @@ pub(crate) fn pack_fields_into_single_union(fields: Vec<FieldInfo>) -> CsNestedU
 
     let declarations = packed_structs
         .into_iter()
-        .map(|s| CsMember::NestedStruct(s).into())
+        .map(|s| CppMember::NestedStruct(s).into())
         .collect_vec();
 
-    CsNestedUnion {
+    CppNestedUnion {
         brief_comment: Some("Explicitly laid out type with union based offsets".into()),
         declarations,
         offset: min_offset,
@@ -831,10 +813,10 @@ pub(crate) fn field_into_offset_structs(
     );
     let alignment_cpp_name = format!("{}_forAlignment", field.cpp_field.name);
 
-    let packed_padding_field = CsField {
+    let packed_padding_field = CppFieldDecl {
         brief_comment: Some(format!("Padding field 0x{padding:x}")),
         const_expr: false,
-        name: packed_padding_cpp_name,
+        cpp_name: packed_padding_cpp_name,
         field_ty: "uint8_t".into(),
         offset: *actual_offset,
         instance: true,
@@ -843,10 +825,10 @@ pub(crate) fn field_into_offset_structs(
         value: None,
     };
 
-    let alignment_padding_field = CsField {
+    let alignment_padding_field = CppFieldDecl {
         brief_comment: Some(format!("Padding field 0x{padding:x} for alignment")),
         const_expr: false,
-        name: alignment_padding_cpp_name,
+        cpp_name: alignment_padding_cpp_name,
         field_ty: "uint8_t".into(),
         offset: *actual_offset,
         instance: true,
@@ -855,13 +837,13 @@ pub(crate) fn field_into_offset_structs(
         value: None,
     };
 
-    let alignment_field = CsField {
-        name: alignment_cpp_name,
+    let alignment_field = CppFieldDecl {
+        cpp_name: alignment_cpp_name,
         is_private: false,
         ..field.cpp_field.clone()
     };
 
-    let packed_field = CsField {
+    let packed_field = CppFieldDecl {
         is_private: false,
         ..field.cpp_field
     };
@@ -870,8 +852,8 @@ pub(crate) fn field_into_offset_structs(
         declaring_name: "".into(),
         base_type: None,
         declarations: vec![
-            CsMember::FieldDecl(packed_padding_field).into(),
-            CsMember::FieldDecl(packed_field).into(),
+            CppMember::FieldDecl(packed_padding_field).into(),
+            CppMember::FieldDecl(packed_field).into(),
         ],
         brief_comment: None,
         is_class: false,
@@ -884,8 +866,8 @@ pub(crate) fn field_into_offset_structs(
         declaring_name: "".into(),
         base_type: None,
         declarations: vec![
-            CsMember::FieldDecl(alignment_padding_field).into(),
-            CsMember::FieldDecl(alignment_field).into(),
+            CppMember::FieldDecl(alignment_padding_field).into(),
+            CppMember::FieldDecl(alignment_field).into(),
         ],
         brief_comment: None,
         is_class: false,
@@ -899,12 +881,12 @@ pub(crate) fn field_into_offset_structs(
 
 /// generates the fields for the value type or reference type\
 /// handles unions
-pub(crate) fn make_or_unionize_fields(instance_fields: &[FieldInfo]) -> Vec<CsMember> {
+pub(crate) fn make_or_unionize_fields(instance_fields: &[FieldInfo]) -> Vec<CppMember> {
     // make all fields like usual
     if !field_collision_check(instance_fields) {
         return instance_fields
             .iter()
-            .map(|d| CsMember::FieldDecl(d.cpp_field.clone()))
+            .map(|d| CppMember::FieldDecl(d.cpp_field.clone()))
             .collect_vec();
     }
     // we have a collision, investigate and handle
@@ -967,7 +949,7 @@ pub(crate) fn make_or_unionize_fields(instance_fields: &[FieldInfo]) -> Vec<CsMe
                     .fields
                     .into_iter()
                     .flat_map(|v| v.into_iter())
-                    .map(|d| CsMember::FieldDecl(d.cpp_field))
+                    .map(|d| CppMember::FieldDecl(d.cpp_field))
                     .collect_vec();
             }
             // we had more than 1 list, so we have unions to emit
@@ -979,12 +961,12 @@ pub(crate) fn make_or_unionize_fields(instance_fields: &[FieldInfo]) -> Vec<CsMe
                         // emit a struct with only 1 field as just a field
                         return struct_contents
                             .into_iter()
-                            .map(|d| CsMember::FieldDecl(d.cpp_field))
+                            .map(|d| CppMember::FieldDecl(d.cpp_field))
                             .collect_vec();
                     }
                     vec![
                         // if we have more than 1 field, emit a nested struct
-                        CsMember::NestedStruct(CppNestedStruct {
+                        CppMember::NestedStruct(CppNestedStruct {
                             base_type: None,
                             declaring_name: "".to_string(),
                             is_enum: false,
@@ -992,7 +974,7 @@ pub(crate) fn make_or_unionize_fields(instance_fields: &[FieldInfo]) -> Vec<CsMe
                             is_private: false,
                             declarations: struct_contents
                                 .into_iter()
-                                .map(|d| CsMember::FieldDecl(d.cpp_field).into())
+                                .map(|d| CppMember::FieldDecl(d.cpp_field).into())
                                 .collect_vec(),
                             brief_comment: Some(format!(
                                 "Anonymous struct offset 0x{:x}, size 0x{:x}",
@@ -1006,7 +988,7 @@ pub(crate) fn make_or_unionize_fields(instance_fields: &[FieldInfo]) -> Vec<CsMe
                 .collect_vec();
 
             // wrap our set into a union
-            vec![CsMember::NestedUnion(CsNestedUnion {
+            vec![CppMember::NestedUnion(CppNestedUnion {
                 brief_comment: Some(format!(
                     "Anonymous union offset 0x{:x}, size 0x{:x}",
                     field_set.offset, field_set.size

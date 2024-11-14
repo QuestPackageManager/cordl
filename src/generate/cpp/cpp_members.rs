@@ -1,7 +1,7 @@
 use itertools::Itertools;
 use pathdiff::diff_paths;
 
-use crate::{generate::writer::CppWritable, STATIC_CONFIG};
+use crate::generate::writer::CppWritable;
 
 use std::{
     collections::HashMap,
@@ -11,7 +11,7 @@ use std::{
     sync::Arc,
 };
 
-use super::cpp_type::{CppType, CORDL_REFERENCE_TYPE_CONSTRAINT};
+use super::{config::STATIC_CONFIG, cpp_context::CppContext, cpp_type::{CppType, CORDL_REFERENCE_TYPE_CONSTRAINT}};
 
 #[derive(Debug, Eq, Hash, PartialEq, Clone, Default, PartialOrd, Ord)]
 pub struct CppTemplate {

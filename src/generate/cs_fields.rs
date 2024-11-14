@@ -51,7 +51,6 @@ impl<'a> FieldInfoSet<'a> {
 pub(crate) fn handle_const_fields(
     cpp_type: &mut CsType,
     fields: &[FieldInfo],
-    _ctx_collection: &TypeContextCollection,
     metadata: &Metadata,
     tdi: TypeDefinitionIndex,
 ) {
