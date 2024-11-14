@@ -2044,3 +2044,156 @@ fn wrapper_type_for_tdi(td: &Il2CppTypeDefinition) -> &str {
 
     IL2CPP_OBJECT_TYPE
 }
+
+///
+/// This makes generic args for types such as ValueTask<List<T>> work
+/// by recursively checking if any generic arg is a reference or numeric type (for enums)
+///
+fn parse_generic_arg(
+    t: &Il2CppType,
+    gen_name: String,
+    cpp_type: &mut CsType,
+    ctx_collection: &CppContextCollection,
+    metadata: &Metadata<'_>,
+    template_args: &mut Vec<(String, String)>,
+) -> NameComponents {
+    // If reference type, we use a template and add a requirement
+    if !t.valuetype {
+        template_args.push((
+            CORDL_REFERENCE_TYPE_CONSTRAINT.to_string(),
+            gen_name.clone(),
+        ));
+        return gen_name.into();
+    }
+
+    /*
+       mscorelib.xml
+       <type fullname="System.SByteEnum" />
+       <type fullname="System.Int16Enum" />
+       <type fullname="System.Int32Enum" />
+       <type fullname="System.Int64Enum" />
+
+       <type fullname="System.ByteEnum" />
+       <type fullname="System.UInt16Enum" />
+       <type fullname="System.UInt32Enum" />
+       <type fullname="System.UInt64Enum" />
+    */
+    let enum_system_type_discriminator = match t.data {
+        TypeData::TypeDefinitionIndex(tdi) => {
+            let td = &metadata.metadata.global_metadata.type_definitions[tdi];
+            let namespace = td.namespace(metadata.metadata);
+            let name = td.name(metadata.metadata);
+
+            if namespace == "System" {
+                match name {
+                    "SByteEnum" => Some(Il2CppTypeEnum::I1),
+                    "Int16Enum" => Some(Il2CppTypeEnum::I2),
+                    "Int32Enum" => Some(Il2CppTypeEnum::I4),
+                    "Int64Enum" => Some(Il2CppTypeEnum::I8),
+                    "ByteEnum" => Some(Il2CppTypeEnum::U1),
+                    "UInt16Enum" => Some(Il2CppTypeEnum::U2),
+                    "UInt32Enum" => Some(Il2CppTypeEnum::U4),
+                    "UInt64Enum" => Some(Il2CppTypeEnum::U8),
+                    _ => None,
+                }
+            } else {
+                None
+            }
+        }
+        _ => None,
+    };
+
+    let inner_enum_type = enum_system_type_discriminator.map(|e| Il2CppType {
+        attrs: u16::MAX,
+        byref: false,
+        data: TypeData::TypeIndex(usize::MAX),
+        pinned: false,
+        ty: e,
+        valuetype: true,
+    });
+
+    // if int, int64 etc.
+    // this allows for enums to be supported
+    if let Some(inner_enum_type) = inner_enum_type {
+        let inner_enum_type_cpp = cpp_type
+            .cppify_name_il2cpp(
+                ctx_collection,
+                metadata,
+                &inner_enum_type,
+                0,
+                TypeUsage::GenericArg,
+            )
+            .combine_all();
+
+        template_args.push((
+            format!("{CORDL_NUM_ENUM_TYPE_CONSTRAINT}<{inner_enum_type_cpp}>",),
+            gen_name.clone(),
+        ));
+
+        return gen_name.into();
+    }
+
+    let inner_type =
+        cpp_type.cppify_name_il2cpp(ctx_collection, metadata, t, 0, TypeUsage::TypeName);
+
+    match t.data {
+        TypeData::GenericClassIndex(gen_class_idx) => {
+            let gen_class = &metadata.metadata_registration.generic_classes[gen_class_idx];
+            let gen_class_ty = &metadata.metadata_registration.types[gen_class.type_index];
+            let TypeData::TypeDefinitionIndex(gen_class_tdi) = gen_class_ty.data else {
+                todo!()
+            };
+            let gen_class_td = &metadata.metadata.global_metadata.type_definitions[gen_class_tdi];
+
+            let gen_container = gen_class_td.generic_container(metadata.metadata);
+
+            let gen_class_inst = &metadata.metadata_registration.generic_insts
+                [gen_class.context.class_inst_idx.unwrap()];
+
+            // this relies on the fact TDIs do not include their generic params
+            let non_generic_inner_type = cpp_type.cppify_name_il2cpp(
+                ctx_collection,
+                metadata,
+                gen_class_ty,
+                0,
+                TypeUsage::GenericArg,
+            );
+
+            let inner_generic_params = gen_class_inst
+                .types
+                .iter()
+                .enumerate()
+                .map(|(param_idx, u)| {
+                    let t = metadata.metadata_registration.types.get(*u).unwrap();
+                    let gen_param = gen_container
+                        .generic_parameters(metadata.metadata)
+                        .iter()
+                        .find(|p| p.num as usize == param_idx)
+                        .expect("No generic param at this num");
+
+                    (t, gen_param)
+                })
+                .map(|(t, gen_param)| {
+                    let inner_gen_name = gen_param.name(metadata.metadata).to_owned();
+                    let mangled_gen_name =
+                        format!("{inner_gen_name}_cordlgen_{}", template_args.len());
+                    parse_generic_arg(
+                        t,
+                        mangled_gen_name,
+                        cpp_type,
+                        ctx_collection,
+                        metadata,
+                        template_args,
+                    )
+                })
+                .map(|n| n.combine_all())
+                .collect_vec();
+
+            NameComponents {
+                generics: Some(inner_generic_params),
+                ..non_generic_inner_type
+            }
+        }
+        _ => inner_type,
+    }
+}
