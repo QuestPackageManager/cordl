@@ -3,11 +3,11 @@ use log::info;
 use std::rc::Rc;
 
 use crate::generate::{
-    context_collection::CppContextCollection, cs_context_collection::CsContextCollection,
-    members::CsMember,
+    cs_context_collection::TypeContextCollection, cs_context_collection::CsContextCollection,
+    cs_members::CsMember,
 };
 
-pub fn remove_coments(context_collection: &mut CppContextCollection) -> Result<()> {
+pub fn remove_coments(context_collection: &mut TypeContextCollection) -> Result<()> {
     info!("Removing comments");
 
     context_collection

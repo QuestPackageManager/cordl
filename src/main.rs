@@ -23,16 +23,12 @@ use std::{fs, path::PathBuf, process::Command, sync::LazyLock, time};
 
 use clap::{Parser, Subcommand};
 
-use crate::{
-    generate::{
-        context_collection::CppContextCollection, cs_type_tag::CsTypeTag,
-        cs_context_collection::CsContextCollection, members::CsMember,
-    },
-    handlers::{comment_omit::remove_coments, object, unity, value_type},
+use crate::generate::{
+    cs_context_collection::TypeContextCollection, cs_members::CsMember, cs_type_tag::CsTypeTag,
 };
 mod data;
 mod generate;
-mod handlers;
+// mod handlers;
 mod helpers;
 mod json;
 
@@ -152,7 +148,7 @@ fn main() -> color_eyre::Result<()> {
         return Ok(());
     }
 
-    let mut cpp_context_collection = CppContextCollection::new();
+    let mut cpp_context_collection = TypeContextCollection::new();
 
     // blacklist types
     {
@@ -256,6 +252,7 @@ fn main() -> color_eyre::Result<()> {
             let ty_def = &metadata.metadata.global_metadata.type_definitions[tdi];
             let _ty = &metadata.metadata_registration.types[ty_def.byval_type_index as usize];
 
+            // only make the roots
             if ty_def.declaring_type_index != u32::MAX {
                 continue;
             }
@@ -378,9 +375,11 @@ fn main() -> color_eyre::Result<()> {
 
     info!("Registering handlers!");
     // il2cpp_internals::register_il2cpp_types(&mut metadata)?;
-    unity::register_unity(&mut metadata)?;
-    object::register_system(&mut metadata)?;
-    value_type::register_value_type(&mut metadata)?;
+
+    // TODO: uncomment
+    // unity::register_unity(&mut metadata)?;
+    // object::register_system(&mut metadata)?;
+    // value_type::register_value_type(&mut metadata)?;
     info!("Handlers registered!");
 
     {
@@ -405,7 +404,8 @@ fn main() -> color_eyre::Result<()> {
     }
 
     if cli.remove_verbose_comments {
-        remove_coments(&mut cpp_context_collection)?;
+        // TODO: uncomment
+        // remove_coments(&mut cpp_context_collection)?;
     }
 
     const write_all: bool = true;
@@ -440,7 +440,11 @@ fn main() -> color_eyre::Result<()> {
         cpp_context_collection
             .get()
             .iter()
-            .find(|(_, c)| c.get_types().iter().any(|(_, t)| t.generic_template.is_some()))
+            .find(|(_, c)| {
+                c.get_types()
+                    .iter()
+                    .any(|(_, t)| t.generic_template.is_some())
+            })
             .unwrap()
             .1
             .write(&STATIC_CONFIG)?;

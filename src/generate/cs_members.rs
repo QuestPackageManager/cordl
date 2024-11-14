@@ -1,12 +1,14 @@
 use bitflags::bitflags;
-use brocolib::runtime_metadata::Il2CppType;
 use bytes::Bytes;
 use itertools::Itertools;
 use pathdiff::diff_paths;
 
 use crate::STATIC_CONFIG;
 
-use super::{context::TypeContext, cs_type::CsType, writer::CppWritable};
+use super::{
+    context::TypeContext, cs_fields::FieldInfo, cs_type::CsType, cs_type_tag::CsTypeTag,
+    writer::CppWritable,
+};
 
 use std::{
     collections::HashMap,
@@ -17,31 +19,31 @@ use std::{
 };
 
 #[derive(Debug, Eq, Hash, PartialEq, Clone, Default, PartialOrd, Ord)]
-pub struct GenericTemplate {
-    pub names: Vec<(GenericTemplateType, String)>,
+pub struct CsGenericTemplate {
+    pub names: Vec<(CsGenericTemplateType, String)>,
 }
 
 #[derive(Debug, Eq, Hash, PartialEq, Clone, Default, PartialOrd, Ord)]
-pub enum GenericTemplateType {
+pub enum CsGenericTemplateType {
     #[default]
     Any,
     Reference,
 }
 
-impl GenericTemplate {
+impl CsGenericTemplate {
     pub fn make_typenames(names: impl Iterator<Item = String>) -> Self {
-        GenericTemplate {
+        CsGenericTemplate {
             names: names
                 .into_iter()
-                .map(|s| (GenericTemplateType::Any, s))
+                .map(|s| (CsGenericTemplateType::Any, s))
                 .collect(),
         }
     }
     pub fn make_ref_types(names: impl Iterator<Item = String>) -> Self {
-        GenericTemplate {
+        CsGenericTemplate {
             names: names
                 .into_iter()
-                .map(|s| (GenericTemplateType::Reference, s))
+                .map(|s| (CsGenericTemplateType::Reference, s))
                 .collect(),
         }
     }
@@ -58,16 +60,10 @@ pub struct CsCommentedString {
 }
 
 #[derive(Debug, Hash, PartialEq, Eq, PartialOrd, Ord, Clone)]
-pub struct CppInclude {
-    pub include: PathBuf,
-    pub system: bool,
-}
-
-#[derive(Debug, Hash, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub struct CppUsingAlias {
     pub result: String,
     pub alias: String,
-    pub template: Option<GenericTemplate>,
+    pub template: Option<CsGenericTemplate>,
 }
 
 #[derive(Clone, Debug, PartialEq, PartialOrd)]
@@ -77,8 +73,20 @@ pub enum CsMember {
     Property(CsPropertyDecl),
     ConstructorDecl(CsConstructor),
     NestedUnion(CsNestedUnion),
+    NestedStruct(CsNestedStruct),
     CppUsingAlias(CppUsingAlias),
     Comment(CsCommentedString),
+    FieldLayout(CsFieldLayout),
+}
+
+#[derive(Clone, Debug, PartialEq, PartialOrd)]
+pub struct CsNestedStruct {
+    pub name: String,
+    pub declarations: Vec<Rc<CsMember>>,
+    pub is_enum: bool,
+    pub is_class: bool,
+    pub brief_comment: Option<String>,
+    pub packing: Option<u8>,
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
@@ -102,7 +110,7 @@ pub struct CsMethodSizeData {
     pub method_info_lines: Vec<String>,
     pub method_info_var: String,
 
-    pub template: Option<GenericTemplate>,
+    pub template: Option<CsGenericTemplate>,
     pub generic_literals: Option<Vec<String>>,
 
     pub interface_clazz_of: String,
@@ -123,15 +131,16 @@ pub enum CsValue {
 #[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct CsField {
     pub name: String,
-    pub field_ty: Il2CppType,
+    pub field_ty: CsTypeTag,
     pub instance: bool,
     pub readonly: bool,
+    // is C# const
+    // could be assumed from value though
     pub const_expr: bool,
 
     pub offset: Option<u32>,
     pub value: Option<CsValue>,
     pub brief_comment: Option<String>,
-    pub is_private: bool,
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
@@ -157,7 +166,7 @@ bitflags! {
 #[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct CsParam {
     pub name: String,
-    pub il2cpp_ty: Il2CppType,
+    pub il2cpp_ty: CsTypeTag,
     // TODO: Use bitflags to indicate these attributes
     // May hold:
     // const
@@ -181,10 +190,10 @@ bitflags! {
 #[derive(Clone, Debug, PartialEq, PartialOrd)]
 pub struct CsMethodDecl {
     pub name: String,
-    pub return_type: Il2CppType,
+    pub return_type: CsTypeTag,
     pub parameters: Vec<CsParam>,
     pub instance: bool,
-    pub template: Option<GenericTemplate>,
+    pub template: Option<CsGenericTemplate>,
     pub method_data: Option<CsMethodData>,
     pub brief: Option<String>,
 }
@@ -194,7 +203,7 @@ pub struct CsMethodDecl {
 pub struct CsConstructor {
     pub cpp_name: String,
     pub parameters: Vec<CsParam>,
-    pub template: Option<GenericTemplate>,
+    pub template: Option<CsGenericTemplate>,
 
     pub brief: Option<String>,
     pub body: Option<Vec<Arc<dyn CppWritable>>>,
@@ -238,134 +247,13 @@ pub struct CsNestedUnion {
     pub declarations: Vec<Rc<CsMember>>,
     pub brief_comment: Option<String>,
     pub offset: u32,
-    pub is_private: bool,
 }
 
-impl CsParam {
-    pub fn params_as_args(params: &[CsParam]) -> impl Iterator<Item = String> + '_ {
-        params.iter().map(|p| match &p.def_value {
-            Some(val) => format!("{}{} {} = {val}", p.ty, p.modifiers, p.name),
-            None => format!("{} {} {}", p.ty, p.modifiers, p.name),
-        })
-    }
-    pub fn params_as_args_no_default(params: &[CsParam]) -> impl Iterator<Item = String> + '_ {
-        params
-            .iter()
-            .map(|p| format!("{} {} {}", p.ty, p.modifiers, p.name))
-    }
-    pub fn params_names(params: &[CsParam]) -> impl Iterator<Item = &String> {
-        params.iter().map(|p| &p.name)
-    }
-    pub fn params_types(params: &[CsParam]) -> impl Iterator<Item = &String> {
-        params.iter().map(|p| &p.ty)
-    }
-
-    pub fn params_il2cpp_types(params: &[CsParam]) -> impl Iterator<Item = String> + '_ {
-        params
-            .iter()
-            .map(|p| format!("::il2cpp_utils::ExtractType({})", p.name))
-    }
-}
-
-impl CppInclude {
-    // smelly use of config but whatever
-    pub fn new_context_typedef(context: &TypeContext) -> Self {
-        Self {
-            include: diff_paths(&context.typedef_path, &STATIC_CONFIG.header_path).unwrap(),
-            system: false,
-        }
-    }
-    pub fn new_context_typeimpl(context: &TypeContext) -> Self {
-        Self {
-            include: diff_paths(&context.type_impl_path, &STATIC_CONFIG.header_path).unwrap(),
-            system: false,
-        }
-    }
-    pub fn new_context_fundamental(context: &TypeContext) -> Self {
-        Self {
-            include: diff_paths(&context.fundamental_path, &STATIC_CONFIG.header_path).unwrap(),
-            system: false,
-        }
-    }
-
-    pub fn new_system<P: AsRef<Path>>(str: P) -> Self {
-        Self {
-            include: str.as_ref().to_path_buf(),
-            system: true,
-        }
-    }
-
-    pub fn new_exact<P: AsRef<Path>>(str: P) -> Self {
-        Self {
-            include: str.as_ref().to_path_buf(),
-            system: false,
-        }
-    }
-}
-
-impl CppUsingAlias {
-    // TODO: Rewrite
-    pub fn from_cpp_type(
-        alias: String,
-        cpp_type: &CsType,
-        forwarded_generic_args_opt: Option<Vec<String>>,
-        fixup_generic_args: bool,
-    ) -> Self {
-        let forwarded_generic_args = forwarded_generic_args_opt.unwrap_or_default();
-
-        // splits literals and template
-        let (literal_args, template) = match &cpp_type.generic_template {
-            Some(other_template) => {
-                // Skip the first args as those aren't necessary
-                let extra_template_args = other_template
-                    .names
-                    .iter()
-                    .skip(forwarded_generic_args.len())
-                    .cloned()
-                    .collect_vec();
-
-                let remaining_cpp_template = match !extra_template_args.is_empty() {
-                    true => Some(GenericTemplate {
-                        names: extra_template_args,
-                    }),
-                    false => None,
-                };
-
-                // Essentially, all nested types inherit their declaring type's generic params.
-                // Append the rest of the template params as generic parameters
-                match remaining_cpp_template {
-                    Some(remaining_cpp_template) => (
-                        forwarded_generic_args
-                            .iter()
-                            .chain(remaining_cpp_template.just_names())
-                            .cloned()
-                            .collect_vec(),
-                        Some(remaining_cpp_template),
-                    ),
-                    None => (forwarded_generic_args, None),
-                }
-            }
-            None => (forwarded_generic_args, None),
-        };
-
-        let do_fixup = fixup_generic_args && !literal_args.is_empty();
-
-        let mut name_components = cpp_type.cpp_name_components.clone();
-        if do_fixup {
-            name_components = name_components.remove_generics();
-        }
-
-        let mut result = name_components.remove_pointer().combine_all();
-
-        // easy way to tell it's a generic instantiation
-        if do_fixup {
-            result = format!("{result}<{}>", literal_args.join(", "))
-        }
-
-        Self {
-            alias,
-            result,
-            template,
-        }
-    }
+#[derive(Clone, Debug, PartialEq, PartialOrd)]
+pub struct CsFieldLayout {
+    pub field: CsField,
+    // make struct with size [padding, field] packed with 1
+    pub padding: u32,
+    // make struct with size [alignment, field_size] default packed
+    pub alignment: usize,
 }

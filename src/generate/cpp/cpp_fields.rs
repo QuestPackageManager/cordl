@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
+use crate::generate::cs_members::CppLine;
+use crate::generate::cs_members::CsNestedUnion;
 use crate::generate::cs_type::CsType;
 use crate::generate::cs_type::CORDL_ACCESSOR_FIELD_PREFIX;
-use crate::generate::members::CppLine;
-use crate::generate::members::CsNestedUnion;
 
 use brocolib::global_metadata::Il2CppFieldDefinition;
 use brocolib::runtime_metadata::Il2CppType;
@@ -17,20 +17,20 @@ use brocolib::runtime_metadata::Il2CppTypeEnum;
 use brocolib::global_metadata::TypeDefinitionIndex;
 
 use super::context_collection::CppContextCollection;
+use super::cs_type::CSType;
 use super::cs_type::CORDL_METHOD_HELPER_NAMESPACE;
 use super::cs_type_tag::CsTypeTag;
-use super::cs_type::CSType;
-use super::members::CsField;
 use super::members::CppFieldImpl;
 use super::members::CppInclude;
-use super::members::CsMember;
-use super::members::CsMethodDecl;
 use super::members::CppMethodImpl;
 use super::members::CppNestedStruct;
 use super::members::CppNonMember;
+use super::members::CppStaticAssert;
+use super::members::CsField;
+use super::members::CsMember;
+use super::members::CsMethodDecl;
 use super::members::CsParam;
 use super::members::CsPropertyDecl;
-use super::members::CppStaticAssert;
 use super::members::GenericTemplate;
 use super::metadata::Metadata;
 use super::type_extensions::Il2CppTypeEnumExtensions;
@@ -191,9 +191,7 @@ pub fn handle_static_fields(
         };
 
         // only push accessors if declaring ref type, or if static field
-        cpp_type
-            .members
-            .push(CsMember::Property(prop_decl).into());
+        cpp_type.members.push(CsMember::Property(prop_decl).into());
 
         // decl
         cpp_type
@@ -444,13 +442,14 @@ pub(crate) fn handle_valuetype_fields(
     if t.is_explicit_layout() {
         for field_info in fields.iter().filter(|f| !f.is_constant && !f.is_static) {
             // don't get a template that has no names
-            let template = cpp_type
-                .generic_template
-                .clone()
-                .and_then(|t| match t.names.is_empty() {
-                    true => None,
-                    false => Some(t),
-                });
+            let template =
+                cpp_type
+                    .generic_template
+                    .clone()
+                    .and_then(|t| match t.names.is_empty() {
+                        true => None,
+                        false => Some(t),
+                    });
 
             let declaring_cpp_full_name =
                 cpp_type.cpp_name_components.remove_pointer().combine_all();
@@ -462,9 +461,7 @@ pub(crate) fn handle_valuetype_fields(
             cpp_type.members.push(CsMember::Property(prop).into());
 
             accessor_decls.into_iter().for_each(|method| {
-                cpp_type
-                    .members
-                    .push(CsMember::MethodDecl(method).into());
+                cpp_type.members.push(CsMember::MethodDecl(method).into());
             });
 
             accessor_impls.into_iter().for_each(|method| {
@@ -658,25 +655,25 @@ pub(crate) fn prop_methods_from_fieldinfo(
     };
 
     // construct getter and setter bodies
-    let getter_body: Vec<Arc<dyn CppWritable>> = if let Some(instance_null_check) = instance_null_check
-    {
-        vec![
-            Arc::new(CppLine::make(instance_null_check.into())),
-            Arc::new(CppLine::make(getter_call)),
-        ]
-    } else {
-        vec![Arc::new(CppLine::make(getter_call))]
-    };
+    let getter_body: Vec<Arc<dyn CppWritable>> =
+        if let Some(instance_null_check) = instance_null_check {
+            vec![
+                Arc::new(CppLine::make(instance_null_check.into())),
+                Arc::new(CppLine::make(getter_call)),
+            ]
+        } else {
+            vec![Arc::new(CppLine::make(getter_call))]
+        };
 
-    let setter_body: Vec<Arc<dyn CppWritable>> = if let Some(instance_null_check) = instance_null_check
-    {
-        vec![
-            Arc::new(CppLine::make(instance_null_check.into())),
-            Arc::new(CppLine::make(setter_call)),
-        ]
-    } else {
-        vec![Arc::new(CppLine::make(setter_call))]
-    };
+    let setter_body: Vec<Arc<dyn CppWritable>> =
+        if let Some(instance_null_check) = instance_null_check {
+            vec![
+                Arc::new(CppLine::make(instance_null_check.into())),
+                Arc::new(CppLine::make(setter_call)),
+            ]
+        } else {
+            vec![Arc::new(CppLine::make(setter_call))]
+        };
 
     let getter_impl = CppMethodImpl {
         body: getter_body.clone(),
@@ -747,9 +744,7 @@ pub(crate) fn handle_referencetype_fields(
         cpp_type.members.push(CsMember::Property(prop).into());
 
         accessor_decls.into_iter().for_each(|method| {
-            cpp_type
-                .members
-                .push(CsMember::MethodDecl(method).into());
+            cpp_type.members.push(CsMember::MethodDecl(method).into());
         });
 
         accessor_impls.into_iter().for_each(|method| {

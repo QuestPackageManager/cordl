@@ -8,7 +8,7 @@ use std::{
 use crate::generate::{
     cs_type::CsType,
     cs_type::VALUE_TYPE_WRAPPER_SIZE,
-    members::{CsConstructor, CppLine, CsMember, CsMethodDecl, CsParam},
+    cs_members::{CsConstructor, CppLine, CsMember, CsMethodDecl, CsParam},
     metadata::{Il2cppFullName, Metadata},
 };
 

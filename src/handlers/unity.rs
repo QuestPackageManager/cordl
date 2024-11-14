@@ -6,9 +6,9 @@ use std::{path::PathBuf, rc::Rc};
 use crate::{
     data::name_components::NameComponents,
     generate::{
-        context_collection::CppContextCollection,
+        cs_context_collection::TypeContextCollection,
         cs_type::CsType,
-        members::{CppInclude, CsMember},
+        cs_members::{CppInclude, CsMember},
         metadata::{Il2cppFullName, Metadata, TypeUsage},
         type_extensions::TypeDefinitionExtensions,
     },
@@ -57,7 +57,7 @@ fn register_unity_object_type_handler(metadata: &mut Metadata) -> Result<()> {
 fn unity_object_resolve_handler(
     original: NameComponents,
     cpp_type: &CsType,
-    _ctx_collection: &CppContextCollection,
+    _ctx_collection: &TypeContextCollection,
     metadata: &Metadata,
     _typ: &Il2CppType,
     typ_usage: TypeUsage,

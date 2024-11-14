@@ -4,7 +4,7 @@ use log::info;
 use crate::generate::{
     cs_type::CsType,
     cs_type::IL2CPP_OBJECT_TYPE,
-    members::CsMember,
+    cs_members::CsMember,
     metadata::{Il2cppFullName, Metadata},
 };
 

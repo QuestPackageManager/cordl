@@ -8,7 +8,7 @@ use itertools::Itertools;
 
 use crate::data::name_components::NameComponents;
 
-use super::{context_collection::CppContextCollection, cs_type::CsType};
+use super::{cs_context_collection::TypeContextCollection, cs_type::CsType};
 
 pub struct MethodCalculations {
     pub estimated_size: usize,
@@ -54,7 +54,7 @@ pub type TypeResolveHandlerFn = Box<
     dyn Fn(
         NameComponents,
         &CsType,
-        &CppContextCollection,
+        &TypeContextCollection,
         &Metadata,
         &Il2CppType,
         TypeUsage,

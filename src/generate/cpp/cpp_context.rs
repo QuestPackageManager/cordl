@@ -14,9 +14,9 @@ use itertools::Itertools;
 use log::{info, trace};
 use pathdiff::diff_paths;
 
+use crate::generate::cs_members::CppForwardDeclare;
 use crate::generate::cs_type::CORDL_NO_INCLUDE_IMPL_DEFINE;
-use crate::generate::members::CppForwardDeclare;
-use crate::generate::{members::CppInclude, type_extensions::TypeDefinitionExtensions};
+use crate::generate::{cs_members::CppInclude, type_extensions::TypeDefinitionExtensions};
 use crate::helpers::sorting::DependencyGraph;
 use crate::STATIC_CONFIG;
 
@@ -28,7 +28,7 @@ use super::{
     cs_type::CSType,
     members::CppUsingAlias,
     metadata::Metadata,
-    writer::{CppWriter, CppWritable},
+    writer::{CppWritable, CppWriter},
 };
 
 // Holds the contextual information for creating a C++ file

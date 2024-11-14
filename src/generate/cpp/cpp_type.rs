@@ -1,8 +1,20 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, sync::Arc};
 
 use brocolib::{global_metadata::Il2CppTypeDefinition, runtime_metadata::Il2CppType};
 
-use crate::{data::name_components::NameComponents, generate::{context_collection::CppContextCollection, members::{CppForwardDeclare, CppInclude}, metadata::{Metadata, TypeUsage}}};
+use crate::{
+    data::name_components::NameComponents,
+    generate::{
+        cs_context_collection::TypeContextCollection,
+        cs_members::{CppForwardDeclare, CppInclude},
+        cs_type::CsType,
+        cs_type_tag::CsTypeTag,
+        metadata::{Metadata, TypeUsage},
+        writer::CppWriter,
+    },
+};
+
+use super::cpp_members::{CppMember, CppNonMember};
 
 pub const CORDL_TYPE_MACRO: &str = "CORDL_TYPE";
 pub const __CORDL_IS_VALUE_TYPE: &str = "__IL2CPP_IS_VALUE_TYPE";
@@ -41,21 +53,26 @@ pub struct CppTypeRequirements {
     pub required_impl_includes: HashSet<CppInclude>,
 }
 
-pub struct CppType(CSType);
+pub struct CppType {
+    pub members: Vec<Arc<CppMember>>,
+    pub non_members: Vec<Arc<CppNonMember>>,
+    pub implementation_members: Vec<Arc<CppMember>>,
+    pub implementation_non_members: Vec<Arc<CppNonMember>>,
+
+    pub cpp_name_components: NameComponents,
+    pub tag: CsTypeTag,
+}
 
 impl CppType {
-    pub fn write_impl(&self, writer: &mut super::writer::CppWriter) -> color_eyre::Result<()> {
+    pub fn write_impl(&self, writer: &mut CppWriter) -> color_eyre::Result<()> {
         self.write_impl_internal(writer)
     }
 
-    pub fn write_def(&self, writer: &mut super::writer::CppWriter) -> color_eyre::Result<()> {
+    pub fn write_def(&self, writer: &mut CppWriter) -> color_eyre::Result<()> {
         self.write_def_internal(writer, Some(&self.cpp_namespace()))
     }
 
-    pub fn write_impl_internal(
-        &self,
-        writer: &mut super::writer::CppWriter,
-    ) -> color_eyre::Result<()> {
+    pub fn write_impl_internal(&self, writer: &mut CppWriter) -> color_eyre::Result<()> {
         self.nonmember_implementations
             .iter()
             .try_for_each(|d| d.write(writer))?;
@@ -76,7 +93,7 @@ impl CppType {
 
     fn write_def_internal(
         &self,
-        writer: &mut super::writer::CppWriter,
+        writer: &mut CppWriter,
         namespace: Option<&str>,
     ) -> color_eyre::Result<()> {
         self.prefix_comments
@@ -382,7 +399,7 @@ impl CppType {
 
     fn cppify_name_il2cpp(
         &mut self,
-        ctx_collection: &CppContextCollection,
+        ctx_collection: &TypeContextCollection,
         metadata: &Metadata,
         typ: &Il2CppType,
         include_depth: usize,
@@ -409,7 +426,7 @@ impl CppType {
     fn cppify_name_il2cpp_recurse(
         &self,
         requirements: &mut CsTypeRequirements,
-        ctx_collection: &CppContextCollection,
+        ctx_collection: &TypeContextCollection,
         metadata: &Metadata,
         typ: &Il2CppType,
         include_depth: usize,
@@ -1145,7 +1162,7 @@ impl CppType {
     fn create_enum_backing_type_constant(
         &mut self,
         metadata: &Metadata,
-        ctx_collection: &CppContextCollection,
+        ctx_collection: &TypeContextCollection,
         tdi: TypeDefinitionIndex,
     ) {
         let t = Self::get_type_definition(metadata, tdi);
@@ -1177,7 +1194,7 @@ impl CppType {
     fn create_enum_wrapper(
         &mut self,
         metadata: &Metadata,
-        ctx_collection: &CppContextCollection,
+        ctx_collection: &TypeContextCollection,
         tdi: TypeDefinitionIndex,
     ) {
         let cpp_type = {
@@ -1347,7 +1364,7 @@ impl CppType {
     fn create_valuetype_constructor(
         &mut self,
         metadata: &Metadata,
-        ctx_collection: &CppContextCollection,
+        ctx_collection: &TypeContextCollection,
         config: &GenerationConfig,
         tdi: TypeDefinitionIndex,
     ) {
@@ -2053,7 +2070,7 @@ fn parse_generic_arg(
     t: &Il2CppType,
     gen_name: String,
     cpp_type: &mut CsType,
-    ctx_collection: &CppContextCollection,
+    ctx_collection: &TypeContextCollection,
     metadata: &Metadata<'_>,
     template_args: &mut Vec<(String, String)>,
 ) -> NameComponents {

@@ -4,7 +4,7 @@ use color_eyre::Result;
 
 use crate::generate::{
     cs_type::CsType,
-    members::CsMember,
+    cs_members::CsMember,
     metadata::{Il2cppFullName, Metadata},
 };
 
