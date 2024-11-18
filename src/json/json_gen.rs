@@ -1,7 +1,7 @@
 use std::{
     fs::{self, File},
     io::BufWriter,
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 
 use brocolib::global_metadata::{
@@ -259,7 +259,7 @@ pub fn is_real_declaring_type(td: &Il2CppTypeDefinition, metadata: &Metadata) ->
         && condition4
 }
 
-pub fn make_json(metadata: &Metadata, file: PathBuf) -> Result<()> {
+pub fn make_json(metadata: &Metadata, file: &Path) -> Result<()> {
     // we could use a map here but sorting
     // wouldn't be guaranteed
     // we want sorting so diffs are more readable
@@ -285,7 +285,7 @@ pub fn make_json(metadata: &Metadata, file: PathBuf) -> Result<()> {
     Ok(())
 }
 
-pub fn make_json_folder(metadata: &Metadata, folder: PathBuf) -> Result<()> {
+pub fn make_json_folder(metadata: &Metadata, folder: &Path) -> Result<()> {
     // we could use a map here but sorting
     // wouldn't be guaranteed
     // we want sorting so diffs are more readable

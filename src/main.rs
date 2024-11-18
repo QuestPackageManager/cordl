@@ -10,7 +10,7 @@
 use brocolib::{global_metadata::TypeDefinitionIndex, runtime_metadata::TypeData};
 use byteorder::LittleEndian;
 use color_eyre::eyre::Context;
-use generate::metadata::Metadata;
+use generate::{cpp, metadata::Metadata};
 use itertools::Itertools;
 extern crate pretty_env_logger;
 
@@ -19,7 +19,12 @@ use json::json_gen::{make_json, make_json_folder};
 use log::{info, trace, warn};
 use rayon::prelude::*;
 
-use std::{fs, path::PathBuf, time};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+    str::FromStr,
+    time,
+};
 
 use clap::{Parser, Subcommand};
 
@@ -29,6 +34,13 @@ mod generate;
 // mod handlers;
 mod helpers;
 mod json;
+
+#[derive(Clone, Copy, Debug, clap::ValueEnum)]
+enum TargetLang {
+    CPP,
+    SingleJSON,
+    MultiJSON,
+}
 
 #[derive(Parser)]
 #[clap(author, version, about, long_about = None)]
@@ -41,20 +53,15 @@ struct Cli {
     #[clap(short, long, value_parser, value_name = "FILE")]
     libil2cpp: PathBuf,
 
-    /// The path to generated json file
-    #[clap(short, long, value_parser, value_name = "FILE")]
-    json: Option<PathBuf>,
-
-    /// The path to the folder for the generated json files
-    #[clap(long, value_parser, value_name = "FILE")]
-    multi_json: Option<PathBuf>,
-
-    /// Whether to format with clang-format
+    /// Whether to format
     #[clap(short, long)]
     format: bool,
-    /// Whether to format with clang-format
+
     #[clap(short, long)]
     remove_verbose_comments: bool,
+
+    #[clap(value_parser)]
+    target: TargetLang,
 
     /// Whether to generate generic method specializations
     #[clap(short, long)]
@@ -108,17 +115,6 @@ fn main() -> color_eyre::Result<()> {
     info!("Parsing metadata methods");
     metadata.parse();
     info!("Finished in {}ms", t.elapsed().as_millis());
-
-    if let Some(json) = cli.json {
-        println!("Writing json file {json:?}");
-        make_json(&metadata, json)?;
-        return Ok(());
-    }
-    if let Some(json_folder) = cli.multi_json {
-        println!("Writing json file {json_folder:?}");
-        make_json_folder(&metadata, json_folder)?;
-        return Ok(());
-    }
 
     let mut cs_context_collection = TypeContextCollection::new();
 
@@ -366,6 +362,21 @@ fn main() -> color_eyre::Result<()> {
         // TODO: uncomment
         // remove_coments(&mut cpp_context_collection)?;
     }
+
+    match cli.target {
+        TargetLang::CPP => cpp::cpp_main::run_cpp(cs_context_collection, &metadata),
+        TargetLang::SingleJSON => {
+            let json = Path::new("./json");
+            println!("Writing json file {json:?}");
+            make_json(&metadata, json)
+        }
+        TargetLang::MultiJSON => {
+            let json_folder = Path::new("./multi_json");
+
+            println!("Writing json file {json_folder:?}");
+            make_json_folder(&metadata, json_folder)
+        }
+    }?;
 
     Ok(())
 }
