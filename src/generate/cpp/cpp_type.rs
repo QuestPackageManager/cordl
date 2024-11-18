@@ -1575,7 +1575,7 @@ to_incl_cpp_ty.cpp_name_components.clone()
         }
         // Maps into the first parent -> ""
         // so then Parent()
-        let base_ctor = self.parent.map(|s| (s.clone(), "".to_string()));
+        let base_ctor = self.parent.as_ref().map(|s| (s.clone(), "".to_string()));
 
         let body: Vec<Arc<dyn CppWritable>> = instance_fields
             .iter()
@@ -1891,7 +1891,10 @@ to_incl_cpp_ty.cpp_name_components.clone()
         };
         let cpp_name = cpp_type.cpp_name().clone();
 
-        let base_type = cpp_type.parent.expect("No parent for interface type?");
+        let base_type = cpp_type
+            .parent
+            .as_ref()
+            .expect("No parent for interface type?");
 
         cpp_type.declarations.push(
             CppMember::ConstructorDecl(CppConstructorDecl {
@@ -2220,7 +2223,6 @@ to_incl_cpp_ty.cpp_name_components.clone()
     fn name(&self) -> &String {
         &self.cpp_name_components.name
     }
-    
 }
 
 fn wrapper_type_for_tdi(td: &Il2CppTypeDefinition) -> &str {

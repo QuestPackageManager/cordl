@@ -28,12 +28,7 @@ pub struct TypeContextCollection {
 }
 
 impl TypeContextCollection {
-    
-fn fill_cpp_type(
-        &mut self,
-        cpp_type: &mut CsType,
-        metadata: &Metadata,
-    ) {
+    fn fill_cpp_type(&mut self, cpp_type: &mut CsType, metadata: &Metadata) {
         let tag = cpp_type.self_tag;
 
         if self.filled_types.contains(&tag) {
@@ -50,6 +45,37 @@ fn fill_cpp_type(
 
         self.filled_types.insert(tag);
         self.filling_types.remove(&tag.clone());
+    }
+
+    pub fn fill(&mut self, metadata: &Metadata, type_tag: CsTypeTag) {
+        let context_tag = self.get_context_root_tag(type_tag);
+
+        if self.filled_types.contains(&type_tag) {
+            return;
+        }
+
+        if self.borrowing_types.contains(&context_tag) {
+            panic!("Borrowing context {context_tag:?}");
+        }
+
+        // Move ownership to local
+        let cpp_type_entry = self
+            .all_contexts
+            .get_mut(&context_tag)
+            .expect("No cpp context")
+            .typedef_types
+            .remove_entry(&type_tag);
+
+        // In some occasions, the CppContext can be empty
+        if let Some((_t, mut cpp_type)) = cpp_type_entry {
+            self.fill_cpp_type(&mut cpp_type, metadata);
+
+            // Move ownership back up
+            self.all_contexts
+                .get_mut(&context_tag)
+                .expect("No cpp context")
+                .insert_cpp_type(cpp_type);
+        }
     }
 
     ///
@@ -404,12 +430,15 @@ fn fill_cpp_type(
             type_data
         };
 
-        self.borrow_cs_type(generic_class_ty_data, |collection: &mut TypeContextCollection, mut cpp_type| {
-            // cpp_type.make_generics_args(metadata, collection);
-            collection.fill_cpp_type(&mut cpp_type, metadata);
+        self.borrow_cs_type(
+            generic_class_ty_data,
+            |collection: &mut TypeContextCollection, mut cpp_type| {
+                // cpp_type.make_generics_args(metadata, collection);
+                collection.fill_cpp_type(&mut cpp_type, metadata);
 
-            cpp_type
-        });
+                cpp_type
+            },
+        );
 
         self.all_contexts.get_mut(&context_root_tag)
     }

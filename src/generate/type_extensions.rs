@@ -443,11 +443,11 @@ impl Il2CppTypeEnumExtensions for Il2CppTypeEnum {
 }
 
 pub trait TypeDefinitionIndexExtensions {
-    fn get_type_definition(&self, metadata: &Metadata) -> &Il2CppTypeDefinition;
+    fn get_type_definition<'a>(&self, metadata: &'a Metadata) -> &'a Il2CppTypeDefinition;
 }
 
 impl TypeDefinitionIndexExtensions for TypeDefinitionIndex {
-    fn get_type_definition(&self, metadata: &Metadata) -> &Il2CppTypeDefinition {
+    fn get_type_definition<'a>(&self, metadata: &'a Metadata) -> &'a Il2CppTypeDefinition {
         &metadata.global_metadata.type_definitions[*self]
     }
 }

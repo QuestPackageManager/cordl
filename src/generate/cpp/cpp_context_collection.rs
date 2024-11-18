@@ -20,14 +20,14 @@ impl CppContextCollection {
     pub fn from_cs_collection(
         collection: TypeContextCollection,
         metadata: &Metadata,
-        config: &CppGenerationConfig
+        config: &CppGenerationConfig,
     ) -> CppContextCollection {
         let mut cpp_collection = CppContextCollection::default();
 
-        for (tag, context) in collection.take() {
+        for (tag, context) in collection.get() {
             cpp_collection
                 .all_contexts
-                .insert(tag, CppContext::make(tag, context, metadata, config));
+                .insert(*tag, CppContext::make(*tag, context.clone(), metadata, config));
         }
         cpp_collection.alias_context = collection.alias_context;
 
