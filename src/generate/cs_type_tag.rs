@@ -86,10 +86,11 @@ impl CsTypeTag {
     pub fn from_type_data(type_data: TypeData, metadata: &brocolib::Metadata) -> Self {
         match type_data {
             TypeData::TypeDefinitionIndex(tdi) => tdi.into(),
+            TypeData::TypeIndex(_) => panic!("Not supported on array! {type_data:#?}"),
             TypeData::GenericClassIndex(generic_class_idx) => {
                 Self::from_generic_class_index(generic_class_idx, metadata)
             }
-            _ => todo!(),
+            _ => todo!("{type_data:#?}"),
         }
     }
 

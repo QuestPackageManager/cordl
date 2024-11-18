@@ -217,12 +217,11 @@ pub fn handle_static_fields(
         let _f_offset = field_info.offset.unwrap_or(u32::MAX);
         let _f_size = field_info.size;
         let _field_ty_cpp_name = &field_info.cs_field.field_ty;
-        let f_tag = CsTypeTag::from_type_data(f_type.data, metadata.metadata);
-
+        
         cpp_type.members.push(
             CsMember::FieldDecl(CsField {
                 name: f_name.to_string(),
-                field_ty: f_tag,
+                field_ty: f_type.data,
                 instance: false,
                 readonly: false,
                 const_expr: true,

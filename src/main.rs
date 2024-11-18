@@ -89,8 +89,9 @@ fn main() -> color_eyre::Result<()> {
         info!("Add --format/-f to format with clang-format at end")
     }
 
-    let global_metadata_data = fs::read(cli.metadata).context("il2cpp metadata")?;
-    let elf_data = fs::read(cli.libil2cpp).context("libil2cpp.so shared object")?;
+    println!("Running on {}", Path::new("./").canonicalize().unwrap().display());
+    let global_metadata_data = fs::read(&cli.metadata).with_context(|| format!("il2cpp metadata not found {}", cli.metadata.display()))?;
+    let elf_data = fs::read(&cli.libil2cpp).with_context(|| format!("libil2cpp.so shared object not found {}", cli.metadata.display()))?;
     let il2cpp_metadata = brocolib::Metadata::parse(&global_metadata_data, &elf_data)?;
 
     let mut metadata = Metadata {

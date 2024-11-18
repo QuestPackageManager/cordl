@@ -1,10 +1,11 @@
 use bitflags::bitflags;
+use brocolib::runtime_metadata::TypeData;
 use bytes::Bytes;
 use itertools::Itertools;
 
 use super::{cs_type_tag::CsTypeTag, writer::CppWritable};
 
-use std::{hash::Hash, rc::Rc, sync::Arc};
+use std::{hash::Hash, num, rc::Rc, sync::Arc};
 
 #[derive(Debug, Eq, Hash, PartialEq, Clone, Default, PartialOrd, Ord)]
 pub struct CsGenericTemplate {
@@ -54,7 +55,7 @@ pub struct CsUsingAlias {
     pub template: Option<CsGenericTemplate>,
 }
 
-#[derive(Clone, Debug, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum CsMember {
     FieldDecl(CsField),
     MethodDecl(CsMethodDecl),
@@ -67,7 +68,7 @@ pub enum CsMember {
     FieldLayout(CsFieldLayout),
 }
 
-#[derive(Clone, Debug, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct CsNestedStruct {
     pub name: String,
     pub declarations: Vec<Rc<CsMember>>,
@@ -110,17 +111,30 @@ pub struct CsMethodSizeData {
 pub enum CsValue {
     String(String),
     Bool(bool),
-    Num(usize),
-    FloatingNum(f64),
+    
+    U8(u8),
+    U16(u16),
+    U32(u32),
+    U64(u64),
+    
+    I8(i8),
+    I16(i16),
+    I32(i32),
+    I64(i64),
+
+    F32(f32),
+    F64(f64),
+    
     Object(Bytes),
     ValueType(Bytes),
     Null,
 }
 
-#[derive(Clone, Debug, PartialEq, PartialOrd)]
+
+#[derive(Clone, Debug, PartialEq)]
 pub struct CsField {
     pub name: String,
-    pub field_ty: CsTypeTag,
+    pub field_ty: TypeData,
     pub instance: bool,
     pub readonly: bool,
     // is C# const
@@ -132,10 +146,10 @@ pub struct CsField {
     pub brief_comment: Option<String>,
 }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct CsPropertyDecl {
     pub name: String,
-    pub prop_ty: CsTypeTag,
+    pub prop_ty: TypeData,
     pub instance: bool,
     pub getter: Option<String>,
     pub setter: Option<String>,
@@ -153,10 +167,10 @@ bitflags! {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct CsParam {
     pub name: String,
-    pub il2cpp_ty: CsTypeTag,
+    pub il2cpp_ty: TypeData,
     // TODO: Use bitflags to indicate these attributes
     // May hold:
     // const
@@ -177,10 +191,10 @@ bitflags! {
 }
 
 // TODO: Generics
-#[derive(Clone, Debug, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct CsMethodDecl {
     pub name: String,
-    pub return_type: CsTypeTag,
+    pub return_type: TypeData,
     pub parameters: Vec<CsParam>,
     pub instance: bool,
     pub template: Option<CsGenericTemplate>,
@@ -210,28 +224,15 @@ impl PartialEq for CsConstructor {
     }
 }
 
-impl PartialOrd for CsConstructor {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        match self.cpp_name.partial_cmp(&other.cpp_name) {
-            Some(core::cmp::Ordering::Equal) => {}
-            ord => return ord,
-        }
-        match self.parameters.partial_cmp(&other.parameters) {
-            Some(core::cmp::Ordering::Equal) => {}
-            ord => return ord,
-        }
-        self.template.partial_cmp(&other.template)
-    }
-}
 
-#[derive(Clone, Debug, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct CsNestedUnion {
     pub declarations: Vec<Rc<CsMember>>,
     pub brief_comment: Option<String>,
     pub offset: u32,
 }
 
-#[derive(Clone, Debug, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct CsFieldLayout {
     pub field: CsField,
     // make struct with size [padding, field] packed with 1

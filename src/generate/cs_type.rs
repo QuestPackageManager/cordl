@@ -305,14 +305,13 @@ impl CsType {
             .get(param.type_index as usize)
             .unwrap();
 
-        let param_ty_tag = CsTypeTag::from_type_data(param_type.data, metadata.metadata);
-
+    
         let def_value = Self::param_default_value(metadata, param_index);
 
         CsParam {
             name: param.name(metadata.metadata).to_owned(),
             def_value,
-            il2cpp_ty: param_ty_tag,
+            il2cpp_ty: param_type.data,
             modifiers: CsParamFlags::empty(),
         }
     }
@@ -466,7 +465,7 @@ impl CsType {
 
                 let cpp_field_decl = CsField {
                     name: f_name.to_owned(),
-                    field_ty: CsTypeTag::from_type_data(f_type.data, metadata.metadata),
+                    field_ty: f_type.data,
                     offset: f_offset,
                     instance: !f_type.is_static() && !f_type.is_constant(),
                     readonly: f_type.is_constant(),
@@ -599,7 +598,6 @@ impl CsType {
                 .get(p_type_index)
                 .unwrap();
 
-            let p_ty_tag = CsTypeTag::from_type_data(p_type.data, metadata.metadata);
 
             let _method_map = |p: MethodIndex| {
                 let method_calc = metadata.method_calculations.get(&p).unwrap();
@@ -618,7 +616,7 @@ impl CsType {
             self.members.push(
                 CsMember::Property(CsPropertyDecl {
                     name: p_name.to_owned(),
-                    prop_ty: p_ty_tag,
+                    prop_ty: p_type.data,
                     // methods generated in make_methods
                     setter: p_setter.map(|m| m.name(metadata.metadata).to_string()),
                     getter: p_getter.map(|m| m.name(metadata.metadata).to_string()),
@@ -653,7 +651,6 @@ impl CsType {
             .types
             .get(method.return_type as usize)
             .unwrap();
-        let m_ret_tag = CsTypeTag::from_type_data(m_ret_type.data, metadata.metadata);
 
         let m_params_with_def: Vec<CsParam> = self.make_parameters(method, metadata);
 
@@ -721,7 +718,7 @@ impl CsType {
             )
             .into(),
             name: m_name.to_string(),
-            return_type: m_ret_tag,
+            return_type: m_ret_type.data,
             parameters: m_params_no_def.clone(),
             instance: !method.is_static_method(),
             template: template.clone(),
@@ -768,34 +765,35 @@ impl CsType {
 
         match ty.ty {
             Il2CppTypeEnum::Boolean => CsValue::Bool(data[0] != 0),
-            Il2CppTypeEnum::I1 => CsValue::Num(cursor.read_i8().unwrap().try_into().unwrap()),
+            Il2CppTypeEnum::I1 => CsValue::I8(cursor.read_i8().unwrap().try_into().unwrap()),
             Il2CppTypeEnum::I2 => {
-                CsValue::Num(cursor.read_i16::<Endian>().unwrap().try_into().unwrap())
+                CsValue::I16(cursor.read_i16::<Endian>().unwrap().try_into().unwrap())
             }
-            Il2CppTypeEnum::I4 => CsValue::Num(
+            Il2CppTypeEnum::I4 => CsValue::I32(
                 cursor
                     .read_compressed_i32::<Endian>()
+                    
                     .unwrap()
                     .try_into()
                     .unwrap(),
             ),
             // TODO: We assume 64 bit
             Il2CppTypeEnum::I | Il2CppTypeEnum::I8 => {
-                CsValue::Num(cursor.read_i64::<Endian>().unwrap().try_into().unwrap())
+                CsValue::I64(cursor.read_i64::<Endian>().unwrap().try_into().unwrap())
             }
-            Il2CppTypeEnum::U1 => CsValue::Num(cursor.read_u8().unwrap().into()),
-            Il2CppTypeEnum::U2 => CsValue::Num(cursor.read_u16::<Endian>().unwrap().into()),
+            Il2CppTypeEnum::U1 => CsValue::U8(cursor.read_u8().unwrap().into()),
+            Il2CppTypeEnum::U2 => CsValue::U16(cursor.read_u16::<Endian>().unwrap().into()),
             Il2CppTypeEnum::U4 => {
-                CsValue::Num(cursor.read_u32::<Endian>().unwrap().try_into().unwrap())
+                CsValue::U32(cursor.read_u32::<Endian>().unwrap().try_into().unwrap())
             }
             // TODO: We assume 64 bit
             Il2CppTypeEnum::U | Il2CppTypeEnum::U8 => {
-                CsValue::Num(cursor.read_u64::<Endian>().unwrap().try_into().unwrap())
+                CsValue::U64(cursor.read_u64::<Endian>().unwrap().try_into().unwrap())
             }
             // https://learn.microsoft.com/en-us/nimbusml/concepts/types
             // https://en.cppreference.com/w/cpp/types/floating-point
-            Il2CppTypeEnum::R4 => CsValue::FloatingNum(cursor.read_f32::<Endian>().unwrap().into()),
-            Il2CppTypeEnum::R8 => CsValue::FloatingNum(cursor.read_f64::<Endian>().unwrap()),
+            Il2CppTypeEnum::R4 => CsValue::F32(cursor.read_f32::<Endian>().unwrap().into()),
+            Il2CppTypeEnum::R8 => CsValue::F64(cursor.read_f64::<Endian>().unwrap()),
             Il2CppTypeEnum::Char => {
                 let res = String::from_utf16_lossy(&[cursor.read_u16::<Endian>().unwrap()])
                     .escape_default()
@@ -823,6 +821,7 @@ impl CsType {
             | Il2CppTypeEnum::Array
             | Il2CppTypeEnum::Object
             | Il2CppTypeEnum::Class
+            | Il2CppTypeEnum::Valuetype
             | Il2CppTypeEnum::Szarray => {
                 // let def = Self::type_default_value(metadata, None, ty);
                 // format!("/* TODO: Fix these default values */ {ty:?} */ {def}")
