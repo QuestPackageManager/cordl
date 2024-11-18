@@ -70,12 +70,11 @@ impl CppContext {
         &mut self.typedef_types
     }
 
-
     pub fn make(
         context_tag: CsTypeTag,
         context: TypeContext,
         metadata: &Metadata,
-        config: &CppGenerationConfig
+        config: &CppGenerationConfig,
     ) -> CppContext {
         let tdi = context_tag.get_tdi();
         let t = &metadata.metadata.global_metadata.type_definitions[tdi];
@@ -117,7 +116,8 @@ impl CppContext {
         };
 
         for (tag, ty) in context.typedef_types {
-            x.typedef_types.insert(tag, CppType::make_cpp_type(metadata, tag, ty));
+            x.typedef_types
+                .insert(tag, CppType::make_cpp_type(metadata, tag, ty));
         }
 
         x
@@ -425,8 +425,7 @@ impl CppContext {
             .as_ref()
             .is_some_and(|t| !t.names.is_empty());
 
-        if !ty.is_value_type && !template_container_type && !is_generic_instantiation
-        {
+        if !ty.is_value_type && !template_container_type && !is_generic_instantiation {
             // reference types need no boxing
             writeln!(
                 writer,

@@ -3,7 +3,12 @@ use std::io::Write;
 
 use crate::generate::writer::{CppWritable, CppWriter, SortLevel, Sortable};
 
-use super::cpp_members::{CppCommentedString, CppConstructorDecl, CppConstructorImpl, CppFieldDecl, CppFieldImpl, CppForwardDeclare, CppInclude, CppLine, CppMember, CppMethodDecl, CppMethodImpl, CppMethodSizeStruct, CppNestedStruct, CppNestedUnion, CppNonMember, CppParam, CppPropertyDecl, CppStaticAssert, CppTemplate, CppUsingAlias};
+use super::cpp_members::{
+    CppCommentedString, CppConstructorDecl, CppConstructorImpl, CppFieldDecl, CppFieldImpl,
+    CppForwardDeclare, CppInclude, CppLine, CppMember, CppMethodDecl, CppMethodImpl,
+    CppMethodSizeStruct, CppNestedStruct, CppNestedUnion, CppNonMember, CppParam, CppPropertyDecl,
+    CppStaticAssert, CppTemplate, CppUsingAlias,
+};
 
 impl CppWritable for CppTemplate {
     fn write(&self, writer: &mut CppWriter) -> color_eyre::Result<()> {

@@ -1,7 +1,5 @@
 use std::{path::PathBuf, sync::LazyLock};
 
-
-
 pub static STATIC_CONFIG: LazyLock<CppGenerationConfig> = LazyLock::new(|| CppGenerationConfig {
     header_path: PathBuf::from("./codegen/include"),
     source_path: PathBuf::from("./codegen/src"),

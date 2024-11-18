@@ -1494,6 +1494,7 @@ to_incl_cpp_ty.cpp_name_components.clone()
             })
             .into(),
         );
+        
 
         // cpp_type.declarations.push(
         //     CppMember::ConstructorDecl(CppConstructorDecl {
@@ -1644,12 +1645,8 @@ to_incl_cpp_ty.cpp_name_components.clone()
     }
 
     fn create_valuetype_default_constructors(&mut self) {
-        let cpp_type = {
-            let this = &mut *self;
-            this
-        };
         // create the various copy and move ctors and operators
-        let cpp_name = cpp_type.cpp_name();
+        let cpp_name = self.cpp_name();
         let wrapper = format!("{VALUE_WRAPPER_TYPE}<{VALUE_TYPE_WRAPPER_SIZE}>::instance");
 
         let move_ctor = CppConstructorDecl {
@@ -1752,31 +1749,27 @@ to_incl_cpp_ty.cpp_name_components.clone()
             ]),
         };
 
-        cpp_type
+        self
             .declarations
             .push(CppMember::ConstructorDecl(move_ctor).into());
-        cpp_type
+        self
             .declarations
             .push(CppMember::ConstructorDecl(copy_ctor).into());
-        cpp_type
+        self
             .declarations
             .push(CppMember::MethodDecl(move_operator_eq).into());
-        cpp_type
+        self
             .declarations
             .push(CppMember::MethodDecl(copy_operator_eq).into());
     }
 
     fn create_ref_default_constructor(&mut self) {
-        let cpp_type = {
-            let this = &mut *self;
-            this
-        };
-        let cpp_name = cpp_type.cpp_name().clone();
+        let cpp_name = self.cpp_name().clone();
 
-        let cs_name = cpp_type.name().clone();
+        let cs_name = self.name().clone();
 
         // Skip if System.ValueType or System.Enum
-        if cpp_type.namespace() == "System" && (cs_name == "ValueType" || cs_name == "Enum") {
+        if self.namespace() == "System" && (cs_name == "ValueType" || cs_name == "Enum") {
             return;
         }
 
@@ -1839,13 +1832,13 @@ to_incl_cpp_ty.cpp_name_components.clone()
             body: None,
         };
 
-        cpp_type
+        self
             .declarations
             .push(CppMember::ConstructorDecl(default_ctor).into());
-        cpp_type
+        self
             .declarations
             .push(CppMember::ConstructorDecl(copy_ctor).into());
-        cpp_type
+        self
             .declarations
             .push(CppMember::ConstructorDecl(move_ctor).into());
 
@@ -1885,18 +1878,14 @@ to_incl_cpp_ty.cpp_name_components.clone()
         // );
     }
     fn make_interface_constructors(&mut self) {
-        let cpp_type = {
-            let this = &mut *self;
-            this
-        };
-        let cpp_name = cpp_type.cpp_name().clone();
+        let cpp_name = self.cpp_name().clone();
 
-        let base_type = cpp_type
+        let base_type = self
             .parent
             .as_ref()
             .expect("No parent for interface type?");
 
-        cpp_type.declarations.push(
+        self.declarations.push(
             CppMember::ConstructorDecl(CppConstructorDecl {
                 cpp_name: cpp_name.clone(),
                 parameters: vec![CppParam {
@@ -1922,25 +1911,21 @@ to_incl_cpp_ty.cpp_name_components.clone()
         );
     }
     fn create_ref_default_operators(&mut self) {
-        let cpp_type = {
-            let this = &mut *self;
-            this
-        };
-        let cpp_name = cpp_type.cpp_name();
+        let cpp_name = self.cpp_name();
 
         // Skip if System.ValueType or System.Enum
-        if cpp_type.namespace() == "System"
-            && (cpp_type.cpp_name() == "ValueType" || cpp_type.cpp_name() == "Enum")
+        if self.namespace() == "System"
+            && (self.cpp_name() == "ValueType" || self.cpp_name() == "Enum")
         {
             return;
         }
 
         // Delegates and such are reference types with no inheritance
-        if cpp_type.get_inherits().count() > 0 {
+        if self.get_inherits().count() > 0 {
             return;
         }
 
-        cpp_type.declarations.push(
+        self.declarations.push(
             CppMember::CppLine(CppLine {
                 line: format!(
                     "

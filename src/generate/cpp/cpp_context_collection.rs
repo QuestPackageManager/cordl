@@ -25,9 +25,10 @@ impl CppContextCollection {
         let mut cpp_collection = CppContextCollection::default();
 
         for (tag, context) in collection.get() {
-            cpp_collection
-                .all_contexts
-                .insert(*tag, CppContext::make(*tag, context.clone(), metadata, config));
+            cpp_collection.all_contexts.insert(
+                *tag,
+                CppContext::make(*tag, context.clone(), metadata, config),
+            );
         }
         cpp_collection.alias_context = collection.alias_context;
 

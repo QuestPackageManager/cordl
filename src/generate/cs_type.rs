@@ -258,11 +258,7 @@ impl CsType {
         Some(cpptype)
     }
 
-    pub fn fill_from_il2cpp(
-        &mut self,
-        metadata: &Metadata,
-        
-    ) {
+    pub fn fill_from_il2cpp(&mut self, metadata: &Metadata) {
         let tdi: TypeDefinitionIndex = self.self_tag.into();
 
         let _t = &metadata.metadata.global_metadata.type_definitions[tdi];
@@ -338,11 +334,7 @@ impl CsType {
         }
     }
 
-    fn make_fields(
-        &mut self,
-        metadata: &Metadata,
-        tdi: TypeDefinitionIndex,
-    ) {
+    fn make_fields(&mut self, metadata: &Metadata, tdi: TypeDefinitionIndex) {
         let t = Self::get_type_definition(metadata, tdi);
 
         // if no fields, skip

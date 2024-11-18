@@ -3,7 +3,10 @@ use std::collections::HashMap;
 use crate::generate::cpp::cpp_type::CORDL_ACCESSOR_FIELD_PREFIX;
 use crate::generate::cs_type::CsType;
 use crate::generate::cs_type_tag::CsTypeTag;
-use crate::generate::type_extensions::{Il2CppTypeEnumExtensions, TypeDefinitionExtensions, TypeDefinitionIndexExtensions, TypeExtentions};
+use crate::generate::type_extensions::{
+    Il2CppTypeEnumExtensions, TypeDefinitionExtensions, TypeDefinitionIndexExtensions,
+    TypeExtentions,
+};
 use crate::generate::writer::CppWritable;
 use crate::generate::{cs_members::CsNestedUnion, metadata::Metadata};
 use brocolib::global_metadata::Il2CppFieldDefinition;
@@ -647,25 +650,25 @@ pub(crate) fn prop_methods_from_fieldinfo(
     };
 
     // construct getter and setter bodies
-    let getter_body: Vec<Arc<dyn CppWritable>> = if let Some(instance_null_check) = instance_null_check
-    {
-        vec![
-            Arc::new(CppLine::make(instance_null_check.into())),
-            Arc::new(CppLine::make(getter_call)),
-        ]
-    } else {
-        vec![Arc::new(CppLine::make(getter_call))]
-    };
+    let getter_body: Vec<Arc<dyn CppWritable>> =
+        if let Some(instance_null_check) = instance_null_check {
+            vec![
+                Arc::new(CppLine::make(instance_null_check.into())),
+                Arc::new(CppLine::make(getter_call)),
+            ]
+        } else {
+            vec![Arc::new(CppLine::make(getter_call))]
+        };
 
-    let setter_body: Vec<Arc<dyn CppWritable>> = if let Some(instance_null_check) = instance_null_check
-    {
-        vec![
-            Arc::new(CppLine::make(instance_null_check.into())),
-            Arc::new(CppLine::make(setter_call)),
-        ]
-    } else {
-        vec![Arc::new(CppLine::make(setter_call))]
-    };
+    let setter_body: Vec<Arc<dyn CppWritable>> =
+        if let Some(instance_null_check) = instance_null_check {
+            vec![
+                Arc::new(CppLine::make(instance_null_check.into())),
+                Arc::new(CppLine::make(setter_call)),
+            ]
+        } else {
+            vec![Arc::new(CppLine::make(setter_call))]
+        };
 
     let getter_impl = CppMethodImpl {
         body: getter_body.clone(),

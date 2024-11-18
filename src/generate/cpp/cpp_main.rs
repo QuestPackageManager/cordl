@@ -23,13 +23,10 @@
 //     // extract contents of the cordl internals folder into destination
 //     INTERNALS_DIR.extract(&STATIC_CONFIG.dst_internals_path)?;
 
-
 //     ///
-//     /// 
-//     /// 
-//     /// 
-    
-
+//     ///
+//     ///
+//     ///
 
 //     const write_all: bool = true;
 //     if write_all {
@@ -346,7 +343,6 @@
 //         // }
 //     }
 // }
-
 
 // fn format_files() -> Result<()> {
 //     info!("Formatting!");
