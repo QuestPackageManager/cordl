@@ -5,6 +5,7 @@
 #![feature(map_try_insert)]
 #![feature(lazy_cell)]
 #![feature(exit_status_error)]
+#![feature(iterator_try_collect)]
 
 use brocolib::{global_metadata::TypeDefinitionIndex, runtime_metadata::TypeData};
 use byteorder::LittleEndian;

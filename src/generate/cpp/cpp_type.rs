@@ -1494,7 +1494,6 @@ to_incl_cpp_ty.cpp_name_components.clone()
             })
             .into(),
         );
-        
 
         // cpp_type.declarations.push(
         //     CppMember::ConstructorDecl(CppConstructorDecl {
@@ -1749,17 +1748,13 @@ to_incl_cpp_ty.cpp_name_components.clone()
             ]),
         };
 
-        self
-            .declarations
+        self.declarations
             .push(CppMember::ConstructorDecl(move_ctor).into());
-        self
-            .declarations
+        self.declarations
             .push(CppMember::ConstructorDecl(copy_ctor).into());
-        self
-            .declarations
+        self.declarations
             .push(CppMember::MethodDecl(move_operator_eq).into());
-        self
-            .declarations
+        self.declarations
             .push(CppMember::MethodDecl(copy_operator_eq).into());
     }
 
@@ -1832,14 +1827,11 @@ to_incl_cpp_ty.cpp_name_components.clone()
             body: None,
         };
 
-        self
-            .declarations
+        self.declarations
             .push(CppMember::ConstructorDecl(default_ctor).into());
-        self
-            .declarations
+        self.declarations
             .push(CppMember::ConstructorDecl(copy_ctor).into());
-        self
-            .declarations
+        self.declarations
             .push(CppMember::ConstructorDecl(move_ctor).into());
 
         // // Delegates and such are reference types with no inheritance
@@ -1880,10 +1872,7 @@ to_incl_cpp_ty.cpp_name_components.clone()
     fn make_interface_constructors(&mut self) {
         let cpp_name = self.cpp_name().clone();
 
-        let base_type = self
-            .parent
-            .as_ref()
-            .expect("No parent for interface type?");
+        let base_type = self.parent.as_ref().expect("No parent for interface type?");
 
         self.declarations.push(
             CppMember::ConstructorDecl(CppConstructorDecl {
@@ -2187,25 +2176,25 @@ to_incl_cpp_ty.cpp_name_components.clone()
             .chain(self.interfaces.iter())
     }
 
-    pub(crate) fn cpp_namespace(&self) -> String {
+    pub fn cpp_namespace(&self) -> String {
         self.cpp_name_components
             .namespace
             .clone()
             .unwrap_or("GlobalNamespace".to_owned())
     }
 
-    pub(crate) fn namespace(&self) -> String {
+    pub fn namespace(&self) -> String {
         self.cs_name_components
             .namespace
             .clone()
             .unwrap_or("GlobalNamespace".to_owned())
     }
 
-    pub(crate) fn cpp_name(&self) -> &std::string::String {
+    pub fn cpp_name(&self) -> &std::string::String {
         &self.cpp_name_components.name
     }
 
-    fn name(&self) -> &String {
+    pub fn name(&self) -> &String {
         &self.cpp_name_components.name
     }
 }

@@ -1,7 +1,16 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    fs::File,
+    io::Write,
+};
+
+use itertools::Itertools;
+use log::{info, trace};
+use pathdiff::diff_paths;
 
 use crate::generate::{
-    cs_context_collection::TypeContextCollection, cs_type_tag::CsTypeTag, metadata::Metadata,
+    cpp::config::STATIC_CONFIG, cs_context_collection::TypeContextCollection,
+    cs_type_tag::CsTypeTag, metadata::Metadata,
 };
 
 use super::{config::CppGenerationConfig, cpp_context::CppContext, cpp_type::CppType};
@@ -156,5 +165,101 @@ impl CppContextCollection {
             .cloned()
             // .map(|t| self.get_context_root_tag(*t))
             .unwrap_or(ty)
+    }
+
+    pub(crate) fn get(&self) -> &HashMap<CsTypeTag, CppContext> {
+        &self.all_contexts
+    }
+
+    pub fn write_all(&self, config: &CppGenerationConfig) -> color_eyre::Result<()> {
+        let amount = self.all_contexts.len() as f64;
+        self.all_contexts
+            .iter()
+            .enumerate()
+            .try_for_each(|(i, (_, c))| {
+                trace!(
+                    "Writing {:.4}% ({}/{}) {}",
+                    (i as f64 / amount * 100.0),
+                    i,
+                    amount,
+                    c.fundamental_path.display(),
+                );
+                c.write(config)
+            })
+    }
+
+    pub fn write_namespace_headers(&self) -> color_eyre::Result<()> {
+        self.all_contexts
+            .iter()
+            .into_group_map_by(|(_, c)| c.fundamental_path.parent())
+            .into_iter()
+            .try_for_each(|(dir, contexts)| -> color_eyre::Result<()> {
+                let namespace = if dir.unwrap() == STATIC_CONFIG.header_path {
+                    "GlobalNamespace"
+                } else {
+                    dir.unwrap().file_name().unwrap().to_str().unwrap()
+                };
+
+                let str = contexts
+                    .iter()
+                    // ignore empty contexts
+                    .filter(|(_, c)| !c.typedef_types.is_empty())
+                    // ignore weird named types
+                    .filter(|(_, c)| {
+                        !c.fundamental_path
+                            .file_name()
+                            .unwrap()
+                            .to_str()
+                            .unwrap()
+                            .starts_with('_')
+                    })
+                    // add includes
+                    .map(|(_, c)| {
+                        let stripped_path =
+                            diff_paths(&c.fundamental_path, &STATIC_CONFIG.header_path).unwrap();
+
+                        let stripped_path_friendly = if cfg!(windows) {
+                            stripped_path.to_string_lossy().replace('\\', "/")
+                        } else {
+                            stripped_path.to_string_lossy().to_string()
+                        };
+                        // replace \\ to / on Windows
+                        format!("#include \"{stripped_path_friendly}\"")
+                    })
+                    .sorted()
+                    .unique()
+                    .join("\n");
+
+                let path = dir.unwrap().join(namespace).with_extension("hpp");
+
+                info!(
+                    "Creating namespace glob include {path:?} for {} files",
+                    contexts.len()
+                );
+
+                let mut file = File::create(path)?;
+
+                writeln!(
+                    file,
+                    "#ifdef __cpp_modules
+                    module;
+                    #endif
+                "
+                )?;
+                writeln!(file, "#pragma once")?;
+                file.write_all(str.as_bytes())?;
+
+                writeln!(file)?;
+                writeln!(
+                    file,
+                    "#ifdef __cpp_modules
+                    export module {namespace};
+                    #endif
+                "
+                )?;
+
+                Ok(())
+            })?;
+        Ok(())
     }
 }
