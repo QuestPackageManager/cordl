@@ -10,7 +10,7 @@ use pathdiff::diff_paths;
 
 use crate::generate::{
     cpp::config::STATIC_CONFIG, cs_context_collection::TypeContextCollection,
-    cs_type_tag::CsTypeTag, metadata::Metadata,
+    cs_type_tag::CsTypeTag, metadata::CordlMetadata,
 };
 
 use super::{config::CppGenerationConfig, cpp_context::CppContext, cpp_type::CppType};
@@ -28,7 +28,7 @@ pub struct CppContextCollection {
 impl CppContextCollection {
     pub fn from_cs_collection(
         collection: TypeContextCollection,
-        metadata: &Metadata,
+        metadata: &CordlMetadata,
         config: &CppGenerationConfig,
     ) -> CppContextCollection {
         let mut cpp_collection = CppContextCollection::default();
@@ -44,7 +44,7 @@ impl CppContextCollection {
         cpp_collection
     }
 
-    fn fill_cpp_type(&mut self, cpp_type: &mut CppType, metadata: &Metadata) {
+    fn fill_cpp_type(&mut self, cpp_type: &mut CppType, metadata: &CordlMetadata) {
         let tag = cpp_type.self_tag;
 
         if self.filled_types.contains(&tag) {
@@ -63,7 +63,7 @@ impl CppContextCollection {
         self.filling_types.remove(&tag.clone());
     }
 
-    pub fn fill(&mut self, metadata: &Metadata, type_tag: CsTypeTag) {
+    pub fn fill(&mut self, metadata: &CordlMetadata, type_tag: CsTypeTag) {
         let context_tag = self.get_context_root_tag(type_tag);
 
         if self.filled_types.contains(&type_tag) {

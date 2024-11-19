@@ -31,13 +31,13 @@ use crate::{
 use super::{
     cs_context_collection::TypeContextCollection,
     cs_members::{
-        CsGenericTemplate, CsMember, CsMethodData, CsMethodDecl, CsParam, CsParamFlags,
-        CsPropertyDecl, CsValue,
+        CsConstructor, CsGenericTemplate, CsMember, CsMethod, CsMethodData, CsParam, CsParamFlags,
+        CsProperty, CsValue,
     },
     cs_type_tag::CsTypeTag,
-    metadata::Metadata,
+    metadata::CordlMetadata,
     offsets::{self, SizeInfo},
-    type_extensions::{MethodDefintionExtensions, TypeDefinitionExtensions},
+    type_extensions::{MethodDefintionExtensions, TypeDefinitionExtensions, TypeDefinitionIndexExtensions},
 };
 
 #[derive(Debug, Clone, Default)]
@@ -62,8 +62,6 @@ pub struct CsType {
     pub self_tag: CsTypeTag,
     pub nested: bool,
 
-    pub(crate) prefix_comments: Vec<String>,
-
     pub size_info: Option<SizeInfo>,
     pub packing: Option<u8>,
 
@@ -72,7 +70,10 @@ pub struct CsType {
     // pub cpp_name_components: NameComponents,
     pub cs_name_components: NameComponents,
 
-    pub members: Vec<Rc<CsMember>>,
+    pub fields: Vec<CsField>,
+    pub methods: Vec<CsMethod>,
+    pub properties: Vec<CsProperty>,
+    pub constructors: Vec<CsConstructor>,
 
     pub is_value_type: bool,
     pub is_enum_type: bool,
@@ -116,6 +117,8 @@ impl CsType {
         }
     }
 
+
+
     ////
     ///
     ///
@@ -123,7 +126,7 @@ impl CsType {
     pub fn add_method_generic_inst(
         &mut self,
         method_spec: &Il2CppMethodSpec,
-        metadata: &Metadata,
+        metadata: &CordlMetadata,
     ) -> &mut CsType {
         assert!(method_spec.method_inst_index != u32::MAX);
 
@@ -142,7 +145,7 @@ impl CsType {
     }
 
     pub fn make_cs_type(
-        metadata: &Metadata,
+        metadata: &CordlMetadata,
         tdi: TypeDefinitionIndex,
         tag: CsTypeTag,
         generic_inst_types: Option<&Vec<usize>>,
@@ -200,14 +203,16 @@ impl CsType {
         let cpptype = CsType {
             self_tag: tag,
             nested,
-            prefix_comments: vec![format!("Type: {ns}::{name}"), format!("{size_info:?}")],
 
             size_info: Some(size_info),
             packing,
 
             cs_name_components,
 
-            members: Default::default(),
+            fields: Default::default(),
+            methods: Default::default(),
+            properties: Default::default(),
+            constructors: Default::default(),
 
             is_value_type: t.is_value_type(),
             is_enum_type: t.is_enum_type(),
@@ -226,19 +231,6 @@ impl CsType {
             nested_types: Default::default(),
         };
 
-        // Nested type unnesting fix
-        if t.declaring_type_index != u32::MAX {
-            let declaring_ty = &metadata
-                .metadata
-                .runtime_metadata
-                .metadata_registration
-                .types[t.declaring_type_index as usize];
-
-            let declaring_tag = CsTypeTag::from_type_data(declaring_ty.data, metadata.metadata);
-            let declaring_tdi: TypeDefinitionIndex = declaring_tag.into();
-            let _declaring_td = &metadata.metadata.global_metadata.type_definitions[declaring_tdi];
-        }
-
         if t.parent_index == u32::MAX {
             if !t.is_interface() && t.full_name(metadata.metadata, true) != "System.Object" {
                 info!("Skipping type: {ns}::{name} because it has parent index: {} and is not an interface!", t.parent_index);
@@ -256,7 +248,7 @@ impl CsType {
         Some(cpptype)
     }
 
-    pub fn fill_from_il2cpp(&mut self, metadata: &Metadata) {
+    pub fn fill_from_il2cpp(&mut self, metadata: &CordlMetadata) {
         let tdi: TypeDefinitionIndex = self.self_tag.into();
 
         let _t = &metadata.metadata.global_metadata.type_definitions[tdi];
@@ -277,7 +269,7 @@ impl CsType {
     fn make_parameters(
         &mut self,
         method: &brocolib::global_metadata::Il2CppMethodDefinition,
-        metadata: &Metadata<'_>,
+        metadata: &CordlMetadata<'_>,
     ) -> Vec<CsParam> {
         method
             .parameters(metadata.metadata)
@@ -295,7 +287,7 @@ impl CsType {
         &mut self,
         param: &brocolib::global_metadata::Il2CppParameterDefinition,
         param_index: ParameterIndex,
-        metadata: &Metadata<'_>,
+        metadata: &CordlMetadata<'_>,
     ) -> CsParam {
         let param_type = metadata
             .metadata_registration
@@ -313,24 +305,24 @@ impl CsType {
         }
     }
 
-    fn make_methods(&mut self, metadata: &Metadata, tdi: TypeDefinitionIndex) {
+    fn make_methods(&mut self, metadata: &CordlMetadata, tdi: TypeDefinitionIndex) {
         let t = Self::get_type_definition(metadata, tdi);
 
         // Then, handle methods
         if t.method_count > 0 {
             // 2 because each method gets a method struct and method decl
             // a constructor will add an additional one for each
-            self.members.reserve(2 * (t.method_count as usize + 1));
+            self.methods.reserve(t.method_count as usize + 1);
 
             // Then, for each method, write it out
             for (i, _method) in t.methods(metadata.metadata).iter().enumerate() {
                 let method_index = MethodIndex::new(t.method_start.index() + i as u32);
-                self.create_method(t, method_index, metadata, false);
+                self.create_method(method_index, metadata, false);
             }
         }
     }
 
-    fn make_fields(&mut self, metadata: &Metadata, tdi: TypeDefinitionIndex) {
+    fn make_fields(&mut self, metadata: &CordlMetadata, tdi: TypeDefinitionIndex) {
         let t = Self::get_type_definition(metadata, tdi);
 
         // if no fields, skip
@@ -369,7 +361,7 @@ impl CsType {
             i: usize,
             mut iter: impl Iterator<Item = &'a u32>,
             field_offsets: &[u32],
-            metadata: &Metadata<'_>,
+            metadata: &CordlMetadata<'_>,
             t: &Il2CppTypeDefinition,
         ) -> Option<u32> {
             let f_type = metadata
@@ -414,7 +406,7 @@ impl CsType {
         fn get_size(
             field: &Il2CppFieldDefinition,
             gen_args: Option<&Vec<usize>>,
-            metadata: &&Metadata<'_>,
+            metadata: &&CordlMetadata<'_>,
         ) -> usize {
             let f_type = metadata
                 .metadata_registration
@@ -468,11 +460,11 @@ impl CsType {
             .collect_vec();
 
         for f in fields {
-            self.members.push(CsMember::Field(f).into());
+            self.fields.push(f);
         }
     }
 
-    fn make_parents(&mut self, metadata: &Metadata, tdi: TypeDefinitionIndex) {
+    fn make_parents(&mut self, metadata: &CordlMetadata, tdi: TypeDefinitionIndex) {
         let t = &metadata.metadata.global_metadata.type_definitions[tdi];
 
         let ns = t.namespace(metadata.metadata);
@@ -513,7 +505,7 @@ impl CsType {
         }
     }
 
-    fn make_interfaces(&mut self, metadata: &Metadata<'_>, tdi: TypeDefinitionIndex) {
+    fn make_interfaces(&mut self, metadata: &CordlMetadata<'_>, tdi: TypeDefinitionIndex) {
         let t = &metadata.metadata.global_metadata.type_definitions[tdi];
 
         for &interface_index in t.interfaces(metadata.metadata) {
@@ -524,7 +516,7 @@ impl CsType {
         }
     }
 
-    fn make_nested_types(&mut self, metadata: &Metadata, tdi: TypeDefinitionIndex) {
+    fn make_nested_types(&mut self, metadata: &CordlMetadata, tdi: TypeDefinitionIndex) {
         let t = &metadata.metadata.global_metadata.type_definitions[tdi];
 
         if t.nested_type_count == 0 {
@@ -542,7 +534,7 @@ impl CsType {
             .collect();
     }
 
-    fn make_properties(&mut self, metadata: &Metadata, tdi: TypeDefinitionIndex) {
+    fn make_properties(&mut self, metadata: &CordlMetadata, tdi: TypeDefinitionIndex) {
         let t = Self::get_type_definition(metadata, tdi);
 
         // Then, handle properties
@@ -550,7 +542,7 @@ impl CsType {
             return;
         }
 
-        self.members.reserve(t.property_count as usize);
+        self.properties.reserve(t.property_count as usize);
         // Then, for each field, write it out
         for prop in t.properties(metadata.metadata) {
             let p_name = prop.name(metadata.metadata);
@@ -587,8 +579,8 @@ impl CsType {
             let index = p_getter.is_some_and(|p| p.parameter_count > 0);
 
             // Need to include this type
-            self.members.push(
-                CsMember::Property(CsPropertyDecl {
+            self.properties.push(
+                CsProperty {
                     name: p_name.to_owned(),
                     prop_ty: p_type.data,
                     // methods generated in make_methods
@@ -597,18 +589,15 @@ impl CsType {
                     indexable: index,
                     brief_comment: None,
                     instance: true,
-                })
-                .into(),
+                },
             );
         }
     }
 
     pub fn create_method(
         &mut self,
-        _declaring_type: &Il2CppTypeDefinition,
         method_index: MethodIndex,
-
-        metadata: &Metadata,
+        metadata: &CordlMetadata,
         is_generic_method_inst: bool,
     ) {
         let method = &metadata.metadata.global_metadata.methods[method_index];
@@ -681,7 +670,7 @@ impl CsType {
 
         let method_calc = metadata.method_calculations.get(&method_index);
 
-        let mut method_decl = CsMethodDecl {
+        let mut method_decl = CsMethod {
             brief: format!(
                 "Method {m_name}, addr 0x{:x}, size 0x{:x}, virtual {}, abstract: {}, final {}",
                 method_calc.map(|m| m.addrs).unwrap_or(u64::MAX),
@@ -718,12 +707,12 @@ impl CsType {
         }
 
         if !is_generic_method_inst {
-            self.members.push(CsMember::Method(method_decl).into());
+            self.methods.push(method_decl);
         }
     }
 
     fn default_value_blob(
-        metadata: &Metadata,
+        metadata: &CordlMetadata,
         ty: &Il2CppType,
         data_index: usize,
         _string_quotes: bool,
@@ -795,7 +784,10 @@ impl CsType {
         }
     }
 
-    fn unbox_nullable_valuetype<'a>(metadata: &'a Metadata, ty: &'a Il2CppType) -> &'a Il2CppType {
+    fn unbox_nullable_valuetype<'a>(
+        metadata: &'a CordlMetadata,
+        ty: &'a Il2CppType,
+    ) -> &'a Il2CppType {
         if let Il2CppTypeEnum::Valuetype = ty.ty {
             match ty.data {
                 TypeData::TypeDefinitionIndex(tdi) => {
@@ -819,7 +811,7 @@ impl CsType {
         ty
     }
 
-    fn field_default_value(metadata: &Metadata, field_index: FieldIndex) -> Option<CsValue> {
+    fn field_default_value(metadata: &CordlMetadata, field_index: FieldIndex) -> Option<CsValue> {
         metadata
             .metadata
             .global_metadata
@@ -843,7 +835,7 @@ impl CsType {
             })
     }
     fn param_default_value(
-        metadata: &Metadata,
+        metadata: &CordlMetadata,
         parameter_index: ParameterIndex,
     ) -> Option<CsValue> {
         metadata
@@ -892,7 +884,7 @@ impl CsType {
     }
 
     pub fn get_type_definition<'a>(
-        metadata: &'a Metadata,
+        metadata: &'a CordlMetadata,
         tdi: TypeDefinitionIndex,
     ) -> &'a Il2CppTypeDefinition {
         &metadata.metadata.global_metadata.type_definitions[tdi]

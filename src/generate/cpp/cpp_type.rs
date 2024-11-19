@@ -18,12 +18,12 @@ use log::{info, warn};
 use std::io::Write;
 
 use crate::{
-    data::name_components::NameComponents,
+    data::{name_components::NameComponents, name_resolver::TypeUsage},
     generate::{
         cpp::cpp_members::{CppMethodSizeStruct, CppStaticAssert},
         cs_type::CsType,
         cs_type_tag::CsTypeTag,
-        metadata::{Metadata, TypeUsage},
+        metadata::CordlMetadata,
         offsets::{self, SizeInfo},
         type_extensions::{
             MethodDefintionExtensions, ParameterDefinitionExtensions, TypeDefinitionExtensions,
@@ -369,11 +369,16 @@ impl CppType {
         Ok(())
     }
 
-    pub fn make_cpp_type(metadata: &Metadata<'_>, tag: CsTypeTag, ty: CsType) -> CppType {
+    pub fn make_cpp_type(metadata: &CordlMetadata<'_>, tag: CsTypeTag, ty: CsType) -> CppType {
         todo!()
     }
 
-    pub fn fill_from_il2cpp(&self, metadata: &Metadata<'_>, ctx_collection: &CppContextCollection, config: &CppGenerationConfig) {
+    pub fn fill_from_il2cpp(
+        &self,
+        metadata: &CordlMetadata<'_>,
+        ctx_collection: &CppContextCollection,
+        config: &CppGenerationConfig,
+    ) {
         let tdi: TypeDefinitionIndex = self.self_tag.into();
 
         let t = &metadata.metadata.global_metadata.type_definitions[tdi];
@@ -426,7 +431,7 @@ impl CppType {
 
     fn make_parents(
         &mut self,
-        metadata: &Metadata,
+        metadata: &CordlMetadata,
         ctx_collection: &CppContextCollection,
         tdi: TypeDefinitionIndex,
     ) {
@@ -523,16 +528,14 @@ impl CppType {
                     )
                 }
 
-                self
-                    .parent = Some(
-                    inherit_type.remove_pointer().combine_all());
+                self.parent = Some(inherit_type.remove_pointer().combine_all());
             }
         }
     }
 
     fn make_interfaces(
         &mut self,
-        metadata: &Metadata<'_>,
+        metadata: &CordlMetadata<'_>,
         ctx_collection: &CppContextCollection,
         config: &CppGenerationConfig,
         tdi: TypeDefinitionIndex,
@@ -609,26 +612,22 @@ impl CppType {
             };
 
             // operator
-            self
-                .declarations
+            self.declarations
                 .push(CppMember::MethodDecl(operator_method_decl).into());
-            self
-                .implementations
+            self.implementations
                 .push(CppMember::MethodImpl(operator_method_impl).into());
 
             // helper method
-            self
-                .declarations
+            self.declarations
                 .push(CppMember::MethodDecl(helper_method_decl).into());
-            self
-                .implementations
+            self.implementations
                 .push(CppMember::MethodImpl(helper_method_impl).into());
         }
     }
 
     fn make_nested_types(
         &mut self,
-        metadata: &Metadata,
+        metadata: &CordlMetadata,
         ctx_collection: &CppContextCollection,
         config: &CppGenerationConfig,
         tdi: TypeDefinitionIndex,
@@ -705,7 +704,7 @@ impl CppType {
 
     fn make_properties(
         &mut self,
-        metadata: &Metadata,
+        metadata: &CordlMetadata,
         ctx_collection: &CppContextCollection,
         config: &CppGenerationConfig,
         tdi: TypeDefinitionIndex,
@@ -776,7 +775,7 @@ impl CppType {
 
     fn make_methods(
         &mut self,
-        metadata: &Metadata,
+        metadata: &CordlMetadata,
         config: &CppGenerationConfig,
         ctx_collection: &CppContextCollection,
         tdi: TypeDefinitionIndex,
@@ -803,7 +802,7 @@ impl CppType {
         declaring_type: &Il2CppTypeDefinition,
         method_index: MethodIndex,
 
-        metadata: &Metadata,
+        metadata: &CordlMetadata,
         ctx_collection: &CppContextCollection,
         config: &CppGenerationConfig,
         is_generic_method_inst: bool,
@@ -872,8 +871,7 @@ impl CppType {
         };
 
         let literal_types = if is_generic_method_inst {
-            self
-                .method_generic_instantiation_map
+            self.method_generic_instantiation_map
                 .get(&method_index)
                 .cloned()
         } else {
@@ -885,8 +883,7 @@ impl CppType {
                 .iter()
                 .map(|t| &metadata.metadata_registration.types[*t as usize])
                 .map(|t| {
-                    self
-                        .cppify_name_il2cpp(ctx_collection, metadata, t, 0, TypeUsage::GenericArg)
+                    self.cppify_name_il2cpp(ctx_collection, metadata, t, 0, TypeUsage::GenericArg)
                         .combine_all()
                 })
                 .collect_vec()
@@ -1178,8 +1175,7 @@ impl CppType {
             && !has_template_args
             && !is_generic_method_inst
         {
-            self
-                .nonmember_implementations
+            self.nonmember_implementations
                 .push(Arc::new(CppNonMember::SizeStruct(
                     CppMethodSizeStruct {
                         ret_ty: method_decl.return_type.clone(),
@@ -1215,14 +1211,12 @@ impl CppType {
         const ALLOW_GENERIC_METHOD_STUBS_IMPL: bool = true;
         // If a generic instantiation or not a template
         if !method_stub || ALLOW_GENERIC_METHOD_STUBS_IMPL {
-            self
-                .implementations
+            self.implementations
                 .push(CppMember::MethodImpl(method_impl).into());
         }
 
         if !is_generic_method_inst {
-            self
-                .declarations
+            self.declarations
                 .push(CppMember::MethodDecl(method_decl).into());
         }
     }
@@ -1232,7 +1226,7 @@ impl CppType {
         method: &brocolib::global_metadata::Il2CppMethodDefinition,
         method_index: MethodIndex,
         is_generic_method_inst: bool,
-        metadata: &Metadata<'_>,
+        metadata: &CordlMetadata<'_>,
         config: &CppGenerationConfig,
         ctx_collection: &CppContextCollection,
     ) -> Vec<CppParam> {
@@ -1262,11 +1256,10 @@ impl CppType {
         method_index: MethodIndex,
         param_index: ParameterIndex,
         is_generic_method_inst: bool,
-        metadata: &Metadata<'_>,
+        metadata: &CordlMetadata<'_>,
         config: &CppGenerationConfig,
         ctx_collection: &CppContextCollection,
     ) -> CppParam {
-
         let param_type = metadata
             .metadata_registration
             .types
@@ -1324,7 +1317,7 @@ impl CppType {
         }
     }
 
-    fn parent_joined_cpp_name(metadata: &Metadata, tdi: TypeDefinitionIndex) -> String {
+    fn parent_joined_cpp_name(metadata: &CordlMetadata, tdi: TypeDefinitionIndex) -> String {
         let ty_def = &metadata.metadata.global_metadata.type_definitions[tdi];
 
         let name = ty_def.name(metadata.metadata);
@@ -1369,7 +1362,7 @@ impl CppType {
     // TODO: Make this less confusing
     fn il2cpp_mvar_use_param_name<'a>(
         &mut self,
-        metadata: &'a Metadata,
+        metadata: &'a CordlMetadata,
         method_index: MethodIndex,
         // use a lambda to do this lazily
         cpp_name: impl FnOnce(&mut CppType) -> String,
@@ -1406,7 +1399,7 @@ impl CppType {
     fn cppify_name_il2cpp(
         &mut self,
         ctx_collection: &CppContextCollection,
-        metadata: &Metadata,
+        metadata: &CordlMetadata,
         typ: &Il2CppType,
         include_depth: usize,
         typ_usage: TypeUsage,
@@ -1433,7 +1426,7 @@ impl CppType {
         &self,
         requirements: &mut CppTypeRequirements,
         ctx_collection: &CppContextCollection,
-        metadata: &Metadata,
+        metadata: &CordlMetadata,
         typ: &Il2CppType,
         include_depth: usize,
         declaring_generic_inst_types: Option<&Vec<usize>>,
@@ -1902,7 +1895,7 @@ to_incl_cpp_ty.cpp_name_components.clone()
 
     fn add_interface_operators(
         &mut self,
-        metadata: &Metadata<'_>,
+        metadata: &CordlMetadata<'_>,
         ctx_collection: &CppContextCollection,
         config: &CppGenerationConfig,
         tdi: TypeDefinitionIndex,
@@ -2019,7 +2012,7 @@ to_incl_cpp_ty.cpp_name_components.clone()
     ///
     /// add missing size for type
     ///
-    fn create_size_padding(&mut self, metadata: &Metadata, tdi: TypeDefinitionIndex) {
+    fn create_size_padding(&mut self, metadata: &CordlMetadata, tdi: TypeDefinitionIndex) {
         // // get type metadata size
         let Some(type_definition_sizes) = &metadata.metadata_registration.type_definition_sizes
         else {
@@ -2157,7 +2150,7 @@ to_incl_cpp_ty.cpp_name_components.clone()
 
     fn create_enum_backing_type_constant(
         &mut self,
-        metadata: &Metadata,
+        metadata: &CordlMetadata,
         ctx_collection: &CppContextCollection,
         tdi: TypeDefinitionIndex,
     ) {
@@ -2189,7 +2182,7 @@ to_incl_cpp_ty.cpp_name_components.clone()
 
     fn create_enum_wrapper(
         &mut self,
-        metadata: &Metadata,
+        metadata: &CordlMetadata,
         ctx_collection: &CppContextCollection,
         tdi: TypeDefinitionIndex,
     ) {
@@ -2290,7 +2283,7 @@ to_incl_cpp_ty.cpp_name_components.clone()
     }
 
     fn type_default_value(
-        metadata: &Metadata,
+        metadata: &CordlMetadata,
         cpp_type: Option<&CppType>,
         ty: &Il2CppType,
     ) -> String {
@@ -2331,7 +2324,7 @@ to_incl_cpp_ty.cpp_name_components.clone()
         }
     }
 
-    fn field_default_value(metadata: &Metadata, field_index: FieldIndex) -> Option<String> {
+    fn field_default_value(metadata: &CordlMetadata, field_index: FieldIndex) -> Option<String> {
         metadata
             .metadata
             .global_metadata
@@ -2355,7 +2348,10 @@ to_incl_cpp_ty.cpp_name_components.clone()
                 // Self::default_value_blob(metadata, ty, def.data_index.index() as usize, true, true)
             })
     }
-    fn param_default_value(metadata: &Metadata, parameter_index: ParameterIndex) -> Option<String> {
+    fn param_default_value(
+        metadata: &CordlMetadata,
+        parameter_index: ParameterIndex,
+    ) -> Option<String> {
         metadata
             .metadata
             .global_metadata
@@ -2460,7 +2456,7 @@ to_incl_cpp_ty.cpp_name_components.clone()
 
     fn create_valuetype_constructor(
         &mut self,
-        metadata: &Metadata,
+        metadata: &CordlMetadata,
         ctx_collection: &CppContextCollection,
         config: &CppGenerationConfig,
         tdi: TypeDefinitionIndex,
@@ -3131,7 +3127,7 @@ fn parse_generic_arg(
     gen_name: String,
     cpp_type: &mut CppType,
     ctx_collection: &CppContextCollection,
-    metadata: &Metadata<'_>,
+    metadata: &CordlMetadata<'_>,
     template_args: &mut Vec<(String, String)>,
 ) -> NameComponents {
     // If reference type, we use a template and add a requirement
@@ -3210,7 +3206,8 @@ fn parse_generic_arg(
         return gen_name.into();
     }
 
-    let inner_type = cpp_type.cppify_name_il2cpp(ctx_collection, metadata, t, 0, TypeUsage::TypeName);
+    let inner_type =
+        cpp_type.cppify_name_il2cpp(ctx_collection, metadata, t, 0, TypeUsage::TypeName);
 
     match t.data {
         TypeData::GenericClassIndex(gen_class_idx) => {

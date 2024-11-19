@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::generate::cpp::cpp_type::CORDL_ACCESSOR_FIELD_PREFIX;
 use crate::generate::cs_type::CsType;
 use crate::generate::cs_type_tag::CsTypeTag;
-use crate::generate::metadata::Metadata;
+use crate::generate::metadata::CordlMetadata;
 use crate::generate::type_extensions::{
     Il2CppTypeEnumExtensions, TypeDefinitionExtensions, TypeDefinitionIndexExtensions,
     TypeExtentions,
@@ -58,7 +58,7 @@ impl<'a> FieldInfoSet<'a> {
 pub fn handle_static_fields(
     cpp_type: &mut CppType,
     fields: &[FieldInfo],
-    metadata: &Metadata,
+    metadata: &CordlMetadata,
     tdi: TypeDefinitionIndex,
 ) {
     let t = tdi.get_type_definition(metadata.metadata);
@@ -211,7 +211,7 @@ pub(crate) fn handle_const_fields(
     cpp_type: &mut CppType,
     fields: &[FieldInfo],
     ctx_collection: &CppContextCollection,
-    metadata: &Metadata,
+    metadata: &CordlMetadata,
     tdi: TypeDefinitionIndex,
 ) {
     let t = tdi.get_type_definition(metadata.metadata);
@@ -314,7 +314,7 @@ pub(crate) fn handle_const_fields(
 pub(crate) fn handle_instance_fields(
     cpp_type: &mut CppType,
     fields: &[FieldInfo],
-    metadata: &Metadata,
+    metadata: &CordlMetadata,
     tdi: TypeDefinitionIndex,
 ) {
     let t = tdi.get_type_definition(metadata.metadata);
@@ -421,7 +421,7 @@ pub(crate) fn fixup_backing_field(fieldname: &str) -> String {
 pub(crate) fn handle_valuetype_fields(
     cpp_type: &mut CppType,
     fields: &[FieldInfo],
-    metadata: &Metadata,
+    metadata: &CordlMetadata,
     tdi: TypeDefinitionIndex,
 ) {
     // Value types only need getter fixes for explicit layout types
@@ -483,7 +483,7 @@ pub(crate) fn handle_valuetype_fields(
 
 // create prop and field declaration from passed field info
 pub(crate) fn prop_decl_from_fieldinfo(
-    metadata: &Metadata,
+    metadata: &CordlMetadata,
     field_info: &FieldInfo,
 ) -> CppPropertyDecl {
     if field_info.is_static {
@@ -703,7 +703,7 @@ pub(crate) fn prop_methods_from_fieldinfo(
 pub(crate) fn handle_referencetype_fields(
     cpp_type: &mut CppType,
     fields: &[FieldInfo],
-    metadata: &Metadata,
+    metadata: &CordlMetadata,
     tdi: TypeDefinitionIndex,
 ) {
     let t = tdi.get_type_definition(metadata.metadata);

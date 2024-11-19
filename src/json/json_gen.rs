@@ -14,7 +14,7 @@ use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
 use crate::generate::{
-    metadata::Metadata,
+    metadata::CordlMetadata,
     offsets,
     type_extensions::{ParameterDefinitionExtensions, TypeDefinitionExtensions, TypeExtentions},
 };
@@ -76,7 +76,7 @@ fn make_field(
     field_index: usize,
     _td: &Il2CppTypeDefinition,
     tdi: TypeDefinitionIndex,
-    metadata: &Metadata,
+    metadata: &CordlMetadata,
 ) -> JsonField {
     let ty = metadata
         .metadata
@@ -103,7 +103,7 @@ fn make_property(
     property: &Il2CppPropertyDefinition,
     td: &Il2CppTypeDefinition,
     _tdi: TypeDefinitionIndex,
-    metadata: &Metadata,
+    metadata: &CordlMetadata,
 ) -> JsonProperty {
     let p_setter = (property.set != u32::MAX).then(|| property.set_method(td, metadata.metadata));
     let p_getter = (property.get != u32::MAX).then(|| property.get_method(td, metadata.metadata));
@@ -132,7 +132,7 @@ fn make_param(
     param: &Il2CppParameterDefinition,
     _td: &Il2CppTypeDefinition,
     _tdi: TypeDefinitionIndex,
-    metadata: &Metadata,
+    metadata: &CordlMetadata,
 ) -> JsonParam {
     let param_type = metadata
         .metadata
@@ -160,7 +160,7 @@ fn make_method(
     method: &Il2CppMethodDefinition,
     td: &Il2CppTypeDefinition,
     tdi: TypeDefinitionIndex,
-    metadata: &Metadata,
+    metadata: &CordlMetadata,
 ) -> JsonMethod {
     let ret_ty = metadata
         .metadata
@@ -181,7 +181,7 @@ fn make_method(
     }
 }
 
-fn make_type(td: &Il2CppTypeDefinition, tdi: TypeDefinitionIndex, metadata: &Metadata) -> JsonType {
+fn make_type(td: &Il2CppTypeDefinition, tdi: TypeDefinitionIndex, metadata: &CordlMetadata) -> JsonType {
     let fields = td
         .fields(metadata.metadata)
         .iter()
@@ -235,7 +235,7 @@ fn make_type(td: &Il2CppTypeDefinition, tdi: TypeDefinitionIndex, metadata: &Met
 /// Essentially check if the type is compiler generated or
 /// not useful to emit
 ///
-pub fn is_real_declaring_type(td: &Il2CppTypeDefinition, metadata: &Metadata) -> bool {
+pub fn is_real_declaring_type(td: &Il2CppTypeDefinition, metadata: &CordlMetadata) -> bool {
     let condition1 = !td.name(metadata.metadata).contains("<>c__")
         && !td.name(metadata.metadata).contains(">d__");
     let condition2 = !td
@@ -259,7 +259,7 @@ pub fn is_real_declaring_type(td: &Il2CppTypeDefinition, metadata: &Metadata) ->
         && condition4
 }
 
-pub fn make_json(metadata: &Metadata, file: &Path) -> Result<()> {
+pub fn make_json(metadata: &CordlMetadata, file: &Path) -> Result<()> {
     // we could use a map here but sorting
     // wouldn't be guaranteed
     // we want sorting so diffs are more readable
@@ -285,7 +285,7 @@ pub fn make_json(metadata: &Metadata, file: &Path) -> Result<()> {
     Ok(())
 }
 
-pub fn make_json_folder(metadata: &Metadata, folder: &Path) -> Result<()> {
+pub fn make_json_folder(metadata: &CordlMetadata, folder: &Path) -> Result<()> {
     // we could use a map here but sorting
     // wouldn't be guaranteed
     // we want sorting so diffs are more readable

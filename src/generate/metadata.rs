@@ -34,39 +34,18 @@ impl<'a> TypeDefinitionPair<'a> {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
-pub enum TypeUsage {
-    // Method usage
-    Parameter,
-    ReturnType,
 
-    // References
-    FieldName,
-    PropertyName,
 
-    // naming the CppType itself
-    TypeName,
-    GenericArg,
-}
 
 pub type TypeHandlerFn = Box<dyn Fn(&mut CsType)>;
-pub type TypeResolveHandlerFn = Box<
-    dyn Fn(
-        NameComponents,
-        &CsType,
-        &TypeContextCollection,
-        &Metadata,
-        &Il2CppType,
-        TypeUsage,
-    ) -> NameComponents,
->;
+
 pub type Il2cppNamespace<'a> = &'a str;
 pub type Il2cppName<'a> = &'a str;
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Il2cppFullName<'a>(pub Il2cppNamespace<'a>, pub Il2cppName<'a>);
 
-pub struct Metadata<'a> {
+pub struct CordlMetadata<'a> {
     pub metadata: &'a brocolib::Metadata<'a, 'a>,
     pub metadata_registration: &'a brocolib::runtime_metadata::Il2CppMetadataRegistration,
     pub code_registration: &'a brocolib::runtime_metadata::Il2CppCodeRegistration<'a>,
@@ -88,7 +67,7 @@ pub struct Metadata<'a> {
     pub packing_is_default_offset: u8,
 }
 
-impl<'a> Metadata<'a> {
+impl<'a> CordlMetadata<'a> {
     /// Returns the size of the base object.
     /// To be used for boxing/unboxing and various offset computations.
     pub fn object_size(&self) -> u8 {

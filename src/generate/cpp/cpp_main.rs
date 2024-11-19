@@ -16,14 +16,14 @@ use crate::{
         },
         cs_context_collection::TypeContextCollection,
         cs_members::CsMember,
-        metadata::{self, Metadata},
+        metadata::{self, CordlMetadata},
     },
     INTERNALS_DIR,
 };
 
 pub fn run_cpp(
     cs_collection: TypeContextCollection,
-    metadata: &Metadata,
+    metadata: &CordlMetadata,
 ) -> color_eyre::Result<()> {
     if STATIC_CONFIG.header_path.exists() {
         std::fs::remove_dir_all(&STATIC_CONFIG.header_path)?;

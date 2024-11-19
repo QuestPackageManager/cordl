@@ -1,6 +1,6 @@
 use core::mem;
 
-use crate::generate::metadata::Metadata;
+use crate::generate::metadata::CordlMetadata;
 use crate::generate::metadata::PointerSize;
 use crate::generate::type_extensions::TypeDefinitionExtensions;
 use crate::TypeDefinitionIndex;
@@ -33,7 +33,7 @@ pub fn get_size_info<'a>(
     t: &'a Il2CppTypeDefinition,
     tdi: TypeDefinitionIndex,
     generic_inst_types: Option<&Vec<usize>>,
-    metadata: &'a Metadata,
+    metadata: &'a CordlMetadata,
 ) -> SizeInfo {
     let size_metadata = get_size_of_type_table(metadata, tdi).unwrap();
     let mut instance_size = size_metadata.instance_size;
@@ -77,7 +77,7 @@ pub fn get_size_and_packing<'a>(
     t: &'a Il2CppTypeDefinition,
     tdi: TypeDefinitionIndex,
     generic_inst_types: Option<&Vec<usize>>,
-    metadata: &'a Metadata,
+    metadata: &'a CordlMetadata,
 ) -> (u32, Option<u8>) {
     let size_metadata = get_size_of_type_table(metadata, tdi).unwrap();
     let mut metadata_size = size_metadata.instance_size;
@@ -99,7 +99,7 @@ pub fn get_size_and_packing<'a>(
 }
 
 pub fn get_il2cpptype_sa(
-    metadata: &Metadata<'_>,
+    metadata: &CordlMetadata<'_>,
     ty: &Il2CppType,
     generic_inst_types: Option<&Vec<usize>>,
 ) -> SizeAndAlignment {
@@ -110,7 +110,7 @@ pub fn get_sizeof_type<'a>(
     t: &'a Il2CppTypeDefinition,
     tdi: TypeDefinitionIndex,
     generic_inst_types: Option<&Vec<usize>>,
-    metadata: &'a Metadata,
+    metadata: &'a CordlMetadata,
 ) -> u32 {
     let size_metadata = get_size_of_type_table(metadata, tdi).unwrap();
     let mut metadata_size = size_metadata.instance_size;
@@ -182,7 +182,7 @@ fn packing_is_default(bitfield: u32, packing_is_default_offset: u8) -> bool {
 }
 
 /// RuntimeType::GetPacking
-fn get_packing(metadata: &Metadata<'_>, ty_def: &Il2CppTypeDefinition) -> Option<u8> {
+fn get_packing(metadata: &CordlMetadata<'_>, ty_def: &Il2CppTypeDefinition) -> Option<u8> {
     // according to this, packing is by default n = 8
     // https://learn.microsoft.com/en-us/cpp/preprocessor/pack?view=msvc-170
     if packing_is_default(ty_def.bitfield, metadata.packing_is_default_offset) {
@@ -196,7 +196,7 @@ fn get_packing(metadata: &Metadata<'_>, ty_def: &Il2CppTypeDefinition) -> Option
 }
 
 /// GlobalMetadata::FromTypeDefinition
-fn get_type_def_packing(metadata: &Metadata, ty_def: &Il2CppTypeDefinition) -> Option<u8> {
+fn get_type_def_packing(metadata: &CordlMetadata, ty_def: &Il2CppTypeDefinition) -> Option<u8> {
     let packing = packing_value(ty_def.bitfield, metadata.packing_field_offset);
 
     // packing 8 is default
@@ -214,7 +214,7 @@ fn size_is_default(bitfield: u32, size_is_default_offset: u8) -> bool {
 }
 
 fn get_size(
-    metadata: &Metadata<'_>,
+    metadata: &CordlMetadata<'_>,
     tdi: TypeDefinitionIndex,
     ty_def: &Il2CppTypeDefinition,
 ) -> Option<u32> {
@@ -246,7 +246,7 @@ fn is_reference(ty: &Il2CppType) -> bool {
 
 /// Inspired by libil2cpp Class::LayoutFieldsLocked
 pub fn layout_fields(
-    metadata: &Metadata<'_>,
+    metadata: &CordlMetadata<'_>,
     declaring_ty_def: &Il2CppTypeDefinition,
     declaring_tdi: TypeDefinitionIndex,
     generic_inst_types: Option<&Vec<usize>>,
@@ -373,7 +373,7 @@ pub fn layout_fields(
 
 /// equivalent to libil2cpp FieldLayout::LayoutFields with the instance field filter
 fn layout_instance_fields(
-    metadata: &Metadata<'_>,
+    metadata: &CordlMetadata<'_>,
     declaring_ty_def: &Il2CppTypeDefinition,
     declaring_tdi: TypeDefinitionIndex,
     generic_inst_types: Option<&Vec<usize>>,
@@ -449,7 +449,7 @@ fn layout_instance_fields(
 }
 
 fn get_offset_of_type_table(
-    metadata: &Metadata<'_>,
+    metadata: &CordlMetadata<'_>,
     tdi: TypeDefinitionIndex,
     field: usize,
 ) -> Option<usize> {
@@ -467,7 +467,7 @@ fn get_offset_of_type_table(
 }
 
 fn get_parent_sa(
-    metadata: &Metadata<'_>,
+    metadata: &CordlMetadata<'_>,
     parent_index: u32,
     generic_inst_types: Option<&Vec<usize>>,
 ) -> SizeAndAlignment {
@@ -536,7 +536,7 @@ fn update_instance_size_for_generic_class(
     ty_def: &Il2CppTypeDefinition,
     tdi: TypeDefinitionIndex,
     instance_size: usize,
-    metadata: &Metadata<'_>,
+    metadata: &CordlMetadata<'_>,
 ) -> usize {
     // need to set this in case there are no fields in a generic instance type
     if !ty_def.generic_container_index.is_valid() {
@@ -559,7 +559,7 @@ fn update_instance_size_for_generic_class(
 }
 
 pub fn get_size_of_type_table<'a>(
-    metadata: &'a Metadata<'a>,
+    metadata: &'a CordlMetadata<'a>,
     tdi: TypeDefinitionIndex,
 ) -> Option<&'a Il2CppTypeDefinitionSizes> {
     if let Some(size_table) = &metadata
@@ -604,7 +604,7 @@ fn get_alignment_of_type(ty: OffsetType, pointer_size: PointerSize) -> u8 {
 fn get_type_size_and_alignment(
     ty: &Il2CppType,
     generic_inst_types: Option<&Vec<usize>>,
-    metadata: &Metadata,
+    metadata: &CordlMetadata,
 ) -> SizeAndAlignment {
     let mut sa = SizeAndAlignment {
         alignment: 0,

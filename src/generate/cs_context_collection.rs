@@ -13,7 +13,7 @@ use crate::generate::cs_type::CsType;
 use super::{
     context::TypeContext,
     cs_type_tag::{CsTypeTag, GenericInstantiation},
-    metadata::Metadata,
+    metadata::CordlMetadata,
     type_extensions::TypeDefinitionExtensions,
 };
 
@@ -28,7 +28,7 @@ pub struct TypeContextCollection {
 }
 
 impl TypeContextCollection {
-    fn fill_cpp_type(&mut self, cpp_type: &mut CsType, metadata: &Metadata) {
+    fn fill_cpp_type(&mut self, cpp_type: &mut CsType, metadata: &CordlMetadata) {
         let tag = cpp_type.self_tag;
 
         if self.filled_types.contains(&tag) {
@@ -47,7 +47,7 @@ impl TypeContextCollection {
         self.filling_types.remove(&tag.clone());
     }
 
-    pub fn fill(&mut self, metadata: &Metadata, type_tag: CsTypeTag) {
+    pub fn fill(&mut self, metadata: &CordlMetadata, type_tag: CsTypeTag) {
         let context_tag = self.get_context_root_tag(type_tag);
 
         if self.filled_types.contains(&type_tag) {
@@ -87,7 +87,7 @@ impl TypeContextCollection {
         &mut self,
         owner_tdi: TypeDefinitionIndex,
         root_tag: CsTypeTag,
-        metadata: &Metadata,
+        metadata: &CordlMetadata,
         nested: bool,
     ) {
         let owner_tag = CsTypeTag::TypeDefinitionIndex(owner_tdi);
@@ -153,7 +153,7 @@ impl TypeContextCollection {
 
     pub fn make_nested_from(
         &mut self,
-        metadata: &Metadata<'_>,
+        metadata: &CordlMetadata<'_>,
         tdi: TypeDefinitionIndex,
         generic_inst: Option<&Vec<usize>>,
     ) -> Option<&mut TypeContext> {
@@ -229,7 +229,7 @@ impl TypeContextCollection {
     pub fn make_generic_from(
         &mut self,
         method_spec: &Il2CppMethodSpec,
-        metadata: &mut Metadata,
+        metadata: &mut CordlMetadata,
     ) -> Option<&mut TypeContext> {
         // Not a generic class, no type needed
         if method_spec.class_inst_index == u32::MAX {
@@ -325,7 +325,7 @@ impl TypeContextCollection {
     pub fn fill_generic_method_inst(
         &mut self,
         method_spec: &Il2CppMethodSpec,
-        metadata: &mut Metadata,
+        metadata: &mut CordlMetadata,
     ) -> Option<&mut TypeContext> {
         if method_spec.method_inst_index == u32::MAX {
             return None;
@@ -372,7 +372,7 @@ impl TypeContextCollection {
         self.borrow_cs_type(generic_class_ty_data, |collection, mut cpp_type| {
             let method_index = method_spec.method_definition_index;
             cpp_type.add_method_generic_inst(method_spec, metadata);
-            cpp_type.create_method(ty_def, method_index, metadata, true);
+            cpp_type.create_method(method_index, metadata, true);
 
             cpp_type
         });
@@ -383,7 +383,7 @@ impl TypeContextCollection {
     pub fn fill_generic_class_inst(
         &mut self,
         method_spec: &Il2CppMethodSpec,
-        metadata: &mut Metadata,
+        metadata: &mut CordlMetadata,
     ) -> Option<&mut TypeContext> {
         if method_spec.class_inst_index == u32::MAX {
             return None;
@@ -445,7 +445,7 @@ impl TypeContextCollection {
 
     pub fn make_from(
         &mut self,
-        metadata: &Metadata,
+        metadata: &CordlMetadata,
 
         type_data: TypeData,
         generic_inst: Option<&Vec<usize>>,

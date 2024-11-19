@@ -57,23 +57,7 @@ pub struct CsUsingAlias {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum CsMember {
-    Field(CsField),
-    Method(CsMethodDecl),
-    Property(CsPropertyDecl),
-    Constructor(CsConstructor),
-    NestedStruct(CsNestedStruct),
-    CppUsingAlias(CsUsingAlias),
-    Comment(CsCommentedString),
-}
 
-#[derive(Clone, Debug, PartialEq)]
-pub struct CsNestedStruct {
-    pub name: String,
-    pub declarations: Vec<Rc<CsMember>>,
-    pub is_enum: bool,
-    pub is_class: bool,
-    pub brief_comment: Option<String>,
-    pub packing: Option<u8>,
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
@@ -163,7 +147,7 @@ pub struct CsField {
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct CsPropertyDecl {
+pub struct CsProperty {
     pub name: String,
     pub prop_ty: TypeData,
     pub instance: bool,
@@ -208,7 +192,7 @@ bitflags! {
 
 // TODO: Generics
 #[derive(Clone, Debug, PartialEq)]
-pub struct CsMethodDecl {
+pub struct CsMethod {
     pub name: String,
     pub return_type: TypeData,
     pub parameters: Vec<CsParam>,

@@ -10,7 +10,7 @@
 use brocolib::{global_metadata::TypeDefinitionIndex, runtime_metadata::TypeData};
 use byteorder::LittleEndian;
 use color_eyre::eyre::Context;
-use generate::{cpp, metadata::Metadata};
+use generate::{cpp, metadata::CordlMetadata};
 use itertools::Itertools;
 extern crate pretty_env_logger;
 
@@ -103,7 +103,7 @@ fn main() -> color_eyre::Result<()> {
     })?;
     let il2cpp_metadata = brocolib::Metadata::parse(&global_metadata_data, &elf_data)?;
 
-    let mut metadata = Metadata {
+    let mut metadata = CordlMetadata {
         metadata: &il2cpp_metadata,
         code_registration: &il2cpp_metadata.runtime_metadata.code_registration,
         metadata_registration: &il2cpp_metadata.runtime_metadata.metadata_registration,

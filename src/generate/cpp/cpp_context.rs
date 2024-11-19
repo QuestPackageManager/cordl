@@ -20,7 +20,7 @@ use crate::generate::cpp::cpp_members::{CppForwardDeclare, CppInclude};
 use crate::generate::cpp::cpp_type::CORDL_NO_INCLUDE_IMPL_DEFINE;
 use crate::generate::cs_type::CsType;
 use crate::generate::cs_type_tag::CsTypeTag;
-use crate::generate::metadata::Metadata;
+use crate::generate::metadata::CordlMetadata;
 use crate::generate::type_extensions::TypeDefinitionExtensions;
 use crate::generate::writer::{CppWritable, CppWriter};
 use crate::helpers::sorting::DependencyGraph;
@@ -73,7 +73,7 @@ impl CppContext {
     pub fn make(
         context_tag: CsTypeTag,
         context: TypeContext,
-        metadata: &Metadata,
+        metadata: &CordlMetadata,
         config: &CppGenerationConfig,
     ) -> CppContext {
         let tdi = context_tag.get_tdi();
