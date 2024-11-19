@@ -3,12 +3,12 @@ use std::collections::HashMap;
 use crate::generate::cpp::cpp_type::CORDL_ACCESSOR_FIELD_PREFIX;
 use crate::generate::cs_type::CsType;
 use crate::generate::cs_type_tag::CsTypeTag;
+use crate::generate::metadata::Metadata;
 use crate::generate::type_extensions::{
     Il2CppTypeEnumExtensions, TypeDefinitionExtensions, TypeDefinitionIndexExtensions,
     TypeExtentions,
 };
 use crate::generate::writer::CppWritable;
-use crate::generate::{cs_members::CsNestedUnion, metadata::Metadata};
 use brocolib::global_metadata::Il2CppFieldDefinition;
 use brocolib::runtime_metadata::Il2CppType;
 use itertools::Itertools;

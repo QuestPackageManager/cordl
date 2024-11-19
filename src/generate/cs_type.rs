@@ -19,7 +19,6 @@ use log::{debug, info, warn};
 use crate::{
     data::name_components::NameComponents,
     generate::{
-        cs_fields::{handle_static_fields, FieldInfo},
         cs_members::CsField,
         type_extensions::{
             Il2CppTypeEnumExtensions, ParameterDefinitionExtensions, TypeExtentions,
@@ -31,7 +30,6 @@ use crate::{
 
 use super::{
     cs_context_collection::TypeContextCollection,
-    cs_fields::{handle_const_fields, handle_referencetype_fields, handle_valuetype_fields},
     cs_members::{
         CsGenericTemplate, CsMember, CsMethodData, CsMethodDecl, CsParam, CsParamFlags,
         CsPropertyDecl, CsValue,
@@ -433,7 +431,7 @@ impl CsType {
             .fields(metadata.metadata)
             .iter()
             .enumerate()
-            .filter_map(|(i, field)| {
+            .map(|(i, field)| {
                 let f_type = metadata
                     .metadata_registration
                     .types
@@ -448,52 +446,30 @@ impl CsType {
                 // calculate / fetch the field size
                 let f_size = get_size(field, self.generic_instantiations_args_types.as_ref(), &metadata);
 
-                if let TypeData::TypeDefinitionIndex(field_tdi) = f_type.data
-                    && metadata.blacklisted_types.contains(&field_tdi)
-                {
-                    if !self.is_value_type && !self.is_enum_type {
-                        return None;
-                    }
-                    warn!("Value type uses {tdi:?} which is blacklisted! TODO");
-                }
 
                 // TODO: Check a flag to look for default values to speed this up
                 let def_value = Self::field_default_value(metadata, field_index);
 
                 assert!(def_value.is_none() || (def_value.is_some() && f_type.is_param_optional()));
 
-                let cpp_field_decl = CsField {
+
+                CsField {
                     name: f_name.to_owned(),
-                    field_ty: f_type.data,
+                    field_ty: field.type_index,
                     offset: f_offset,
+                    size: f_size,
                     instance: !f_type.is_static() && !f_type.is_constant(),
                     readonly: f_type.is_constant(),
                     brief_comment: Some(format!("Field {f_name}, offset: 0x{:x}, size: 0x{f_size:x}, def value: {def_value:?}", f_offset.unwrap_or(u32::MAX))),
                     value: def_value,
-                    const_expr: false,
-                };
-
-                Some(FieldInfo {
-                    cs_field: cpp_field_decl,
-                    field,
-                    field_type: f_type,
-                    is_constant: f_type.is_constant(),
-                    is_static: f_type.is_static(),
-                    is_pointer: f_type.byref || !f_type.valuetype,
-                    offset: f_offset,
-                    size: f_size,
-                })
+                    is_const: false,
+                }
             })
             .collect_vec();
 
-        if t.is_value_type() || t.is_enum_type() {
-            handle_valuetype_fields(self, &fields, metadata, tdi);
-        } else {
-            handle_referencetype_fields(self, &fields, metadata, tdi);
+        for f in fields {
+            self.members.push(CsMember::Field(f).into());
         }
-
-        handle_static_fields(self, &fields, metadata, tdi);
-        handle_const_fields(self, &fields, metadata, tdi);
     }
 
     fn make_parents(&mut self, metadata: &Metadata, tdi: TypeDefinitionIndex) {
@@ -742,7 +718,7 @@ impl CsType {
         }
 
         if !is_generic_method_inst {
-            self.members.push(CsMember::MethodDecl(method_decl).into());
+            self.members.push(CsMember::Method(method_decl).into());
         }
     }
 

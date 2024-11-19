@@ -1463,11 +1463,7 @@ to_incl_cpp_ty.cpp_name_components.clone()
             todo!("Why does this type not have a valid size??? {:?}", self);
         }
 
-        let size = self
-            .size_info
-            .as_ref()
-            .map(|s| s.instance_size)
-            .unwrap();
+        let size = self.size_info.as_ref().map(|s| s.instance_size).unwrap();
 
         self.requirements.needs_byte_include();
         self.declarations.push(
@@ -1951,8 +1947,7 @@ to_incl_cpp_ty.cpp_name_components.clone()
             body: None,
         };
 
-        self
-            .declarations
+        self.declarations
             .push(CppMember::ConstructorDecl(move_ctor).into());
     }
 
@@ -1980,8 +1975,7 @@ to_incl_cpp_ty.cpp_name_components.clone()
             body: None,
         };
 
-        self
-            .declarations
+        self.declarations
             .push(CppMember::ConstructorDecl(move_ctor).into());
     }
 
@@ -2011,12 +2005,10 @@ to_incl_cpp_ty.cpp_name_components.clone()
             ..default_ctor_decl.clone().into()
         };
 
-        self
-            .declarations
+        self.declarations
             .push(CppMember::ConstructorDecl(default_ctor_decl).into());
 
-        self
-            .implementations
+        self.implementations
             .push(CppMember::ConstructorImpl(default_ctor_impl).into());
     }
 
@@ -2035,8 +2027,7 @@ to_incl_cpp_ty.cpp_name_components.clone()
             is_private: false,
         };
 
-        self
-            .declarations
+        self.declarations
             .push(CppMember::FieldDecl(il2cpp_metadata_type_index).into());
     }
 
@@ -2062,8 +2053,7 @@ to_incl_cpp_ty.cpp_name_components.clone()
             body: None,
         };
 
-        self
-            .declarations
+        self.declarations
             .push(CppMember::ConstructorDecl(default_ctor).into());
     }
 

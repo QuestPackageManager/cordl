@@ -1,5 +1,5 @@
 use bitflags::bitflags;
-use brocolib::runtime_metadata::TypeData;
+use brocolib::{global_metadata::TypeIndex, runtime_metadata::TypeData};
 use bytes::Bytes;
 use itertools::Itertools;
 
@@ -57,15 +57,13 @@ pub struct CsUsingAlias {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum CsMember {
-    FieldDecl(CsField),
-    MethodDecl(CsMethodDecl),
+    Field(CsField),
+    Method(CsMethodDecl),
     Property(CsPropertyDecl),
-    ConstructorDecl(CsConstructor),
-    NestedUnion(CsNestedUnion),
+    Constructor(CsConstructor),
     NestedStruct(CsNestedStruct),
     CppUsingAlias(CsUsingAlias),
     Comment(CsCommentedString),
-    FieldLayout(CsFieldLayout),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -130,17 +128,36 @@ pub enum CsValue {
     Null,
 }
 
+/// Explicit layout
+/// il2cpp basically turns each field into 2 structs within a union:
+/// 1 which is packed with size 1, and padded with offset to fit to the end
+/// the other which has the same padding and layout, except this one is for alignment so it's just packed as the parent struct demands
+/// union {
+///      [[pack(1)]]
+///      struct {
+///          byte __field_padding = size(offset)
+///          T field
+///      }
+///      [[pack(default)]]
+///      struct {
+///          byte __field_padding_forAlignment = size(offset)
+///          T __field_forAlignment
+///      }... per field
+/// }
+///
 #[derive(Clone, Debug, PartialEq)]
 pub struct CsField {
     pub name: String,
-    pub field_ty: TypeData,
+    pub field_ty: TypeIndex,
     pub instance: bool,
     pub readonly: bool,
     // is C# const
     // could be assumed from value though
-    pub const_expr: bool,
+    pub is_const: bool,
 
     pub offset: Option<u32>,
+    pub size: usize,
+
     pub value: Option<CsValue>,
     pub brief_comment: Option<String>,
 }
@@ -221,20 +238,4 @@ impl PartialEq for CsConstructor {
             // can't guarantee equality
             && self.body.is_some() == other.body.is_some()
     }
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct CsNestedUnion {
-    pub declarations: Vec<Rc<CsMember>>,
-    pub brief_comment: Option<String>,
-    pub offset: u32,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct CsFieldLayout {
-    pub field: CsField,
-    // make struct with size [padding, field] packed with 1
-    pub padding: u32,
-    // make struct with size [alignment, field_size] default packed
-    pub alignment: u32,
 }
