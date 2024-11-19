@@ -19,7 +19,7 @@ use log::{debug, info, warn};
 use crate::{
     data::{
         name_components::NameComponents,
-        name_resolver::{TypeResolver, TypeUsage},
+        name_resolver::{ResolvedType, TypeResolver, TypeUsage},
     },
     generate::{
         cs_members::CsField,
@@ -85,8 +85,8 @@ pub struct CsType {
     pub is_reference_type: bool,
     pub requirements: CsTypeRequirements,
 
-    pub parent: Option<CsTypeTag>,
-    pub interfaces: Vec<CsTypeTag>,
+    pub parent: Option<ResolvedType>,
+    pub interfaces: Vec<ResolvedType>,
     pub generic_template: Option<CsGenericTemplate>, // Names of templates e.g T, TKey etc.
 
     /// contains the array of generic Il2CppType indexes
@@ -498,8 +498,6 @@ impl CsType {
             .get(t.parent_index as usize)
             .unwrap_or_else(|| panic!("NO PARENT! But valid index found: {}", t.parent_index));
 
-        let parent_ty: CsTypeTag = CsTypeTag::from_type_data(parent_type.data, metadata.metadata);
-
         // handle value types and enum types specially
         if !t.is_value_type() || t.is_enum_type() {
             // make sure our parent is intended\
@@ -509,7 +507,7 @@ impl CsType {
             );
             assert!(is_ref_type, "Not a class, object or generic inst!");
 
-            self.parent = Some(parent_ty);
+            self.parent = Some(type_resolver.resolve_type(self, parent_type, TypeUsage::TypeName));
         }
     }
 
@@ -521,8 +519,8 @@ impl CsType {
         for &interface_index in t.interfaces(metadata.metadata) {
             let int_ty = &metadata.metadata_registration.types[interface_index as usize];
 
-            let interface_tag = CsTypeTag::from_type_data(int_ty.data, metadata.metadata);
-            self.interfaces.push(interface_tag);
+            self.interfaces
+                .push(type_resolver.resolve_type(self, int_ty, TypeUsage::TypeName));
         }
     }
 
