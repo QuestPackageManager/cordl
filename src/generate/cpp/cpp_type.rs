@@ -18,9 +18,10 @@ use log::{info, warn};
 use std::io::Write;
 
 use crate::{
-    data::{name_components::NameComponents, type_resolver::TypeUsage},
+    data::{name_components::NameComponents, type_resolver::{ResolvedType, TypeUsage}},
     generate::{
         cpp::cpp_members::{CppMethodSizeStruct, CppStaticAssert},
+        cs_members::{CsConstructor, CsField, CsGenericTemplateType, CsMethod, CsProperty},
         cs_type::CsType,
         cs_type_tag::CsTypeTag,
         metadata::CordlMetadata,
@@ -41,6 +42,7 @@ use super::{
         CppLine, CppMember, CppMethodData, CppMethodDecl, CppMethodImpl, CppNestedStruct,
         CppNonMember, CppParam, CppPropertyDecl, CppTemplate, CppUsingAlias,
     },
+    cpp_name_resolver::VALUE_WRAPPER_TYPE,
 };
 
 pub const CORDL_TYPE_MACRO: &str = "CORDL_TYPE";
@@ -58,7 +60,6 @@ pub const VALUE_TYPE_WRAPPER_SIZE: &str = "__IL2CPP_VALUE_TYPE_SIZE";
 pub const REFERENCE_TYPE_WRAPPER_SIZE: &str = "__IL2CPP_REFERENCE_TYPE_SIZE";
 pub const REFERENCE_TYPE_FIELD_SIZE: &str = "__fields";
 pub const REFERENCE_WRAPPER_INSTANCE_NAME: &str = "::bs_hook::Il2CppWrapperType::instance";
-
 
 pub const CORDL_NO_INCLUDE_IMPL_DEFINE: &str = "CORDL_NO_IMPL_INCLUDE";
 pub const CORDL_ACCESSOR_FIELD_PREFIX: &str = "___";
@@ -366,71 +367,192 @@ impl CppType {
         Ok(())
     }
 
-    pub fn make_cpp_type(metadata: &CordlMetadata<'_>, tag: CsTypeTag, ty: CsType) -> CppType {
-        todo!()
-    }
+    pub fn make_cpp_type(metadata: &CordlMetadata<'_>, tag: CsTypeTag, cs_type: CsType, config: &CppGenerationConfig) -> CppType {
+        let mut cpp_type = CppType {
+            declarations: vec![],
+            nonmember_declarations: vec![],
+            implementations: vec![],
+            nonmember_implementations: vec![],
+            parent: cs_type.parent.map(|t| t.to_string()),
+            interfaces: cs_type.interfaces.iter().map(|i| i.to_string()).collect(),
+            is_value_type: cs_type.is_value_type,
+            is_enum_type: cs_type.is_enum_type,
+            is_reference_type: cs_type.is_reference_type,
+            requirements: CppTypeRequirements::default(),
+            self_tag: tag.clone(),
+            generic_instantiations_args_types: cs_type.generic_instantiations_args_types,
+            method_generic_instantiation_map: cs_type.method_generic_instantiation_map,
+            cpp_template: cs_type.generic_template.map(|t| t.into()),
+            cs_name_components: cs_type.cs_name_components,
+            cpp_name_components: NameComponents::default(), // TODO
+            tag,
+            prefix_comments: vec![],
+            packing: cs_type.packing.map(|p| p as u32),
+            size_info: cs_type.size_info,
+        };
 
-    pub fn fill_from_il2cpp(
-        &self,
-        metadata: &CordlMetadata<'_>,
-        ctx_collection: &CppContextCollection,
-        config: &CppGenerationConfig,
-    ) {
-        let tdi: TypeDefinitionIndex = self.self_tag.into();
+        // Fill type from CS data
+        cpp_type.make_fields(&cs_type, config);
+        cpp_type.make_methods(&cs_type, config);
+        cpp_type.make_properties(&cs_type, config);
+        cpp_type.make_constructors(&cs_type, config);
+
+        let tdi: TypeDefinitionIndex = cs_type.self_tag.into();
 
         let t = &metadata.metadata.global_metadata.type_definitions[tdi];
 
-        self.make_parents(metadata, ctx_collection, tdi);
-        self.make_interfaces(metadata, ctx_collection, config, tdi);
+        cpp_type.make_parents( &cs_type, config);
+        cpp_type.make_interfaces(&cs_type, config);
 
         // we depend on parents and generic args here
         // default ctor
         if t.is_value_type() || t.is_enum_type() {
-            self.create_valuetype_constructor(metadata, ctx_collection, config, tdi);
-            self.create_valuetype_field_wrapper();
+            cpp_type.create_valuetype_constructor(metadata, ctx_collection, config, tdi);
+            cpp_type.create_valuetype_field_wrapper();
             if t.is_enum_type() {
-                self.create_enum_wrapper(metadata, ctx_collection, tdi);
-                self.create_enum_backing_type_constant(metadata, ctx_collection, tdi);
+                cpp_type.create_enum_wrapper(metadata, ctx_collection, tdi);
+                cpp_type.create_enum_backing_type_constant(metadata, ctx_collection, tdi);
             }
-            self.add_default_ctor(false);
+            cpp_type.add_default_ctor(false);
         } else if t.is_interface() {
             // self.make_interface_constructors();
-            self.delete_move_ctor();
-            self.delete_copy_ctor();
+
+            cpp_type.delete_copy_ctor();
             // self.delete_default_ctor();
         } else {
             // ref type
-            self.delete_move_ctor();
-            self.delete_copy_ctor();
-            self.add_default_ctor(true);
+            cpp_type.delete_move_ctor();
+            cpp_type.delete_copy_ctor();
+            cpp_type.add_default_ctor(true);
             // self.delete_default_ctor();
         }
 
         if !t.is_interface() {
-            self.create_size_assert();
+            cpp_type.create_size_assert();
         }
 
-        self.add_type_index_member();
+        cpp_type.add_type_index_member();
 
-        self.make_nested_types(metadata, ctx_collection, config, tdi);
-        self.make_fields(metadata, ctx_collection, config, tdi);
-        self.make_properties(metadata, ctx_collection, config, tdi);
-        self.make_methods(metadata, config, ctx_collection, tdi);
+        cpp_type.make_nested_types(metadata,);
 
         if !t.is_interface() {
-            self.create_size_padding(metadata, tdi);
+            cpp_type.create_size_padding(metadata, tdi);
         }
 
         // if let Some(func) = metadata.custom_type_handler.get(&tdi) {
         //     func(self)
         // }
+
+        cpp_type
     }
 
-    fn make_parents(
+    fn make_fields(&mut self, fields: Vec<CsField>, config: &CppGenerationConfig) {
+        for field in fields {
+            let field_decl = CppFieldDecl {
+                cpp_name: field.name.clone(),
+                field_ty: field.field_ty.to_string(),
+                offset: field.offset,
+                instance: field.instance,
+                readonly: field.readonly,
+                const_expr: field.is_const,
+                value: field.value.as_ref().map(|v| v.to_string()),
+                brief_comment: field.brief_comment.clone(),
+                is_private: false,
+            };
+
+            self.declarations
+                .push(CppMember::FieldDecl(field_decl).into());
+        }
+    }
+
+    fn make_methods(&mut self, methods: Vec<CsMethod>, config: &CppGenerationConfig) {
+        for method in methods {
+            let method_decl = CppMethodDecl {
+                cpp_name: method.name.clone(),
+                return_type: method.return_type.to_string(),
+                parameters: method
+                    .parameters
+                    .iter()
+                    .map(|p| CppParam {
+                        name: p.name.clone(),
+                        ty: p.il2cpp_ty.to_string(),
+                        modifiers: "".to_string(), // TODO: Convert flags
+                        def_value: p.def_value.as_ref().map(|v| v.to_string()),
+                    })
+                    .collect(),
+                instance: method.instance,
+                template: method.template.clone().into(),
+                brief: method.brief.clone(),
+                is_constexpr: false,
+                is_const: false,
+                is_no_except: false,
+                is_virtual: false,
+                is_implicit_operator: false,
+                is_explicit_operator: false,
+                is_inline: true,
+                prefix_modifiers: vec![],
+                suffix_modifiers: vec![],
+                body: None,
+            };
+
+            self.declarations
+                .push(CppMember::MethodDecl(method_decl).into());
+        }
+    }
+
+    fn make_properties(&mut self, properties: Vec<CsProperty>, config: &CppGenerationConfig) {
+        for prop in properties {
+            let prop_decl = CppPropertyDecl {
+                cpp_name: prop.name.clone(),
+                prop_ty: prop.prop_ty.to_string(),
+                getter: prop.getter.clone(),
+                setter: prop.setter.clone(),
+                indexable: prop.indexable,
+                brief_comment: prop.brief_comment.clone(),
+                instance: prop.instance,
+            };
+
+            self.declarations
+                .push(CppMember::Property(prop_decl).into());
+        }
+    }
+
+    fn make_constructors(&mut self, constructors: Vec<CsConstructor>, config: &CppGenerationConfig) {
+        for ctor in &constructors {
+            let ctor_decl = CppConstructorDecl {
+                cpp_name: ctor.cpp_name.clone(),
+                parameters: ctor
+                    .parameters
+                    .iter()
+                    .map(|p| CppParam {
+                        name: p.name.clone(),
+                        ty: p.il2cpp_ty.to_string(),
+                        modifiers: "".to_string(),
+                        def_value: p.def_value.as_ref().map(|v| v.to_string()),
+                    })
+                    .collect(),
+                template: ctor.template.clone().into(),
+                brief: ctor.brief.clone(),
+                is_constexpr: true,
+                is_explicit: false,
+                is_default: false,
+                is_no_except: true,
+                is_delete: false,
+                is_protected: false,
+                base_ctor: None,
+                initialized_values: Default::default(),
+                body: ctor.body.clone(),
+            };
+
+            self.declarations
+                .push(CppMember::ConstructorDecl(ctor_decl).into());
+        }
+    }
+
+    fn make_parent(
         &mut self,
-        metadata: &CordlMetadata,
-        ctx_collection: &CppContextCollection,
-        tdi: TypeDefinitionIndex,
+        parent: Option<ResolvedType>,
+        config: &CppGenerationConfig
     ) {
         let t = &metadata.metadata.global_metadata.type_definitions[tdi];
 
@@ -532,10 +654,8 @@ impl CppType {
 
     fn make_interfaces(
         &mut self,
-        metadata: &CordlMetadata<'_>,
-        ctx_collection: &CppContextCollection,
-        config: &CppGenerationConfig,
-        tdi: TypeDefinitionIndex,
+        interfaces: Vec<ResolvedType>,
+        config: &CppGenerationConfig
     ) {
         let t = &metadata.metadata.global_metadata.type_definitions[tdi];
 
@@ -624,10 +744,7 @@ impl CppType {
 
     fn make_nested_types(
         &mut self,
-        metadata: &CordlMetadata,
-        ctx_collection: &CppContextCollection,
-        config: &CppGenerationConfig,
-        tdi: TypeDefinitionIndex,
+        name_resolver: &
     ) {
         let t = &metadata.metadata.global_metadata.type_definitions[tdi];
 
@@ -2420,35 +2537,6 @@ to_incl_cpp_ty.cpp_name_components.clone()
             })
             .into(),
         );
-
-        // self.declarations.push(
-        //     CppMember::ConstructorDecl(CppConstructorDecl {
-        //         cpp_name: self.cpp_name().clone(),
-        //         parameters: vec![CppParam {
-        //             name: "instance".to_string(),
-        //             ty: format!("std::array<std::byte, {VALUE_TYPE_WRAPPER_SIZE}>"),
-        //             modifiers: Default::default(),
-        //             def_value: None,
-        //         }],
-        //         template: None,
-        //         is_constexpr: true,
-        //         is_explicit: true,
-        //         is_default: false,
-        //         is_no_except: true,
-        //         is_delete: false,
-        //         is_protected: false,
-        //         base_ctor: Some((
-        //             self.inherit.first().unwrap().to_string(),
-        //             "instance".to_string(),
-        //         )),
-        //         initialized_values: Default::default(),
-        //         brief: Some(
-        //             "Constructor that lets you initialize the internal array explicitly".into(),
-        //         ),
-        //         body: Some(vec![]),
-        //     })
-        //     .into(),
-        // );
     }
 
     fn create_valuetype_constructor(
@@ -2456,7 +2544,6 @@ to_incl_cpp_ty.cpp_name_components.clone()
         metadata: &CordlMetadata,
         ctx_collection: &CppContextCollection,
         config: &CppGenerationConfig,
-        tdi: TypeDefinitionIndex,
     ) {
         let t = &metadata.metadata.global_metadata.type_definitions[tdi];
 
@@ -3097,22 +3184,6 @@ to_incl_cpp_ty.cpp_name_components.clone()
     pub fn name(&self) -> &String {
         &self.cpp_name_components.name
     }
-}
-
-fn wrapper_type_for_tdi(td: &Il2CppTypeDefinition) -> &str {
-    if td.is_enum_type() {
-        return ENUM_WRAPPER_TYPE;
-    }
-
-    if td.is_value_type() {
-        return VALUE_WRAPPER_TYPE;
-    }
-
-    if td.is_interface() {
-        return INTERFACE_WRAPPER_TYPE;
-    }
-
-    IL2CPP_OBJECT_TYPE
 }
 
 ///

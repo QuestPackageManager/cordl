@@ -27,7 +27,7 @@ use crate::helpers::sorting::DependencyGraph;
 
 use super::config::CppGenerationConfig;
 use super::cpp_members::CppUsingAlias;
-use super::cpp_type::{CppType, IL2CPP_OBJECT_TYPE};
+use super::cpp_type::CppType;
 
 // Holds the contextual information for creating a C++ file
 // Will hold various metadata, such as includes, type definitions, and extraneous writes
@@ -117,7 +117,7 @@ impl CppContext {
 
         for (tag, ty) in context.typedef_types {
             x.typedef_types
-                .insert(tag, CppType::make_cpp_type(metadata, tag, ty));
+                .insert(tag, CppType::make_cpp_type(metadata, tag, ty, config));
         }
 
         x

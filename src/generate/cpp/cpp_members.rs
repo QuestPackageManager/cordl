@@ -1,7 +1,10 @@
 use itertools::Itertools;
 use pathdiff::diff_paths;
 
-use crate::generate::writer::CppWritable;
+use crate::generate::{
+    cs_members::{CsGenericTemplate, CsGenericTemplateType},
+    writer::CppWritable,
+};
 
 use std::{
     collections::HashMap,
@@ -42,6 +45,21 @@ impl CppTemplate {
 
     pub fn just_names(&self) -> impl Iterator<Item = &String> {
         self.names.iter().map(|(_constraint, t)| t)
+    }
+}
+
+impl From<CsGenericTemplate> for CppTemplate {
+    fn from(value: CsGenericTemplate) -> Self {
+        CppTemplate {
+            names: value.names.into_iter().map(|(constraint, name)| {
+                let cpp_ty = match constraint {
+                    CsGenericTemplateType::Any => "typename".to_string(),
+                    CsGenericTemplateType::Reference => CORDL_REFERENCE_TYPE_CONSTRAINT.to_string(),
+                };
+
+                (cpp_ty, name)
+            }),
+        }
     }
 }
 
