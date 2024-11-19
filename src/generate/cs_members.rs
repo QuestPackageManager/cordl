@@ -111,12 +111,12 @@ pub struct CsMethodSizeData {
 pub enum CsValue {
     String(String),
     Bool(bool),
-    
+
     U8(u8),
     U16(u16),
     U32(u32),
     U64(u64),
-    
+
     I8(i8),
     I16(i16),
     I32(i32),
@@ -124,12 +124,11 @@ pub enum CsValue {
 
     F32(f32),
     F64(f64),
-    
+
     Object(Bytes),
     ValueType(Bytes),
     Null,
 }
-
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct CsField {
@@ -223,7 +222,6 @@ impl PartialEq for CsConstructor {
             && self.body.is_some() == other.body.is_some()
     }
 }
-
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct CsNestedUnion {

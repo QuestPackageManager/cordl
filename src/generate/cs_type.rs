@@ -305,7 +305,6 @@ impl CsType {
             .get(param.type_index as usize)
             .unwrap();
 
-    
         let def_value = Self::param_default_value(metadata, param_index);
 
         CsParam {
@@ -598,7 +597,6 @@ impl CsType {
                 .get(p_type_index)
                 .unwrap();
 
-
             let _method_map = |p: MethodIndex| {
                 let method_calc = metadata.method_calculations.get(&p).unwrap();
                 CsMethodData {
@@ -765,34 +763,23 @@ impl CsType {
 
         match ty.ty {
             Il2CppTypeEnum::Boolean => CsValue::Bool(data[0] != 0),
-            Il2CppTypeEnum::I1 => CsValue::I8(cursor.read_i8().unwrap().try_into().unwrap()),
-            Il2CppTypeEnum::I2 => {
-                CsValue::I16(cursor.read_i16::<Endian>().unwrap().try_into().unwrap())
-            }
-            Il2CppTypeEnum::I4 => CsValue::I32(
-                cursor
-                    .read_compressed_i32::<Endian>()
-                    
-                    .unwrap()
-                    .try_into()
-                    .unwrap(),
-            ),
+            Il2CppTypeEnum::I1 => CsValue::I8(cursor.read_i8().unwrap()),
+            Il2CppTypeEnum::I2 => CsValue::I16(cursor.read_i16::<Endian>().unwrap()),
+            Il2CppTypeEnum::I4 => CsValue::I32(cursor.read_compressed_i32::<Endian>().unwrap()),
             // TODO: We assume 64 bit
             Il2CppTypeEnum::I | Il2CppTypeEnum::I8 => {
-                CsValue::I64(cursor.read_i64::<Endian>().unwrap().try_into().unwrap())
+                CsValue::I64(cursor.read_i64::<Endian>().unwrap())
             }
-            Il2CppTypeEnum::U1 => CsValue::U8(cursor.read_u8().unwrap().into()),
-            Il2CppTypeEnum::U2 => CsValue::U16(cursor.read_u16::<Endian>().unwrap().into()),
-            Il2CppTypeEnum::U4 => {
-                CsValue::U32(cursor.read_u32::<Endian>().unwrap().try_into().unwrap())
-            }
+            Il2CppTypeEnum::U1 => CsValue::U8(cursor.read_u8().unwrap()),
+            Il2CppTypeEnum::U2 => CsValue::U16(cursor.read_u16::<Endian>().unwrap()),
+            Il2CppTypeEnum::U4 => CsValue::U32(cursor.read_u32::<Endian>().unwrap()),
             // TODO: We assume 64 bit
             Il2CppTypeEnum::U | Il2CppTypeEnum::U8 => {
-                CsValue::U64(cursor.read_u64::<Endian>().unwrap().try_into().unwrap())
+                CsValue::U64(cursor.read_u64::<Endian>().unwrap())
             }
             // https://learn.microsoft.com/en-us/nimbusml/concepts/types
             // https://en.cppreference.com/w/cpp/types/floating-point
-            Il2CppTypeEnum::R4 => CsValue::F32(cursor.read_f32::<Endian>().unwrap().into()),
+            Il2CppTypeEnum::R4 => CsValue::F32(cursor.read_f32::<Endian>().unwrap()),
             Il2CppTypeEnum::R8 => CsValue::F64(cursor.read_f64::<Endian>().unwrap()),
             Il2CppTypeEnum::Char => {
                 let res = String::from_utf16_lossy(&[cursor.read_u16::<Endian>().unwrap()])

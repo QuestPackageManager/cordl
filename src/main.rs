@@ -37,7 +37,7 @@ mod json;
 
 #[derive(Clone, Copy, Debug, clap::ValueEnum)]
 enum TargetLang {
-    CPP,
+    Cpp,
     SingleJSON,
     MultiJSON,
 }
@@ -89,9 +89,18 @@ fn main() -> color_eyre::Result<()> {
         info!("Add --format/-f to format with clang-format at end")
     }
 
-    println!("Running on {}", Path::new("./").canonicalize().unwrap().display());
-    let global_metadata_data = fs::read(&cli.metadata).with_context(|| format!("il2cpp metadata not found {}", cli.metadata.display()))?;
-    let elf_data = fs::read(&cli.libil2cpp).with_context(|| format!("libil2cpp.so shared object not found {}", cli.metadata.display()))?;
+    println!(
+        "Running on {}",
+        Path::new("./").canonicalize().unwrap().display()
+    );
+    let global_metadata_data = fs::read(&cli.metadata)
+        .with_context(|| format!("il2cpp metadata not found {}", cli.metadata.display()))?;
+    let elf_data = fs::read(&cli.libil2cpp).with_context(|| {
+        format!(
+            "libil2cpp.so shared object not found {}",
+            cli.metadata.display()
+        )
+    })?;
     let il2cpp_metadata = brocolib::Metadata::parse(&global_metadata_data, &elf_data)?;
 
     let mut metadata = Metadata {
@@ -365,7 +374,7 @@ fn main() -> color_eyre::Result<()> {
     }
 
     match cli.target {
-        TargetLang::CPP => cpp::cpp_main::run_cpp(cs_context_collection, &metadata),
+        TargetLang::Cpp => cpp::cpp_main::run_cpp(cs_context_collection, &metadata),
         TargetLang::SingleJSON => {
             let json = Path::new("./json");
             println!("Writing json file {json:?}");

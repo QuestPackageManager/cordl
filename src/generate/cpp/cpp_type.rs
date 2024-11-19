@@ -1073,11 +1073,6 @@ to_incl_cpp_ty.cpp_name_components.clone()
     /// add missing size for type
     ///
     fn create_size_padding(&mut self, metadata: &Metadata, tdi: TypeDefinitionIndex) {
-        let cpp_type = {
-            let this = &mut *self;
-            this
-        };
-
         // // get type metadata size
         let Some(type_definition_sizes) = &metadata.metadata_registration.type_definition_sizes
         else {
@@ -1101,7 +1096,7 @@ to_incl_cpp_ty.cpp_name_components.clone()
         // }
         // let remaining_size = metadata_size.instance_size.abs_diff(calculated_size);
 
-        let Some(size_info) = cpp_type.size_info.as_ref() else {
+        let Some(size_info) = self.size_info.as_ref() else {
             return;
         };
 
@@ -1135,12 +1130,12 @@ to_incl_cpp_ty.cpp_name_components.clone()
             _ => 8,
         };
 
-        let packing = cpp_type
+        let packing = self
             .packing
             .unwrap_or_else(|| closest_packing(size_info.calculated_instance_size));
         let packed_remaining_size = match packing == 0 {
             true => remaining_size,
-            false => remaining_size & !(packing as u32 - 1),
+            false => remaining_size & !(packing - 1),
         };
 
         // if the packed remaining size ends up being 0, don't emit padding
@@ -1148,7 +1143,7 @@ to_incl_cpp_ty.cpp_name_components.clone()
             return;
         }
 
-        cpp_type.declarations.push(
+        self.declarations.push(
             CppMember::FieldDecl(CppFieldDecl {
                 cpp_name: format!("_cordl_size_padding[0x{packed_remaining_size:x}]").to_string(),
                 field_ty: "uint8_t".into(),
@@ -1168,9 +1163,8 @@ to_incl_cpp_ty.cpp_name_components.clone()
     }
 
     fn create_ref_size(&mut self) {
-        let cpp_type = self;
-        if let Some(size) = cpp_type.size_info.as_ref().map(|s| s.instance_size) {
-            cpp_type.declarations.push(
+        if let Some(size) = self.size_info.as_ref().map(|s| s.instance_size) {
+            self.declarations.push(
                 CppMember::FieldDecl(CppFieldDecl {
                     cpp_name: REFERENCE_TYPE_WRAPPER_SIZE.to_string(),
                     field_ty: "auto".to_string(),
@@ -1186,13 +1180,13 @@ to_incl_cpp_ty.cpp_name_components.clone()
             );
 
             // here we push an instance field like uint8_t __fields[total_size - base_size] to make sure ref types are the exact size they should be
-            let inherits = cpp_type.get_inherits().collect_vec();
+            let inherits = self.get_inherits().collect_vec();
             let fixup_size = match inherits.first() {
                 Some(base_type) => format!("0x{size:x} - sizeof({base_type})"),
                 None => format!("0x{size:x}"),
             };
 
-            cpp_type.declarations.push(
+            self.declarations.push(
                 CppMember::FieldDecl(CppFieldDecl {
                     cpp_name: format!("{REFERENCE_TYPE_FIELD_SIZE}[{fixup_size}]"),
                     field_ty: "uint8_t".to_string(),
@@ -1210,7 +1204,7 @@ to_incl_cpp_ty.cpp_name_components.clone()
                 .into(),
             );
         } else {
-            todo!("Why does this type not have a valid size??? {:?}", cpp_type);
+            todo!("Why does this type not have a valid size??? {:?}", self);
         }
     }
 
@@ -1465,22 +1459,18 @@ to_incl_cpp_ty.cpp_name_components.clone()
     }
 
     fn create_valuetype_field_wrapper(&mut self) {
-        let cpp_type = {
-            let this = &mut *self;
-            this
-        };
-        if cpp_type.size_info.is_none() {
-            todo!("Why does this type not have a valid size??? {:?}", cpp_type);
+        if self.size_info.is_none() {
+            todo!("Why does this type not have a valid size??? {:?}", self);
         }
 
-        let size = cpp_type
+        let size = self
             .size_info
             .as_ref()
             .map(|s| s.instance_size)
             .unwrap();
 
-        cpp_type.requirements.needs_byte_include();
-        cpp_type.declarations.push(
+        self.requirements.needs_byte_include();
+        self.declarations.push(
             CppMember::FieldDecl(CppFieldDecl {
                 cpp_name: VALUE_TYPE_WRAPPER_SIZE.to_string(),
                 field_ty: "auto".to_string(),
@@ -1938,11 +1928,7 @@ to_incl_cpp_ty.cpp_name_components.clone()
     }
 
     fn delete_move_ctor(&mut self) {
-        let cpp_type = {
-            let this = &mut *self;
-            this
-        };
-        let t = &cpp_type.cpp_name_components.name;
+        let t = &self.cpp_name_components.name;
 
         let move_ctor = CppConstructorDecl {
             cpp_name: t.clone(),
@@ -1965,17 +1951,13 @@ to_incl_cpp_ty.cpp_name_components.clone()
             body: None,
         };
 
-        cpp_type
+        self
             .declarations
             .push(CppMember::ConstructorDecl(move_ctor).into());
     }
 
     fn delete_copy_ctor(&mut self) {
-        let cpp_type = {
-            let this = &mut *self;
-            this
-        };
-        let t = &cpp_type.cpp_name_components.name;
+        let t = &self.cpp_name_components.name;
 
         let move_ctor = CppConstructorDecl {
             cpp_name: t.clone(),
@@ -1998,17 +1980,13 @@ to_incl_cpp_ty.cpp_name_components.clone()
             body: None,
         };
 
-        cpp_type
+        self
             .declarations
             .push(CppMember::ConstructorDecl(move_ctor).into());
     }
 
     fn add_default_ctor(&mut self, protected: bool) {
-        let cpp_type = {
-            let this = &mut *self;
-            this
-        };
-        let t = &cpp_type.cpp_name_components.name;
+        let t = &self.cpp_name_components.name;
 
         let default_ctor_decl = CppConstructorDecl {
             cpp_name: t.clone(),
@@ -2028,26 +2006,22 @@ to_incl_cpp_ty.cpp_name_components.clone()
 
         let default_ctor_impl = CppConstructorImpl {
             body: vec![],
-            declaring_full_name: cpp_type.cpp_name_components.remove_pointer().combine_all(),
-            template: cpp_type.cpp_template.clone(),
+            declaring_full_name: self.cpp_name_components.remove_pointer().combine_all(),
+            template: self.cpp_template.clone(),
             ..default_ctor_decl.clone().into()
         };
 
-        cpp_type
+        self
             .declarations
             .push(CppMember::ConstructorDecl(default_ctor_decl).into());
 
-        cpp_type
+        self
             .implementations
             .push(CppMember::ConstructorImpl(default_ctor_impl).into());
     }
 
     fn add_type_index_member(&mut self) {
-        let cpp_type = {
-            let this = &mut *self;
-            this
-        };
-        let tdi: TypeDefinitionIndex = cpp_type.self_tag.get_tdi();
+        let tdi: TypeDefinitionIndex = self.self_tag.get_tdi();
 
         let il2cpp_metadata_type_index = CppFieldDecl {
             cpp_name: "__IL2CPP_TYPE_DEFINITION_INDEX".into(),
@@ -2061,17 +2035,13 @@ to_incl_cpp_ty.cpp_name_components.clone()
             is_private: false,
         };
 
-        cpp_type
+        self
             .declarations
             .push(CppMember::FieldDecl(il2cpp_metadata_type_index).into());
     }
 
     fn delete_default_ctor(&mut self) {
-        let cpp_type = {
-            let this = &mut *self;
-            this
-        };
-        let t = &cpp_type.cpp_name_components.name;
+        let t = &self.cpp_name_components.name;
 
         let default_ctor = CppConstructorDecl {
             cpp_name: t.clone(),
@@ -2092,7 +2062,7 @@ to_incl_cpp_ty.cpp_name_components.clone()
             body: None,
         };
 
-        cpp_type
+        self
             .declarations
             .push(CppMember::ConstructorDecl(default_ctor).into());
     }

@@ -40,10 +40,10 @@ pub fn run_cpp(
     // extract contents of the cordl internals folder into destination
     INTERNALS_DIR.extract(&STATIC_CONFIG.dst_internals_path)?;
 
-    ///
-    ///
-    ///
-    ///
+    //
+    //
+    //
+    //
     let cpp_context_collection =
         CppContextCollection::from_cs_collection(cs_collection, metadata, &STATIC_CONFIG);
 

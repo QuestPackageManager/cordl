@@ -217,7 +217,7 @@ pub fn handle_static_fields(
         let _f_offset = field_info.offset.unwrap_or(u32::MAX);
         let _f_size = field_info.size;
         let _field_ty_cpp_name = &field_info.cs_field.field_ty;
-        
+
         cpp_type.members.push(
             CsMember::FieldDecl(CsField {
                 name: f_name.to_string(),
