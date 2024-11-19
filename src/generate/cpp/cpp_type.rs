@@ -18,7 +18,10 @@ use log::{info, warn};
 use std::io::Write;
 
 use crate::{
-    data::{name_components::NameComponents, type_resolver::{ResolvedType, TypeUsage}},
+    data::{
+        name_components::NameComponents,
+        type_resolver::{ResolvedType, TypeUsage},
+    },
     generate::{
         cpp::cpp_members::{CppMethodSizeStruct, CppStaticAssert},
         cs_members::{CsConstructor, CsField, CsGenericTemplateType, CsMethod, CsProperty},
@@ -42,7 +45,7 @@ use super::{
         CppLine, CppMember, CppMethodData, CppMethodDecl, CppMethodImpl, CppNestedStruct,
         CppNonMember, CppParam, CppPropertyDecl, CppTemplate, CppUsingAlias,
     },
-    cpp_name_resolver::VALUE_WRAPPER_TYPE,
+    cpp_name_resolver::{CppNameResolver, VALUE_WRAPPER_TYPE},
 };
 
 pub const CORDL_TYPE_MACRO: &str = "CORDL_TYPE";
@@ -367,7 +370,12 @@ impl CppType {
         Ok(())
     }
 
-    pub fn make_cpp_type(metadata: &CordlMetadata<'_>, tag: CsTypeTag, cs_type: CsType, config: &CppGenerationConfig) -> CppType {
+    pub fn make_cpp_type(
+        metadata: &CordlMetadata<'_>,
+        tag: CsTypeTag,
+        cs_type: CsType,
+        config: &CppGenerationConfig,
+    ) -> CppType {
         let mut cpp_type = CppType {
             declarations: vec![],
             nonmember_declarations: vec![],
@@ -401,7 +409,7 @@ impl CppType {
 
         let t = &metadata.metadata.global_metadata.type_definitions[tdi];
 
-        cpp_type.make_parents( &cs_type, config);
+        cpp_type.make_parents(&cs_type, config);
         cpp_type.make_interfaces(&cs_type, config);
 
         // we depend on parents and generic args here
@@ -433,7 +441,7 @@ impl CppType {
 
         cpp_type.add_type_index_member();
 
-        cpp_type.make_nested_types(metadata,);
+        cpp_type.make_nested_types(metadata);
 
         if !t.is_interface() {
             cpp_type.create_size_padding(metadata, tdi);
@@ -517,7 +525,11 @@ impl CppType {
         }
     }
 
-    fn make_constructors(&mut self, constructors: Vec<CsConstructor>, config: &CppGenerationConfig) {
+    fn make_constructors(
+        &mut self,
+        constructors: Vec<CsConstructor>,
+        config: &CppGenerationConfig,
+    ) {
         for ctor in &constructors {
             let ctor_decl = CppConstructorDecl {
                 cpp_name: ctor.cpp_name.clone(),
@@ -549,11 +561,7 @@ impl CppType {
         }
     }
 
-    fn make_parent(
-        &mut self,
-        parent: Option<ResolvedType>,
-        config: &CppGenerationConfig
-    ) {
+    fn make_parent(&mut self, parent: Option<ResolvedType>, config: &CppGenerationConfig) {
         let t = &metadata.metadata.global_metadata.type_definitions[tdi];
 
         let ns = t.namespace(metadata.metadata);
@@ -652,11 +660,7 @@ impl CppType {
         }
     }
 
-    fn make_interfaces(
-        &mut self,
-        interfaces: Vec<ResolvedType>,
-        config: &CppGenerationConfig
-    ) {
+    fn make_interfaces(&mut self, interfaces: Vec<ResolvedType>, config: &CppGenerationConfig) {
         let t = &metadata.metadata.global_metadata.type_definitions[tdi];
 
         for &interface_index in t.interfaces(metadata.metadata) {
@@ -742,10 +746,7 @@ impl CppType {
         }
     }
 
-    fn make_nested_types(
-        &mut self,
-        name_resolver: &
-    ) {
+    fn make_nested_types(&mut self, name_resolver: &CppNameResolver) {
         let t = &metadata.metadata.global_metadata.type_definitions[tdi];
 
         if t.nested_type_count == 0 {
