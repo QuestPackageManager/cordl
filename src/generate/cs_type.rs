@@ -17,7 +17,10 @@ use itertools::Itertools;
 use log::{debug, info, warn};
 
 use crate::{
-    data::name_components::NameComponents,
+    data::{
+        name_components::NameComponents,
+        name_resolver::{TypeResolver, TypeUsage},
+    },
     generate::{
         cs_members::CsField,
         type_extensions::{
@@ -37,7 +40,9 @@ use super::{
     cs_type_tag::CsTypeTag,
     metadata::CordlMetadata,
     offsets::{self, SizeInfo},
-    type_extensions::{MethodDefintionExtensions, TypeDefinitionExtensions, TypeDefinitionIndexExtensions},
+    type_extensions::{
+        MethodDefintionExtensions, TypeDefinitionExtensions, TypeDefinitionIndexExtensions,
+    },
 };
 
 #[derive(Debug, Clone, Default)]
@@ -116,8 +121,6 @@ impl CsType {
             _ => panic!("Unsupported type: {tag:?}"),
         }
     }
-
-
 
     ////
     ///
@@ -248,29 +251,24 @@ impl CsType {
         Some(cpptype)
     }
 
-    pub fn fill_from_il2cpp(&mut self, metadata: &CordlMetadata) {
-        let tdi: TypeDefinitionIndex = self.self_tag.into();
+    pub fn fill_from_il2cpp(&mut self, type_resolver: &TypeResolver) {
+        self.make_parents(type_resolver);
+        self.make_interfaces(type_resolver);
 
-        let _t = &metadata.metadata.global_metadata.type_definitions[tdi];
-
-        self.make_parents(metadata, tdi);
-        self.make_interfaces(metadata, tdi);
-
-        self.make_nested_types(metadata, tdi);
-        self.make_fields(metadata, tdi);
-        self.make_properties(metadata, tdi);
-        self.make_methods(metadata, tdi);
-
-        if let Some(func) = metadata.custom_type_handler.get(&tdi) {
-            func(self)
-        }
+        self.make_nested_types(type_resolver);
+        self.make_fields(type_resolver);
+        self.make_properties(type_resolver);
+        self.make_methods(type_resolver);
     }
 
     fn make_parameters(
         &mut self,
         method: &brocolib::global_metadata::Il2CppMethodDefinition,
-        metadata: &CordlMetadata<'_>,
+        type_resolver: &TypeResolver,
     ) -> Vec<CsParam> {
+        let metadata = type_resolver.cordl_metadata;
+        let tdi = self.self_tag.get_tdi();
+
         method
             .parameters(metadata.metadata)
             .iter()
@@ -278,7 +276,7 @@ impl CsType {
             .map(|(pi, param)| {
                 let param_index = ParameterIndex::new(method.parameter_start.index() + pi as u32);
 
-                self.make_parameter(param, param_index, metadata)
+                self.make_parameter(param, param_index, type_resolver)
             })
             .collect()
     }
@@ -287,8 +285,11 @@ impl CsType {
         &mut self,
         param: &brocolib::global_metadata::Il2CppParameterDefinition,
         param_index: ParameterIndex,
-        metadata: &CordlMetadata<'_>,
+        type_resolver: &TypeResolver,
     ) -> CsParam {
+        let metadata = type_resolver.cordl_metadata;
+        let tdi = self.self_tag.get_tdi();
+
         let param_type = metadata
             .metadata_registration
             .types
@@ -300,12 +301,14 @@ impl CsType {
         CsParam {
             name: param.name(metadata.metadata).to_owned(),
             def_value,
-            il2cpp_ty: param_type.data,
+            il2cpp_ty: type_resolver.resolve_type(self, param_type, TypeUsage::Parameter),
             modifiers: CsParamFlags::empty(),
         }
     }
 
-    fn make_methods(&mut self, metadata: &CordlMetadata, tdi: TypeDefinitionIndex) {
+    fn make_methods(&mut self, type_resolver: &TypeResolver) {
+        let metadata = type_resolver.cordl_metadata;
+        let tdi = self.self_tag.get_tdi();
         let t = Self::get_type_definition(metadata, tdi);
 
         // Then, handle methods
@@ -317,12 +320,14 @@ impl CsType {
             // Then, for each method, write it out
             for (i, _method) in t.methods(metadata.metadata).iter().enumerate() {
                 let method_index = MethodIndex::new(t.method_start.index() + i as u32);
-                self.create_method(method_index, metadata, false);
+                self.create_method(method_index, type_resolver, false);
             }
         }
     }
 
-    fn make_fields(&mut self, metadata: &CordlMetadata, tdi: TypeDefinitionIndex) {
+    fn make_fields(&mut self, type_resolver: &TypeResolver) {
+        let metadata = type_resolver.cordl_metadata;
+        let tdi = self.self_tag.get_tdi();
         let t = Self::get_type_definition(metadata, tdi);
 
         // if no fields, skip
@@ -447,7 +452,7 @@ impl CsType {
 
                 CsField {
                     name: f_name.to_owned(),
-                    field_ty: field.type_index,
+                    field_ty: type_resolver.resolve_type(self, f_type, TypeUsage::Field),
                     offset: f_offset,
                     size: f_size,
                     instance: !f_type.is_static() && !f_type.is_constant(),
@@ -464,7 +469,10 @@ impl CsType {
         }
     }
 
-    fn make_parents(&mut self, metadata: &CordlMetadata, tdi: TypeDefinitionIndex) {
+    fn make_parents(&mut self, type_resolver: &TypeResolver) {
+        let metadata = type_resolver.cordl_metadata;
+        let tdi = self.self_tag.get_tdi();
+
         let t = &metadata.metadata.global_metadata.type_definitions[tdi];
 
         let ns = t.namespace(metadata.metadata);
@@ -505,7 +513,9 @@ impl CsType {
         }
     }
 
-    fn make_interfaces(&mut self, metadata: &CordlMetadata<'_>, tdi: TypeDefinitionIndex) {
+    fn make_interfaces(&mut self, type_resolver: &TypeResolver) {
+        let metadata = type_resolver.cordl_metadata;
+        let tdi = self.self_tag.get_tdi();
         let t = &metadata.metadata.global_metadata.type_definitions[tdi];
 
         for &interface_index in t.interfaces(metadata.metadata) {
@@ -516,7 +526,9 @@ impl CsType {
         }
     }
 
-    fn make_nested_types(&mut self, metadata: &CordlMetadata, tdi: TypeDefinitionIndex) {
+    fn make_nested_types(&mut self, type_resolver: &TypeResolver) {
+        let metadata = type_resolver.cordl_metadata;
+        let tdi = self.self_tag.get_tdi();
         let t = &metadata.metadata.global_metadata.type_definitions[tdi];
 
         if t.nested_type_count == 0 {
@@ -534,7 +546,9 @@ impl CsType {
             .collect();
     }
 
-    fn make_properties(&mut self, metadata: &CordlMetadata, tdi: TypeDefinitionIndex) {
+    fn make_properties(&mut self, type_resolver: &TypeResolver) {
+        let metadata = type_resolver.cordl_metadata;
+        let tdi = self.self_tag.get_tdi();
         let t = Self::get_type_definition(metadata, tdi);
 
         // Then, handle properties
@@ -579,27 +593,26 @@ impl CsType {
             let index = p_getter.is_some_and(|p| p.parameter_count > 0);
 
             // Need to include this type
-            self.properties.push(
-                CsProperty {
-                    name: p_name.to_owned(),
-                    prop_ty: p_type.data,
-                    // methods generated in make_methods
-                    setter: p_setter.map(|m| m.name(metadata.metadata).to_string()),
-                    getter: p_getter.map(|m| m.name(metadata.metadata).to_string()),
-                    indexable: index,
-                    brief_comment: None,
-                    instance: true,
-                },
-            );
+            self.properties.push(CsProperty {
+                name: p_name.to_owned(),
+                prop_ty: type_resolver.resolve_type(self, p_type, TypeUsage::Property),
+                // methods generated in make_methods
+                setter: p_setter.map(|m| m.name(metadata.metadata).to_string()),
+                getter: p_getter.map(|m| m.name(metadata.metadata).to_string()),
+                indexable: index,
+                brief_comment: None,
+                instance: true,
+            });
         }
     }
 
     pub fn create_method(
         &mut self,
         method_index: MethodIndex,
-        metadata: &CordlMetadata,
+        type_resolver: &TypeResolver,
         is_generic_method_inst: bool,
     ) {
+        let metadata = type_resolver.cordl_metadata;
         let method = &metadata.metadata.global_metadata.methods[method_index];
 
         // TODO: sanitize method name for c++
@@ -615,7 +628,7 @@ impl CsType {
             .get(method.return_type as usize)
             .unwrap();
 
-        let m_params_with_def: Vec<CsParam> = self.make_parameters(method, metadata);
+        let m_params_with_def: Vec<CsParam> = self.make_parameters(method, type_resolver);
 
         let m_params_no_def: Vec<CsParam> = m_params_with_def
             .iter()
@@ -681,7 +694,7 @@ impl CsType {
             )
             .into(),
             name: m_name.to_string(),
-            return_type: m_ret_type.data,
+            return_type: type_resolver.resolve_type(self, m_ret_type, TypeUsage::ReturnType),
             parameters: m_params_no_def.clone(),
             instance: !method.is_static_method(),
             template: template.clone(),

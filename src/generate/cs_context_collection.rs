@@ -8,7 +8,7 @@ use brocolib::{
 use itertools::Itertools;
 use log::{info, warn};
 
-use crate::generate::cs_type::CsType;
+use crate::{data::name_resolver::TypeResolver, generate::cs_type::CsType};
 
 use super::{
     context::TypeContext,
@@ -28,7 +28,7 @@ pub struct TypeContextCollection {
 }
 
 impl TypeContextCollection {
-    fn fill_cpp_type(&mut self, cpp_type: &mut CsType, metadata: &CordlMetadata) {
+    fn fill_cpp_type(&mut self, cpp_type: &mut CsType, type_resolver: &TypeResolver) {
         let tag = cpp_type.self_tag;
 
         if self.filled_types.contains(&tag) {
@@ -41,13 +41,13 @@ impl TypeContextCollection {
         // Move ownership to local
         self.filling_types.insert(tag);
 
-        cpp_type.fill_from_il2cpp(metadata);
+        cpp_type.fill_from_il2cpp(type_resolver);
 
         self.filled_types.insert(tag);
         self.filling_types.remove(&tag.clone());
     }
 
-    pub fn fill(&mut self, metadata: &CordlMetadata, type_tag: CsTypeTag) {
+    pub fn fill(&mut self, type_resolver: &TypeResolver, type_tag: CsTypeTag) {
         let context_tag = self.get_context_root_tag(type_tag);
 
         if self.filled_types.contains(&type_tag) {
@@ -68,7 +68,7 @@ impl TypeContextCollection {
 
         // In some occasions, the CppContext can be empty
         if let Some((_t, mut cpp_type)) = cpp_type_entry {
-            self.fill_cpp_type(&mut cpp_type, metadata);
+            self.fill_cpp_type(&mut cpp_type, type_resolver);
 
             // Move ownership back up
             self.all_contexts
@@ -325,7 +325,8 @@ impl TypeContextCollection {
     pub fn fill_generic_method_inst(
         &mut self,
         method_spec: &Il2CppMethodSpec,
-        metadata: &mut CordlMetadata,
+        metadata: &CordlMetadata,
+        type_resolver: &TypeResolver,
     ) -> Option<&mut TypeContext> {
         if method_spec.method_inst_index == u32::MAX {
             return None;
@@ -372,7 +373,7 @@ impl TypeContextCollection {
         self.borrow_cs_type(generic_class_ty_data, |collection, mut cpp_type| {
             let method_index = method_spec.method_definition_index;
             cpp_type.add_method_generic_inst(method_spec, metadata);
-            cpp_type.create_method(method_index, metadata, true);
+            cpp_type.create_method(method_index, type_resolver, true);
 
             cpp_type
         });
@@ -383,8 +384,9 @@ impl TypeContextCollection {
     pub fn fill_generic_class_inst(
         &mut self,
         method_spec: &Il2CppMethodSpec,
-        metadata: &mut CordlMetadata,
+        type_resolver: &TypeResolver,
     ) -> Option<&mut TypeContext> {
+        let metadata = type_resolver.cordl_metadata;
         if method_spec.class_inst_index == u32::MAX {
             return None;
         }
@@ -434,7 +436,7 @@ impl TypeContextCollection {
             generic_class_ty_data,
             |collection: &mut TypeContextCollection, mut cpp_type| {
                 // cpp_type.make_generics_args(metadata, collection);
-                collection.fill_cpp_type(&mut cpp_type, metadata);
+                collection.fill_cpp_type(&mut cpp_type, type_resolver);
 
                 cpp_type
             },

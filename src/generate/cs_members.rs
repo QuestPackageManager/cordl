@@ -1,7 +1,9 @@
 use bitflags::bitflags;
-use brocolib::{global_metadata::TypeIndex, runtime_metadata::TypeData};
+use brocolib::global_metadata::TypeIndex;
 use bytes::Bytes;
 use itertools::Itertools;
+
+use crate::data::name_resolver::ResolvedType;
 
 use super::{cs_type_tag::CsTypeTag, writer::CppWritable};
 
@@ -56,9 +58,7 @@ pub struct CsUsingAlias {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub enum CsMember {
-
-}
+pub enum CsMember {}
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct CsMethodData {
@@ -132,7 +132,7 @@ pub enum CsValue {
 #[derive(Clone, Debug, PartialEq)]
 pub struct CsField {
     pub name: String,
-    pub field_ty: TypeIndex,
+    pub field_ty: ResolvedType,
     pub instance: bool,
     pub readonly: bool,
     // is C# const
@@ -149,7 +149,7 @@ pub struct CsField {
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct CsProperty {
     pub name: String,
-    pub prop_ty: TypeData,
+    pub prop_ty: ResolvedType,
     pub instance: bool,
     pub getter: Option<String>,
     pub setter: Option<String>,
@@ -170,7 +170,7 @@ bitflags! {
 #[derive(Clone, Debug, PartialEq)]
 pub struct CsParam {
     pub name: String,
-    pub il2cpp_ty: TypeData,
+    pub il2cpp_ty: ResolvedType,
     // TODO: Use bitflags to indicate these attributes
     // May hold:
     // const
@@ -194,7 +194,7 @@ bitflags! {
 #[derive(Clone, Debug, PartialEq)]
 pub struct CsMethod {
     pub name: String,
-    pub return_type: TypeData,
+    pub return_type: ResolvedType,
     pub parameters: Vec<CsParam>,
     pub instance: bool,
     pub template: Option<CsGenericTemplate>,

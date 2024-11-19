@@ -22,14 +22,15 @@ pub enum TypeUsage {
     ReturnType,
 
     // References
-    FieldName,
-    PropertyName,
+    Field,
+    Property,
 
     // naming the CppType itself
     TypeName,
     GenericArg,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum ResolvedType {
     Array(Box<ResolvedType>),
     GenericInst(Box<ResolvedType>, Vec<ResolvedType>),

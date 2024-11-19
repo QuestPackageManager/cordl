@@ -740,7 +740,7 @@ impl CppType {
                 .unwrap();
 
             let p_ty_cpp_name = self
-                .cppify_name_il2cpp(ctx_collection, metadata, p_type, 0, TypeUsage::PropertyName)
+                .cppify_name_il2cpp(ctx_collection, metadata, p_type, 0, TypeUsage::Property)
                 .combine_all();
 
             let _method_map = |p: MethodIndex| {
@@ -2479,7 +2479,7 @@ to_incl_cpp_ty.cpp_name_components.clone()
                 }
 
                 let f_type_cpp_name = self
-                    .cppify_name_il2cpp(ctx_collection, metadata, f_type, 0, TypeUsage::FieldName)
+                    .cppify_name_il2cpp(ctx_collection, metadata, f_type, 0, TypeUsage::Field)
                     .combine_all();
 
                 // Get the inner type of a Generic Inst
