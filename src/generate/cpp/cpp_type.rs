@@ -14,20 +14,20 @@ use brocolib::{
 use clap::builder::Str;
 use color_eyre::eyre::Context;
 use itertools::Itertools;
-use log::warn;
+use log::{info, warn};
 use std::io::Write;
 
 use crate::{
     data::name_components::NameComponents,
     generate::{
-        cpp::cpp_members::CppStaticAssert,
+        cpp::cpp_members::{CppMethodSizeStruct, CppStaticAssert},
         cs_type::CsType,
         cs_type_tag::CsTypeTag,
         metadata::{Metadata, TypeUsage},
         offsets::{self, SizeInfo},
         type_extensions::{
-            ParameterDefinitionExtensions, TypeDefinitionExtensions, TypeDefinitionIndexExtensions,
-            TypeExtentions,
+            MethodDefintionExtensions, ParameterDefinitionExtensions, TypeDefinitionExtensions,
+            TypeDefinitionIndexExtensions, TypeExtentions,
         },
         writer::{CppWritable, CppWriter, Sortable},
     },
@@ -38,8 +38,8 @@ use super::{
     cpp_context_collection::CppContextCollection,
     cpp_members::{
         CppConstructorDecl, CppConstructorImpl, CppFieldDecl, CppForwardDeclare, CppInclude,
-        CppLine, CppMember, CppMethodDecl, CppMethodImpl, CppNestedStruct, CppNonMember, CppParam,
-        CppTemplate, CppUsingAlias,
+        CppLine, CppMember, CppMethodData, CppMethodDecl, CppMethodImpl, CppNestedStruct,
+        CppNonMember, CppParam, CppPropertyDecl, CppTemplate, CppUsingAlias,
     },
 };
 
@@ -373,8 +373,955 @@ impl CppType {
         todo!()
     }
 
-    pub fn fill_from_il2cpp(&self, metadata: &Metadata<'_>, ctx_collection: &CppContextCollection) {
-        todo!()
+    pub fn fill_from_il2cpp(&self, metadata: &Metadata<'_>, ctx_collection: &CppContextCollection, config: &CppGenerationConfig) {
+        let tdi: TypeDefinitionIndex = self.self_tag.into();
+
+        let t = &metadata.metadata.global_metadata.type_definitions[tdi];
+
+        self.make_parents(metadata, ctx_collection, tdi);
+        self.make_interfaces(metadata, ctx_collection, config, tdi);
+
+        // we depend on parents and generic args here
+        // default ctor
+        if t.is_value_type() || t.is_enum_type() {
+            self.create_valuetype_constructor(metadata, ctx_collection, config, tdi);
+            self.create_valuetype_field_wrapper();
+            if t.is_enum_type() {
+                self.create_enum_wrapper(metadata, ctx_collection, tdi);
+                self.create_enum_backing_type_constant(metadata, ctx_collection, tdi);
+            }
+            self.add_default_ctor(false);
+        } else if t.is_interface() {
+            // self.make_interface_constructors();
+            self.delete_move_ctor();
+            self.delete_copy_ctor();
+            // self.delete_default_ctor();
+        } else {
+            // ref type
+            self.delete_move_ctor();
+            self.delete_copy_ctor();
+            self.add_default_ctor(true);
+            // self.delete_default_ctor();
+        }
+
+        if !t.is_interface() {
+            self.create_size_assert();
+        }
+
+        self.add_type_index_member();
+
+        self.make_nested_types(metadata, ctx_collection, config, tdi);
+        self.make_fields(metadata, ctx_collection, config, tdi);
+        self.make_properties(metadata, ctx_collection, config, tdi);
+        self.make_methods(metadata, config, ctx_collection, tdi);
+
+        if !t.is_interface() {
+            self.create_size_padding(metadata, tdi);
+        }
+
+        // if let Some(func) = metadata.custom_type_handler.get(&tdi) {
+        //     func(self)
+        // }
+    }
+
+    fn make_parents(
+        &mut self,
+        metadata: &Metadata,
+        ctx_collection: &CppContextCollection,
+        tdi: TypeDefinitionIndex,
+    ) {
+        let t = &metadata.metadata.global_metadata.type_definitions[tdi];
+
+        let ns = t.namespace(metadata.metadata);
+        let name = t.name(metadata.metadata);
+
+        if t.parent_index == u32::MAX {
+            // TYPE_ATTRIBUTE_INTERFACE = 0x00000020
+            match t.is_interface() {
+                true => {
+                    // FIXME: should interfaces have a base type? I don't think they need to
+                    // self.inherit.push(INTERFACE_WRAPPER_TYPE.to_string());
+                }
+                false => {
+                    info!("Skipping type: {ns}::{name} because it has parent index: {} and is not an interface!", t.parent_index);
+                }
+            }
+            return;
+        }
+
+        let parent_type = metadata
+            .metadata_registration
+            .types
+            .get(t.parent_index as usize)
+            .unwrap_or_else(|| panic!("NO PARENT! But valid index found: {}", t.parent_index));
+
+        let parent_ty = CsTypeTag::from_type_data(parent_type.data, metadata.metadata);
+
+        // handle value types and enum types specially
+        match t.is_value_type() || t.is_enum_type() {
+            // parent will be a value wrapper type
+            // which will have the size
+            // OF THE TYPE ITSELF, NOT PARENT
+            true => {
+                // let Some(size_info) = &self.size_info else {
+                //     panic!("No size for value/enum type!")
+                // };
+
+                // if t.is_enum_type() {
+                //     self.requirements.needs_enum_include();
+                // } else if t.is_value_type() {
+                //     self.requirements.needs_value_include();
+                // }
+
+                // let wrapper = wrapper_type_for_tdi(t);
+
+                // self.inherit.push(wrapper.to_string());
+            }
+            // handle as reference type
+            false => {
+                // make sure our parent is intended\
+                let is_ref_type = matches!(
+                    parent_type.ty,
+                    Il2CppTypeEnum::Class | Il2CppTypeEnum::Genericinst | Il2CppTypeEnum::Object
+                );
+                assert!(is_ref_type, "Not a class, object or generic inst!");
+
+                // We have a parent, lets do something with it
+                let inherit_type = self.cppify_name_il2cpp(
+                    ctx_collection,
+                    metadata,
+                    parent_type,
+                    usize::MAX,
+                    TypeUsage::TypeName,
+                );
+
+                if is_ref_type {
+                    // TODO: Figure out why some generic insts don't work here
+                    let parent_tdi: TypeDefinitionIndex = parent_ty.into();
+
+                    let base_type_context = ctx_collection
+                                    .get_context(parent_ty)
+                                    .or_else(|| ctx_collection.get_context(parent_tdi.into()))
+                                    .unwrap_or_else(|| {
+                                        panic!(
+                                        "No CppContext for base type {inherit_type:?}. Using tag {parent_ty:?}"
+                                    )
+                                    });
+
+                    let base_type_cpp_type = ctx_collection
+                                        .get_cpp_type(parent_ty)
+                                        .or_else(|| ctx_collection.get_cpp_type(parent_tdi.into()))
+                                        .unwrap_or_else(|| {
+                                panic!(
+                                    "No CppType for base type {inherit_type:?}. Using tag {parent_ty:?}"
+                                )
+                            });
+
+                    self.requirements.add_impl_include(
+                        Some(base_type_cpp_type),
+                        CppInclude::new_context_typeimpl(base_type_context),
+                    )
+                }
+
+                self
+                    .parent = Some(
+                    inherit_type.remove_pointer().combine_all());
+            }
+        }
+    }
+
+    fn make_interfaces(
+        &mut self,
+        metadata: &Metadata<'_>,
+        ctx_collection: &CppContextCollection,
+        config: &CppGenerationConfig,
+        tdi: TypeDefinitionIndex,
+    ) {
+        let t = &metadata.metadata.global_metadata.type_definitions[tdi];
+
+        for &interface_index in t.interfaces(metadata.metadata) {
+            let int_ty = &metadata.metadata_registration.types[interface_index as usize];
+
+            // We have an interface, lets do something with it
+            let interface_name_il2cpp =
+                &self.cppify_name_il2cpp(ctx_collection, metadata, int_ty, 0, TypeUsage::TypeName);
+            let interface_cpp_name = interface_name_il2cpp.remove_pointer().combine_all();
+            let interface_cpp_pointer = interface_name_il2cpp.as_pointer().combine_all();
+
+            let operator_method_decl = CppMethodDecl {
+                body: Default::default(),
+                brief: Some(format!("Convert operator to {interface_cpp_name:?}")),
+                cpp_name: interface_cpp_pointer.clone(),
+                return_type: "".to_string(),
+                instance: true,
+                is_const: false,
+                is_constexpr: true,
+                is_no_except: !t.is_value_type() && !t.is_enum_type(),
+                is_implicit_operator: true,
+                is_explicit_operator: false,
+
+                is_virtual: false,
+                is_inline: true,
+                parameters: vec![],
+                template: None,
+                prefix_modifiers: vec![],
+                suffix_modifiers: vec![],
+            };
+            let helper_method_decl = CppMethodDecl {
+                brief: Some(format!("Convert to {interface_cpp_name:?}")),
+                is_implicit_operator: false,
+                return_type: interface_cpp_pointer.clone(),
+                cpp_name: format!("i_{}", config.sanitize_to_cpp_name(&interface_cpp_name)),
+                ..operator_method_decl.clone()
+            };
+
+            let method_impl_template = self
+                .cpp_template
+                .as_ref()
+                .is_some_and(|c| !c.names.is_empty())
+                .then(|| self.cpp_template.clone())
+                .flatten();
+
+            let convert_line = match t.is_value_type() || t.is_enum_type() {
+                true => {
+                    // box
+                    "static_cast<void*>(::il2cpp_utils::Box(this))".to_string()
+                }
+                false => "static_cast<void*>(this)".to_string(),
+            };
+
+            let body: Vec<Arc<dyn CppWritable>> = vec![Arc::new(CppLine::make(format!(
+                "return static_cast<{interface_cpp_pointer}>({convert_line});"
+            )))];
+            let declaring_cpp_full_name = self.cpp_name_components.remove_pointer().combine_all();
+            let operator_method_impl = CppMethodImpl {
+                body: body.clone(),
+                declaring_cpp_full_name: declaring_cpp_full_name.clone(),
+                template: method_impl_template.clone(),
+                ..operator_method_decl.clone().into()
+            };
+
+            let helper_method_impl = CppMethodImpl {
+                body: body.clone(),
+                declaring_cpp_full_name,
+                template: method_impl_template,
+                ..helper_method_decl.clone().into()
+            };
+
+            // operator
+            self
+                .declarations
+                .push(CppMember::MethodDecl(operator_method_decl).into());
+            self
+                .implementations
+                .push(CppMember::MethodImpl(operator_method_impl).into());
+
+            // helper method
+            self
+                .declarations
+                .push(CppMember::MethodDecl(helper_method_decl).into());
+            self
+                .implementations
+                .push(CppMember::MethodImpl(helper_method_impl).into());
+        }
+    }
+
+    fn make_nested_types(
+        &mut self,
+        metadata: &Metadata,
+        ctx_collection: &CppContextCollection,
+        config: &CppGenerationConfig,
+        tdi: TypeDefinitionIndex,
+    ) {
+        let t = &metadata.metadata.global_metadata.type_definitions[tdi];
+
+        if t.nested_type_count == 0 {
+            return;
+        }
+
+        let generic_instantiation_args = self.cpp_name_components.generics.clone();
+
+        let aliases = t
+            .nested_types(metadata.metadata)
+            .iter()
+            .filter(|t| !metadata.blacklisted_types.contains(t))
+            .map(|nested_tdi| {
+                let nested_td = &metadata.metadata.global_metadata.type_definitions[*nested_tdi];
+                let nested_tag = CsTypeTag::TypeDefinitionIndex(*nested_tdi);
+
+                let nested_context = ctx_collection
+                    .get_context(nested_tag)
+                    .expect("Unable to find CppContext");
+                let nested = ctx_collection
+                    .get_cpp_type(nested_tag)
+                    .expect("Unable to find nested CppType");
+
+                let alias = CppUsingAlias::from_cpp_type(
+                    config.name_cpp(nested_td.name(metadata.metadata)),
+                    nested,
+                    generic_instantiation_args.clone(),
+                    // if no generic args are made, we can do the generic fixup
+                    // ORDER OF PASSES MATTERS
+                    nested.generic_instantiations_args_types.is_none(),
+                );
+                let fd = CppForwardDeclare::from_cpp_type(nested);
+                let inc = CppInclude::new_context_typedef(nested_context);
+
+                (alias, fd, inc)
+            })
+            .collect_vec();
+
+        for (alias, fd, inc) in aliases {
+            self.declarations
+                .insert(0, CppMember::CppUsingAlias(alias).into());
+            self.requirements.add_forward_declare((fd, inc));
+        }
+
+        // forward
+
+        // old way of making nested types
+
+        // let mut nested_types: Vec<CppType> = Vec::with_capacity(t.nested_type_count as usize);
+
+        // for &nested_type_index in t.nested_types(metadata.metadata) {
+        //     let nt_ty = &metadata.metadata.global_metadata.type_definitions[nested_type_index];
+
+        //     // We have a parent, lets do something with it
+        //     let nested_type = CppType::make_cpp_type(
+        //         metadata,
+        //         config,
+        //         CppTypeTag::TypeDefinitionIndex(nested_type_index),
+        //         nested_type_index,
+        //     );
+
+        //     match nested_type {
+        //         Some(unwrapped) => nested_types.push(unwrapped),
+        //         None => info!("Failed to make nested CppType {nt_ty:?}"),
+        //     };
+        // }
+
+        // self.nested_types = nested_types.into_iter().map(|t| (t.self_tag, t)).collect()
+    }
+
+    fn make_properties(
+        &mut self,
+        metadata: &Metadata,
+        ctx_collection: &CppContextCollection,
+        config: &CppGenerationConfig,
+        tdi: TypeDefinitionIndex,
+    ) {
+        let t = tdi.get_type_definition(metadata.metadata);
+
+        // Then, handle properties
+        if t.property_count == 0 {
+            return;
+        }
+
+        self.declarations.reserve(t.property_count as usize);
+        // Then, for each field, write it out
+        for prop in t.properties(metadata.metadata) {
+            let p_name = prop.name(metadata.metadata);
+            let p_setter = (prop.set != u32::MAX).then(|| prop.set_method(t, metadata.metadata));
+            let p_getter = (prop.get != u32::MAX).then(|| prop.get_method(t, metadata.metadata));
+
+            // if this is a static property, skip emitting a cpp property since those can't be static
+            if p_getter.or(p_setter).unwrap().is_static_method() {
+                continue;
+            }
+
+            let p_type_index = match p_getter {
+                Some(g) => g.return_type as usize,
+                None => p_setter.unwrap().parameters(metadata.metadata)[0].type_index as usize,
+            };
+
+            let p_type = metadata
+                .metadata_registration
+                .types
+                .get(p_type_index)
+                .unwrap();
+
+            let p_ty_cpp_name = self
+                .cppify_name_il2cpp(ctx_collection, metadata, p_type, 0, TypeUsage::PropertyName)
+                .combine_all();
+
+            let _method_map = |p: MethodIndex| {
+                let method_calc = metadata.method_calculations.get(&p).unwrap();
+                CppMethodData {
+                    estimated_size: method_calc.estimated_size,
+                    addrs: method_calc.addrs,
+                }
+            };
+
+            let _abstr = p_getter.is_some_and(|p| p.is_abstract_method())
+                || p_setter.is_some_and(|p| p.is_abstract_method());
+
+            let index = p_getter.is_some_and(|p| p.parameter_count > 0);
+
+            // Need to include this type
+            self.declarations.push(
+                CppMember::Property(CppPropertyDecl {
+                    cpp_name: config.name_cpp(p_name),
+                    prop_ty: p_ty_cpp_name.clone(),
+                    // methods generated in make_methods
+                    setter: p_setter.map(|m| config.name_cpp(m.name(metadata.metadata))),
+                    getter: p_getter.map(|m| config.name_cpp(m.name(metadata.metadata))),
+                    indexable: index,
+                    brief_comment: None,
+                    instance: true,
+                })
+                .into(),
+            );
+        }
+    }
+
+    fn make_methods(
+        &mut self,
+        metadata: &Metadata,
+        config: &CppGenerationConfig,
+        ctx_collection: &CppContextCollection,
+        tdi: TypeDefinitionIndex,
+    ) {
+        let t = tdi.get_type_definition(metadata.metadata);
+
+        // Then, handle methods
+        if t.method_count > 0 {
+            // 2 because each method gets a method struct and method decl
+            // a constructor will add an additional one for each
+            self.declarations.reserve(2 * (t.method_count as usize + 1));
+            self.implementations.reserve(t.method_count as usize + 1);
+
+            // Then, for each method, write it out
+            for (i, _method) in t.methods(metadata.metadata).iter().enumerate() {
+                let method_index = MethodIndex::new(t.method_start.index() + i as u32);
+                self.create_method(t, method_index, metadata, ctx_collection, config, false);
+            }
+        }
+    }
+
+    fn create_method(
+        &mut self,
+        declaring_type: &Il2CppTypeDefinition,
+        method_index: MethodIndex,
+
+        metadata: &Metadata,
+        ctx_collection: &CppContextCollection,
+        config: &CppGenerationConfig,
+        is_generic_method_inst: bool,
+    ) {
+        let method = &metadata.metadata.global_metadata.methods[method_index];
+
+        // TODO: sanitize method name for c++
+        let m_name = method.name(metadata.metadata);
+        if m_name == ".cctor" {
+            // info!("Skipping {}", m_name);
+            return;
+        }
+
+        let m_ret_type = metadata
+            .metadata_registration
+            .types
+            .get(method.return_type as usize)
+            .unwrap();
+
+        let m_params_with_def: Vec<CppParam> = self.make_parameters(
+            method,
+            method_index,
+            is_generic_method_inst,
+            metadata,
+            config,
+            ctx_collection,
+        );
+
+        let m_params_no_def: Vec<CppParam> = m_params_with_def
+            .iter()
+            .cloned()
+            .map(|mut p| {
+                p.def_value = None;
+                p
+            })
+            .collect_vec();
+
+        // TODO: Add template<typename ...> if a generic inst e.g
+        // T UnityEngine.Component::GetComponent<T>() -> bs_hook::Il2CppWrapperType UnityEngine.Component::GetComponent()
+        let template = if method.generic_container_index.is_valid() {
+            match is_generic_method_inst {
+                true => Some(CppTemplate { names: vec![] }),
+                false => {
+                    let generics = method
+                        .generic_container(metadata.metadata)
+                        .unwrap()
+                        .generic_parameters(metadata.metadata)
+                        .iter()
+                        .map(|param| param.name(metadata.metadata).to_string());
+
+                    Some(CppTemplate::make_typenames(generics))
+                }
+            }
+        } else {
+            None
+        };
+
+        let declaring_type_template = if self
+            .cpp_template
+            .as_ref()
+            .is_some_and(|t| !t.names.is_empty())
+        {
+            self.cpp_template.clone()
+        } else {
+            None
+        };
+
+        let literal_types = if is_generic_method_inst {
+            self
+                .method_generic_instantiation_map
+                .get(&method_index)
+                .cloned()
+        } else {
+            None
+        };
+
+        let resolved_generic_types = literal_types.map(|literal_types| {
+            literal_types
+                .iter()
+                .map(|t| &metadata.metadata_registration.types[*t as usize])
+                .map(|t| {
+                    self
+                        .cppify_name_il2cpp(ctx_collection, metadata, t, 0, TypeUsage::GenericArg)
+                        .combine_all()
+                })
+                .collect_vec()
+        });
+
+        // Lazy cppify
+        let make_ret_cpp_type_name = |cpp_type: &mut CppType| -> String {
+            let full_name = m_ret_type.full_name(metadata.metadata);
+            if full_name == "System.Enum" {
+                cpp_type.requirements.needs_enum_include();
+                ENUM_PTR_TYPE.into()
+            } else if full_name == "System.ValueType" {
+                cpp_type.requirements.needs_value_include();
+                VT_PTR_TYPE.into()
+            } else {
+                cpp_type
+                    .cppify_name_il2cpp(
+                        ctx_collection,
+                        metadata,
+                        m_ret_type,
+                        0,
+                        TypeUsage::ReturnType,
+                    )
+                    .combine_all()
+            }
+        };
+
+        let m_ret_cpp_type_name = {
+            let fixup_name = match is_generic_method_inst {
+                false => self.il2cpp_mvar_use_param_name(
+                    metadata,
+                    method_index,
+                    make_ret_cpp_type_name,
+                    m_ret_type,
+                ),
+                true => make_ret_cpp_type_name(self),
+            };
+
+            self.il2cpp_byref(fixup_name, m_ret_type)
+        };
+
+        // Reference type constructor
+        if m_name == ".ctor" {
+            Self::create_ref_constructor(self, declaring_type, &m_params_with_def, &template);
+        }
+        let cpp_m_name = {
+            let cpp_m_name = config.name_cpp(m_name);
+
+            // static functions with same name and params but
+            // different ret types can exist
+            // so we add their ret types
+            let fixup_name = match cpp_m_name == "op_Implicit" || cpp_m_name == "op_Explicit" {
+                true => {
+                    cpp_m_name
+                        + "_"
+                        + &config
+                            .sanitize_to_cpp_name(&m_ret_cpp_type_name)
+                            .replace('*', "_")
+                }
+                false => cpp_m_name,
+            };
+
+            match &resolved_generic_types {
+                Some(resolved_generic_types) => {
+                    format!("{fixup_name}<{}>", resolved_generic_types.join(", "))
+                }
+                None => fixup_name,
+            }
+        };
+
+        let declaring_type = method.declaring_type(metadata.metadata);
+        let tag = CsTypeTag::TypeDefinitionIndex(method.declaring_type);
+
+        let method_calc = metadata.method_calculations.get(&method_index);
+
+        // generic methods don't have definitions if not an instantiation
+        let method_stub = !is_generic_method_inst && template.is_some();
+
+        let method_decl = CppMethodDecl {
+            body: None,
+            brief: format!(
+                "Method {m_name}, addr 0x{:x}, size 0x{:x}, virtual {}, abstract: {}, final {}",
+                method_calc.map(|m| m.addrs).unwrap_or(u64::MAX),
+                method_calc.map(|m| m.estimated_size).unwrap_or(usize::MAX),
+                method.is_virtual_method(),
+                method.is_abstract_method(),
+                method.is_final_method()
+            )
+            .into(),
+            is_const: false,
+            is_constexpr: false,
+            is_no_except: false,
+            cpp_name: cpp_m_name.clone(),
+            return_type: m_ret_cpp_type_name.clone(),
+            parameters: m_params_no_def.clone(),
+            instance: !method.is_static_method(),
+            template: template.clone(),
+            suffix_modifiers: Default::default(),
+            prefix_modifiers: Default::default(),
+            is_virtual: false,
+            is_implicit_operator: false,
+            is_explicit_operator: false,
+
+            is_inline: true,
+        };
+
+        let instance_ptr: String = if method.is_static_method() {
+            "nullptr".into()
+        } else {
+            "this".into()
+        };
+
+        const METHOD_INFO_VAR_NAME: &str = "___internal_method";
+
+        let method_invoke_params = vec![instance_ptr.as_str(), METHOD_INFO_VAR_NAME];
+        let param_names = CppParam::params_names(&method_decl.parameters).map(|s| s.as_str());
+        let declaring_type_cpp_full_name = self.cpp_name_components.remove_pointer().combine_all();
+
+        let declaring_classof_call = format!(
+            "::il2cpp_utils::il2cpp_type_check::il2cpp_no_arg_class<{}>::get()",
+            self.cpp_name_components.combine_all()
+        );
+
+        let extract_self_class =
+            "il2cpp_functions::object_get_class(reinterpret_cast<Il2CppObject*>(this))";
+
+        let params_types_format: String = CppParam::params_types(&method_decl.parameters)
+            .map(|t| format!("::il2cpp_utils::il2cpp_type_check::il2cpp_no_arg_type<{t}>::get()"))
+            .join(", ");
+        let params_types_count = method_decl.parameters.len();
+
+        let resolve_instance_slot_lines = if method.slot != u16::MAX {
+            let slot = &method.slot;
+            vec![format!(
+                "auto* {METHOD_INFO_VAR_NAME} = THROW_UNLESS((::il2cpp_utils::ResolveVtableSlot(
+                    {extract_self_class},
+                    {declaring_classof_call},
+                    {slot}
+                )));"
+            )]
+        } else {
+            vec![]
+        };
+
+        // TODO: link the method to the interface that originally declared it
+        // then the resolve should look something like:
+        // resolve(classof(GlobalNamespace::BeatmapLevelPack*), classof(GlobalNamespace::IBeatmapLevelPack*), 0);
+        // that way the resolve should work correctly, but it should only happen like that for non-interfaces
+
+        let _resolve_metadata_slot_lines = if method.slot != u16::MAX {
+            let self_classof_call = "";
+            let declaring_classof_call = "";
+            let slot = &method.slot;
+
+            vec![format!(
+                "auto* {METHOD_INFO_VAR_NAME} = THROW_UNLESS((::il2cpp_utils::ResolveVtableSlot(
+                    {self_classof_call},
+                    {declaring_classof_call},
+                    {slot}
+                )));"
+            )]
+        } else {
+            vec![]
+        };
+
+        // if no params, just empty span
+        // avoid allocs
+        let params_types_array_cpp = match params_types_count {
+            0 => "::std::span<const Il2CppType* const, 0>()".to_string(),
+            _ => format!(
+                "::std::array<const Il2CppType*, {params_types_count}>{{{params_types_format}}}"
+            ),
+        };
+
+        let method_info_lines = match &template {
+            Some(template) => {
+                // generic
+                let template_names = template
+                    .just_names()
+                    .map(|t| {
+                        format!(
+                            "::il2cpp_utils::il2cpp_type_check::il2cpp_no_arg_class<{t}>::get()"
+                        )
+                    })
+                    .join(", ");
+                let template_count = template.names.len();
+
+                // if no template params, just empty span
+                // avoid allocs
+                let template_classes_array_cpp = match template_count {
+                    0 => "std::span<const Il2CppClass* const, 0>()".to_string(),
+                    _ => format!(
+                        "std::array<const Il2CppClass*, {template_count}>{{{template_names}}}"
+                    ),
+                };
+
+                vec![
+                format!("static auto* ___internal_method_base = THROW_UNLESS((::il2cpp_utils::FindMethod(
+                    {declaring_classof_call},
+                    \"{m_name}\",
+                    {template_classes_array_cpp},
+                    {params_types_array_cpp}
+                )));"),
+                format!("static auto* {METHOD_INFO_VAR_NAME} = THROW_UNLESS(::il2cpp_utils::MakeGenericMethod(
+                    ___internal_method_base,
+                    {template_classes_array_cpp}
+                ));"),
+                ]
+            }
+            None => {
+                vec![
+                    format!("static auto* {METHOD_INFO_VAR_NAME} = THROW_UNLESS((::il2cpp_utils::FindMethod(
+                        {declaring_classof_call},
+                        \"{m_name}\",
+                        std::span<const Il2CppClass* const, 0>(),
+                        {params_types_array_cpp}
+                    )));"),
+                    ]
+            }
+        };
+
+        let method_body_lines = [format!(
+            "return ::cordl_internals::RunMethodRethrow<{m_ret_cpp_type_name}, false>({});",
+            method_invoke_params
+                .into_iter()
+                .chain(param_names)
+                .join(", ")
+        )];
+
+        // instance methods should resolve slots if this is an interface, or if this is a virtual/abstract method, and not a final method
+        // static methods can't be virtual or interface anyway so checking for that here is irrelevant
+        let should_resolve_slot = declaring_type.is_interface()
+            || ((method.is_virtual_method() || method.is_abstract_method())
+                && !method.is_final_method());
+
+        let method_body = match should_resolve_slot {
+            true => resolve_instance_slot_lines
+                .iter()
+                .chain(method_body_lines.iter())
+                .cloned()
+                .map(|l| -> Arc<dyn CppWritable> { Arc::new(CppLine::make(l)) })
+                .collect_vec(),
+            false => method_info_lines
+                .iter()
+                .chain(method_body_lines.iter())
+                .cloned()
+                .map(|l| -> Arc<dyn CppWritable> { Arc::new(CppLine::make(l)) })
+                .collect_vec(),
+        };
+
+        let method_impl = CppMethodImpl {
+            body: method_body,
+            parameters: m_params_with_def.clone(),
+            brief: None,
+            declaring_cpp_full_name: declaring_type_cpp_full_name,
+            instance: !method.is_static_method(),
+            suffix_modifiers: Default::default(),
+            prefix_modifiers: Default::default(),
+            template: template.clone(),
+            declaring_type_template: declaring_type_template.clone(),
+
+            // defaults
+            ..method_decl.clone().into()
+        };
+
+        // check if declaring type is the current type or the interface
+        // we check TDI because if we are a generic instantiation
+        // we just use ourselves if the declaring type is also the same TDI
+        let interface_declaring_cpp_type: Option<&CppType> =
+            if tag.get_tdi() == self.self_tag.get_tdi() {
+                Some(self)
+            } else {
+                ctx_collection.get_cpp_type(tag)
+            };
+
+        // don't emit method size structs for generic methods
+
+        // don't emit method size structs for generic methods
+
+        // if type is a generic
+        let has_template_args = self
+            .cpp_template
+            .as_ref()
+            .is_some_and(|t| !t.names.is_empty());
+
+        // don't emit method size structs for generic methods
+        if let Some(method_calc) = method_calc
+            && template.is_none()
+            && !has_template_args
+            && !is_generic_method_inst
+        {
+            self
+                .nonmember_implementations
+                .push(Arc::new(CppNonMember::SizeStruct(
+                    CppMethodSizeStruct {
+                        ret_ty: method_decl.return_type.clone(),
+                        cpp_method_name: method_decl.cpp_name.clone(),
+                        method_name: m_name.to_string(),
+                        declaring_type_name: method_impl.declaring_cpp_full_name.clone(),
+                        declaring_classof_call,
+                        method_info_lines,
+                        method_info_var: METHOD_INFO_VAR_NAME.to_string(),
+                        instance: method_decl.instance,
+                        params: method_decl.parameters.clone(),
+                        template: template.clone(),
+                        generic_literals: resolved_generic_types,
+                        method_data: CppMethodData {
+                            addrs: method_calc.addrs,
+                            estimated_size: method_calc.estimated_size,
+                        },
+                        interface_clazz_of: interface_declaring_cpp_type
+                            .map(|d| d.classof_cpp_name())
+                            .unwrap_or_else(|| format!("Bad stuff happened {declaring_type:?}")),
+                        is_final: method.is_final_method(),
+                        slot: if method.slot != u16::MAX {
+                            Some(method.slot)
+                        } else {
+                            None
+                        },
+                    }
+                    .into(),
+                )));
+        }
+
+        // TODO: Revise this
+        const ALLOW_GENERIC_METHOD_STUBS_IMPL: bool = true;
+        // If a generic instantiation or not a template
+        if !method_stub || ALLOW_GENERIC_METHOD_STUBS_IMPL {
+            self
+                .implementations
+                .push(CppMember::MethodImpl(method_impl).into());
+        }
+
+        if !is_generic_method_inst {
+            self
+                .declarations
+                .push(CppMember::MethodDecl(method_decl).into());
+        }
+    }
+
+    fn make_parameters(
+        &mut self,
+        method: &brocolib::global_metadata::Il2CppMethodDefinition,
+        method_index: MethodIndex,
+        is_generic_method_inst: bool,
+        metadata: &Metadata<'_>,
+        config: &CppGenerationConfig,
+        ctx_collection: &CppContextCollection,
+    ) -> Vec<CppParam> {
+        method
+            .parameters(metadata.metadata)
+            .iter()
+            .enumerate()
+            .map(|(pi, param)| {
+                let param_index = ParameterIndex::new(method.parameter_start.index() + pi as u32);
+
+                self.make_parameter(
+                    param,
+                    method_index,
+                    param_index,
+                    is_generic_method_inst,
+                    metadata,
+                    config,
+                    ctx_collection,
+                )
+            })
+            .collect()
+    }
+
+    fn make_parameter(
+        &mut self,
+        param: &brocolib::global_metadata::Il2CppParameterDefinition,
+        method_index: MethodIndex,
+        param_index: ParameterIndex,
+        is_generic_method_inst: bool,
+        metadata: &Metadata<'_>,
+        config: &CppGenerationConfig,
+        ctx_collection: &CppContextCollection,
+    ) -> CppParam {
+
+        let param_type = metadata
+            .metadata_registration
+            .types
+            .get(param.type_index as usize)
+            .unwrap();
+
+        let def_value = Self::param_default_value(metadata, param_index);
+
+        let mut make_param_cpp_type_name = |cpp_type: &mut CppType| -> String {
+            let full_name = param_type.full_name(metadata.metadata);
+
+            match full_name.as_str() {
+                "System.Enum" => {
+                    cpp_type.requirements.needs_enum_include();
+                    ENUM_PTR_TYPE.into()
+                }
+                "System.ValueType" => {
+                    cpp_type.requirements.needs_value_include();
+                    VT_PTR_TYPE.into()
+                }
+                _ => cpp_type
+                    .cppify_name_il2cpp(
+                        ctx_collection,
+                        metadata,
+                        param_type,
+                        0,
+                        TypeUsage::Parameter,
+                    )
+                    .combine_all(),
+            }
+        };
+
+        let param_cpp_name = {
+            // use template name if we are a generic inst
+            let fixup_name = match is_generic_method_inst {
+                // use template name
+                false => self.il2cpp_mvar_use_param_name(
+                    metadata,
+                    method_index,
+                    make_param_cpp_type_name,
+                    param_type,
+                ),
+                // use instantiation name
+                true => make_param_cpp_type_name(self),
+            };
+
+            self.il2cpp_byref(fixup_name, param_type)
+        };
+
+        CppParam {
+            name: config.name_cpp(param.name(metadata.metadata)),
+            def_value,
+            ty: param_cpp_name,
+            modifiers: "".to_string(),
+        }
     }
 
     fn parent_joined_cpp_name(metadata: &Metadata, tdi: TypeDefinitionIndex) -> String {
@@ -926,7 +1873,7 @@ to_incl_cpp_ty.cpp_name_components.clone()
             // Il2CppTypeEnum::Typedbyref => {
             //     // TODO: test this
             //     if add_include && let TypeData::TypeDefinitionIndex(tdi) = typ.data {
-            //         cpp_type.requirements.add_dependency_tag(tdi.into());
+            //         self.requirements.add_dependency_tag(tdi.into());
             //     }
 
             //     "::System::TypedReference".to_string()
@@ -1481,9 +2428,9 @@ to_incl_cpp_ty.cpp_name_components.clone()
             .into(),
         );
 
-        // cpp_type.declarations.push(
+        // self.declarations.push(
         //     CppMember::ConstructorDecl(CppConstructorDecl {
-        //         cpp_name: cpp_type.cpp_name().clone(),
+        //         cpp_name: self.cpp_name().clone(),
         //         parameters: vec![CppParam {
         //             name: "instance".to_string(),
         //             ty: format!("std::array<std::byte, {VALUE_TYPE_WRAPPER_SIZE}>"),
@@ -1498,7 +2445,7 @@ to_incl_cpp_ty.cpp_name_components.clone()
         //         is_delete: false,
         //         is_protected: false,
         //         base_ctor: Some((
-        //             cpp_type.inherit.first().unwrap().to_string(),
+        //             self.inherit.first().unwrap().to_string(),
         //             "instance".to_string(),
         //         )),
         //         initialized_values: Default::default(),
@@ -1821,16 +2768,16 @@ to_incl_cpp_ty.cpp_name_components.clone()
             .push(CppMember::ConstructorDecl(move_ctor).into());
 
         // // Delegates and such are reference types with no inheritance
-        // if cpp_type.inherit.is_empty() {
+        // if self.inherit.is_empty() {
         //     return;
         // }
 
-        // let base_type = cpp_type
+        // let base_type = self
         //     .inherit
         //     .get(0)
         //     .expect("No parent for reference type?");
 
-        // cpp_type.declarations.push(
+        // self.declarations.push(
         //     CppMember::ConstructorDecl(CppConstructorDecl {
         //         cpp_name: cpp_name.clone(),
         //         parameters: vec![CppParam {
@@ -2263,8 +3210,7 @@ fn parse_generic_arg(
         return gen_name.into();
     }
 
-    let inner_type =
-        cpp_type.cppify_name_il2cpp(ctx_collection, metadata, t, 0, TypeUsage::TypeName);
+    let inner_type = cpp_type.cppify_name_il2cpp(ctx_collection, metadata, t, 0, TypeUsage::TypeName);
 
     match t.data {
         TypeData::GenericClassIndex(gen_class_idx) => {

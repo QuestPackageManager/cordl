@@ -57,7 +57,7 @@ impl CppContextCollection {
         // Move ownership to local
         self.filling_types.insert(tag);
 
-        cpp_type.fill_from_il2cpp(metadata, self);
+        cpp_type.fill_from_il2cpp(metadata, self, &STATIC_CONFIG);
 
         self.filled_types.insert(tag);
         self.filling_types.remove(&tag.clone());
