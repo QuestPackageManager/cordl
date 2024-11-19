@@ -3,7 +3,7 @@ use brocolib::global_metadata::TypeIndex;
 use bytes::Bytes;
 use itertools::Itertools;
 
-use crate::data::name_resolver::ResolvedType;
+use crate::data::type_resolver::ResolvedType;
 
 use super::{cs_type_tag::CsTypeTag, writer::CppWritable};
 

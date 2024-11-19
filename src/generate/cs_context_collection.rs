@@ -8,7 +8,7 @@ use brocolib::{
 use itertools::Itertools;
 use log::{info, warn};
 
-use crate::{data::name_resolver::TypeResolver, generate::cs_type::CsType};
+use crate::{data::type_resolver::TypeResolver, generate::cs_type::CsType};
 
 use super::{
     context::TypeContext,

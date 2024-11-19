@@ -19,7 +19,7 @@ use log::{debug, info, warn};
 use crate::{
     data::{
         name_components::NameComponents,
-        name_resolver::{ResolvedType, TypeResolver, TypeUsage},
+        type_resolver::{ResolvedType, TypeResolver, TypeUsage},
     },
     generate::{
         cs_members::CsField,

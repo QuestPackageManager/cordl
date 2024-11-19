@@ -1,6 +1,9 @@
 use std::borrow::Cow;
 
-use brocolib::runtime_metadata::{Il2CppType, Il2CppTypeEnum, TypeData};
+use brocolib::{
+    global_metadata::{GenericParameterIndex, MethodIndex},
+    runtime_metadata::{Il2CppType, Il2CppTypeEnum, TypeData},
+};
 use clap::builder::Str;
 use itertools::Itertools;
 use log::warn;
@@ -33,18 +36,13 @@ pub enum TypeUsage {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum ResolvedType {
     Array(Box<ResolvedType>),
-    GenericInst(Box<ResolvedType>, Vec<ResolvedType>),
-    GenericArg(u16),       // points to class generic
-    GenericMethodArg(u16), // points to method generic
+    GenericInst(Box<ResolvedType>, Vec<(ResolvedType, bool)>),
+    GenericArg(GenericParameterIndex, u16), // points to class generic
+    GenericMethodArg(MethodIndex, GenericParameterIndex, u16), // points to method generic
     Ptr(Box<ResolvedType>),
     Type(CsTypeTag),
     Primitive(Il2CppTypeEnum),
     Blacklisted(CsTypeTag),
-}
-
-pub trait NameResolver<'a> {
-    // resolves the type to its proper name in C++, Rust etc.
-    fn resolve_type_name(ty: ResolvedType, usage: TypeUsage) -> NameComponents;
 }
 
 pub struct TypeResolver<'a> {
@@ -193,8 +191,9 @@ impl<'a> TypeResolver<'a> {
                         .find_position(|&p| p.name_index == generic_param.name_index)
                         .unwrap();
 
+                                            let method_index = MethodIndex::new(owner.owner_index);
 
-                        ResolvedType::GenericMethodArg(gen_param.num)
+                        ResolvedType::GenericMethodArg(method_index, index, gen_param.num)
                 }
                 _ => todo!(),
             },
@@ -206,7 +205,7 @@ impl<'a> TypeResolver<'a> {
 
                     let owner = generic_param.owner(metadata.metadata);
 
-                    ResolvedType::GenericArg(generic_param.num)
+                    ResolvedType::GenericArg(index, generic_param.num)
                 }
                 _ => todo!(),
             },
@@ -242,12 +241,13 @@ impl<'a> TypeResolver<'a> {
                             // we must include if the type is a value type
                             let should_include = gen_arg_t.valuetype && add_include;
 
-                            self.resolve_type_recurse(
+                            let t =self.resolve_type_recurse(
                                 declaring_cs_type,
                                 gen_arg_t,
                                 TypeUsage::GenericArg,
                                 should_include
-                            )
+                            );
+                            (t, should_include)
                         })
                         .collect_vec();
 

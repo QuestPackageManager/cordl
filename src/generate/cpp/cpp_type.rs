@@ -18,7 +18,7 @@ use log::{info, warn};
 use std::io::Write;
 
 use crate::{
-    data::{name_components::NameComponents, name_resolver::TypeUsage},
+    data::{name_components::NameComponents, type_resolver::TypeUsage},
     generate::{
         cpp::cpp_members::{CppMethodSizeStruct, CppStaticAssert},
         cs_type::CsType,
@@ -59,10 +59,7 @@ pub const REFERENCE_TYPE_WRAPPER_SIZE: &str = "__IL2CPP_REFERENCE_TYPE_SIZE";
 pub const REFERENCE_TYPE_FIELD_SIZE: &str = "__fields";
 pub const REFERENCE_WRAPPER_INSTANCE_NAME: &str = "::bs_hook::Il2CppWrapperType::instance";
 
-pub const VALUE_WRAPPER_TYPE: &str = "::bs_hook::ValueType";
-pub const ENUM_WRAPPER_TYPE: &str = "::bs_hook::EnumType";
-pub const INTERFACE_WRAPPER_TYPE: &str = "::cordl_internals::InterfaceW";
-pub const IL2CPP_OBJECT_TYPE: &str = "Il2CppObject";
+
 pub const CORDL_NO_INCLUDE_IMPL_DEFINE: &str = "CORDL_NO_IMPL_INCLUDE";
 pub const CORDL_ACCESSOR_FIELD_PREFIX: &str = "___";
 
