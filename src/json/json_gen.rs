@@ -181,7 +181,11 @@ fn make_method(
     }
 }
 
-fn make_type(td: &Il2CppTypeDefinition, tdi: TypeDefinitionIndex, metadata: &CordlMetadata) -> JsonType {
+fn make_type(
+    td: &Il2CppTypeDefinition,
+    tdi: TypeDefinitionIndex,
+    metadata: &CordlMetadata,
+) -> JsonType {
     let fields = td
         .fields(metadata.metadata)
         .iter()

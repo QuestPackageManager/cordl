@@ -22,7 +22,7 @@ pub struct CppNameResolver<'a> {
 }
 
 impl<'a> CppNameResolver<'a> {
-    fn resolve_name(
+    pub fn resolve_name(
         &self,
         declaring_cpp_type: &mut CppType,
         ty: ResolvedType,
@@ -30,9 +30,10 @@ impl<'a> CppNameResolver<'a> {
         add_include: bool,
     ) -> NameComponents {
         let metadata = self.metadata;
-        match ty {
+        match ty.data {
             ResolvedType::Array(array_type) => {
-                let generic = self.resolve_name(declaring_cpp_type, *array_type, type_usage, add_include);
+                let generic =
+                    self.resolve_name(declaring_cpp_type, *array_type, type_usage, add_include);
                 let generic_formatted = generic.combine_all();
 
                 NameComponents {
@@ -51,7 +52,9 @@ impl<'a> CppNameResolver<'a> {
                     self.resolve_name(declaring_cpp_type, *resolved_type, type_usage, add_include);
                 let generic_types_formatted = vec
                     .into_iter()
-                    .map(|(r, inc)| self.resolve_name(declaring_cpp_type, r, type_usage, inc && add_include))
+                    .map(|(r, inc)| {
+                        self.resolve_name(declaring_cpp_type, r, type_usage, inc && add_include)
+                    })
                     .map(|n| n.combine_all())
                     .collect_vec();
 

@@ -3,7 +3,10 @@ use std::collections::HashMap;
 use brocolib::global_metadata::TypeDefinitionIndex;
 use log::info;
 
-use super::{cs_type::CsType, cs_type_tag::CsTypeTag, metadata::CordlMetadata, type_extensions::TypeDefinitionExtensions};
+use super::{
+    cs_type::CsType, cs_type_tag::CsTypeTag, metadata::CordlMetadata,
+    type_extensions::TypeDefinitionExtensions,
+};
 
 // Holds the contextual information for creating a C++ file
 // Will hold various metadata, such as includes, type definitions, and extraneous writes

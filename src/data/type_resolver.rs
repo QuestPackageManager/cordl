@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 
 use brocolib::{
-    global_metadata::{GenericParameterIndex, MethodIndex},
+    global_metadata::{GenericParameterIndex, MethodIndex, TypeIndex},
     runtime_metadata::{Il2CppType, Il2CppTypeEnum, TypeData},
 };
 use clap::builder::Str;
@@ -12,7 +12,7 @@ use crate::generate::{
     cs_context_collection::TypeContextCollection,
     cs_type::{CsType, CsTypeRequirements},
     cs_type_tag::CsTypeTag,
-    metadata::CordlMetadata,
+    metadata::{self, CordlMetadata},
     type_extensions::TypeDefinitionIndexExtensions,
 };
 
@@ -34,7 +34,7 @@ pub enum TypeUsage {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum ResolvedType {
+pub enum ResolvedTypeData {
     Array(Box<ResolvedType>),
     GenericInst(Box<ResolvedType>, Vec<(ResolvedType, bool)>),
     GenericArg(GenericParameterIndex, u16), // points to class generic
@@ -43,6 +43,14 @@ pub enum ResolvedType {
     Type(CsTypeTag),
     Primitive(Il2CppTypeEnum),
     Blacklisted(CsTypeTag),
+    ByRef(Box<ResolvedType>),
+    ByRefConst(Box<ResolvedType>),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct ResolvedType {
+    pub data: ResolvedTypeData,
+    pub ty: TypeIndex
 }
 
 pub struct TypeResolver<'a> {
@@ -54,10 +62,16 @@ impl<'a> TypeResolver<'a> {
     pub fn resolve_type(
         &self,
         declaring_cs_type: &mut CsType,
-        to_resolve: &Il2CppType,
+        to_resolve_idx: TypeIndex,
         typ_usage: TypeUsage,
     ) -> ResolvedType {
-        self.resolve_type_recurse(declaring_cs_type, to_resolve, typ_usage, true)
+        let to_resolve = &self.cordl_metadata.metadata_registration.types[to_resolve_idx as usize];
+        let data = self.resolve_type_recurse(declaring_cs_type, to_resolve, typ_usage, true);
+
+        ResolvedType{
+            data,
+            ty: to_resolve,
+        }
     }
 
     /// [declaring_generic_inst_types] the generic instantiation of the declaring type
@@ -67,7 +81,7 @@ impl<'a> TypeResolver<'a> {
         to_resolve: &Il2CppType,
         typ_usage: TypeUsage,
         add_include: bool,
-    ) -> ResolvedType {
+    ) -> ResolvedTypeData {
         let typ_tag = to_resolve.data;
         let metadata = self.cordl_metadata;
         let ctx_collection = self.collection;
@@ -95,7 +109,7 @@ impl<'a> TypeResolver<'a> {
                         to_resolve.data,
                         self.cordl_metadata.metadata,
                     ));
-                return ResolvedType::Primitive(to_resolve.ty);
+                return ResolvedTypeData::Primitive(to_resolve.ty);
             }
             _ => (),
         };
@@ -112,7 +126,7 @@ impl<'a> TypeResolver<'a> {
 
                 // Self
                 if typ_cpp_tag == declaring_cs_type.self_tag {
-                    return ResolvedType::Type(typ_cpp_tag);
+                    return ResolvedTypeData::Type(typ_cpp_tag);
                 }
 
                 // blacklist if needed
@@ -121,7 +135,7 @@ impl<'a> TypeResolver<'a> {
 
 
                     if metadata.blacklisted_types.contains(&tdi) {
-                        return ResolvedType::Blacklisted(typ_cpp_tag);
+                        return ResolvedTypeData::Blacklisted(typ_cpp_tag);
                     }
                 }
 
@@ -148,7 +162,7 @@ impl<'a> TypeResolver<'a> {
 
                 let own_context = other_context_ty == own_context_ty;
 
-                ResolvedType::Type(to_incl_cpp_ty.self_tag)
+                ResolvedTypeData::Type(to_incl_cpp_ty.self_tag)
             }
 
             // Single dimension array
@@ -168,13 +182,13 @@ impl<'a> TypeResolver<'a> {
                     _ => panic!("Unknown type data for array {to_resolve:?}!"),
                 };
 
-                ResolvedType::Array(Box::new(generic))
+                ResolvedTypeData::Array(Box::new(generic))
             }
             // multi dimensional array
             Il2CppTypeEnum::Array => {
                 // FIXME: when stack further implements the TypeData::ArrayType we can actually implement this fully to be a multidimensional array, whatever that might mean
                 warn!("Multidimensional array was requested but this is not implemented, typ: {to_resolve:?}, instead returning Il2CppObject!");
-                ResolvedType::Primitive(Il2CppTypeEnum::Object)
+                ResolvedTypeData::Primitive(Il2CppTypeEnum::Object)
             }
             //
             Il2CppTypeEnum::Mvar => match to_resolve.data {
@@ -193,7 +207,7 @@ impl<'a> TypeResolver<'a> {
 
                                             let method_index = MethodIndex::new(owner.owner_index);
 
-                        ResolvedType::GenericMethodArg(method_index, index, gen_param.num)
+                        ResolvedTypeData::GenericMethodArg(method_index, index, gen_param.num)
                 }
                 _ => todo!(),
             },
@@ -205,7 +219,7 @@ impl<'a> TypeResolver<'a> {
 
                     let owner = generic_param.owner(metadata.metadata);
 
-                    ResolvedType::GenericArg(index, generic_param.num)
+                    ResolvedTypeData::GenericArg(index, generic_param.num)
                 }
                 _ => todo!(),
             },
@@ -260,7 +274,7 @@ impl<'a> TypeResolver<'a> {
                     );
 
                     // add generics to type def
-                    ResolvedType::GenericInst(Box::new(generic_resolved_type), generic_resolved_args)
+                    ResolvedTypeData::GenericInst(Box::new(generic_resolved_type), generic_resolved_args)
                 }
 
                 _ => panic!("Unknown type data for generic inst {to_resolve:?}!"),
@@ -282,10 +296,18 @@ impl<'a> TypeResolver<'a> {
                     _ => panic!("Unknown type data for array {to_resolve:?}!"),
                 };
 
-                ResolvedType::Ptr(Box::new(ptr_type))
+                ResolvedTypeData::Ptr(Box::new(ptr_type))
             }
             _ => panic!("/* UNKNOWN TYPE! {to_resolve:?} */"),
         };
+
+        if to_resolve.is_param_out() || (to_resolve.byref && !to_resolve.valuetype) {
+            return ResolvedTypeData::ByRef(ret);
+        }
+
+        if to_resolve.is_param_in() {
+            return ResolvedTypeData::ByRefConst(ret);
+        }
 
         ret
     }

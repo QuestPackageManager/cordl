@@ -34,9 +34,6 @@ impl<'a> TypeDefinitionPair<'a> {
     }
 }
 
-
-
-
 pub type TypeHandlerFn = Box<dyn Fn(&mut CsType)>;
 
 pub type Il2cppNamespace<'a> = &'a str;
