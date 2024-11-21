@@ -2063,21 +2063,50 @@ impl CppType {
 impl ToString for CsValue {
     fn to_string(&self) -> String {
         match self {
-            CsValue::String(_) => todo!(),
-            CsValue::Bool(_) => todo!(),
-            CsValue::U8(_) => todo!(),
-            CsValue::U16(_) => todo!(),
-            CsValue::U32(_) => todo!(),
-            CsValue::U64(_) => todo!(),
-            CsValue::I8(_) => todo!(),
-            CsValue::I16(_) => todo!(),
-            CsValue::I32(_) => todo!(),
-            CsValue::I64(_) => todo!(),
-            CsValue::F32(_) => todo!(),
-            CsValue::F64(_) => todo!(),
+            CsValue::String(s) => format!("\"{s}\""),
+            CsValue::Bool(v) => match v {
+                true => "true",
+                false => "false",
+            }
+            .to_string(),
+            CsValue::U8(x) => format!("static_cast<uint8_t>(0x{x:x}u)"),
+            CsValue::U16(x) => format!("static_cast<uint16_t>(0x{x:x}u)"),
+            CsValue::U32(x) => format!("static_cast<uint32_t>(0x{x:x}u)"),
+            CsValue::U64(x) => format!("static_cast<uint64_t>(0x{x:x}u)"),
+            CsValue::I8(x) => format!("static_cast<int8_t>(0x{x:x})"),
+            CsValue::I16(x) => format!("static_cast<int16_t>(0x{x:x})"),
+            CsValue::I32(x) => format!("static_cast<int32_t>(0x{x:x})"),
+            CsValue::I64(x) => format!("static_cast<int64_t>(0x{x:x})"),
+            CsValue::F32(f) => {
+                if *f == f32::INFINITY {
+                    return "INFINITY".to_owned();
+                }
+                if *f == f32::NEG_INFINITY {
+                    return "-INFINITY".to_owned();
+                }
+                if f.is_nan() {
+                    return "NAN".to_owned();
+                }
+                // make it include at least one decimal place
+
+                format!("static_cast<float_32>({f:1}f)")
+            },
+            CsValue::F64(f) => {
+                if *f == f64::INFINITY {
+                    return "INFINITY".to_owned();
+                }
+                if *f == f64::NEG_INFINITY {
+                    return "-INFINITY".to_owned();
+                }
+                if f.is_nan() {
+                    return "NAN".to_owned();
+                }
+
+                format!("static_cast<float_64>({f:1})")
+            },
             CsValue::Object(bytes) => todo!(),
             CsValue::ValueType(bytes) => todo!(),
-            CsValue::Null => todo!(),
+            CsValue::Null => "{}".to_string(),
         }
     }
 }
