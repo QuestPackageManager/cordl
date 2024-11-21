@@ -192,7 +192,7 @@ bitflags! {
         const ABSTRACT = 0b00001000;
         const OVERRIDE = 0b00010000;
         const FINAL = 0b00100000;
-        const EXTERN = 0b01000000;
+        const SPECIAL_NAME = 0b01000000;
         const UNSAFE = 0b10000000;
     }
 }

@@ -604,10 +604,12 @@ impl CppForwardDeclare {
     pub fn from_cpp_type_long(cpp_type: &CppType, force_generics: bool) -> Self {
         let ns = cpp_type.cpp_namespace().to_string();
 
-        assert!(
-            cpp_type.cpp_name_components.declaring_types.is_none(),
-            "Can't forward declare nested types!"
-        );
+        // TODO: Proper nested check
+        // assert!(
+        //     cpp_type.is_nested,
+        //     "Can't forward declare nested types! {:#?}",
+        //     cpp_type.cpp_name_components
+        // );
 
         // literals should only be added for generic specializations
         let literals = if force_generics {

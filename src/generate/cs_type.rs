@@ -32,8 +32,7 @@ use crate::{
 
 use super::{
     cs_members::{
-        CsConstructor, CsGenericTemplate, CsMethod, CsMethodData, CsParam, CsParamFlags,
-        CsProperty, CsValue,
+        CSMethodFlags, CsConstructor, CsGenericTemplate, CsMethod, CsMethodData, CsParam, CsParamFlags, CsProperty, CsValue
     },
     cs_type_tag::CsTypeTag,
     metadata::CordlMetadata,
@@ -708,6 +707,24 @@ impl CsType {
 
         let method_calc = metadata.method_calculations.get(&method_index);
 
+        let mut flag = CSMethodFlags::empty();
+
+        if method.is_final_method() {
+            flag = flag.union(CSMethodFlags::FINAL);
+        }
+        if method.is_virtual_method() {
+            flag = flag.union(CSMethodFlags::VIRTUAL);
+        }
+        if method.is_static_method() {
+            flag = flag.union(CSMethodFlags::STATIC);
+        }
+        if method.is_virtual_method() {
+            flag = flag.union(CSMethodFlags::VIRTUAL);
+        }
+        if method.is_special_name() {
+            flag = flag.union(CSMethodFlags::SPECIAL_NAME);
+        }
+
         let mut method_decl = CsMethod {
             brief: format!(
                 "Method {m_name}, addr 0x{:x}, size 0x{:x}, virtual {}, abstract: {}, final {}",
@@ -718,7 +735,7 @@ impl CsType {
                 method.is_final_method()
             )
             .into(),
-            method_flags: todo!(),
+            method_flags: flag,
             method_index,
             name: m_name.to_string(),
             return_type: type_resolver.resolve_type(
