@@ -548,7 +548,7 @@ impl CppType {
         name_resolver: &CppNameResolver,
         config: &CppGenerationConfig,
     ) -> CppParam {
-        let ty = name_resolver.resolve_name(self, p.il2cpp_ty, TypeUsage::Parameter, false, false);
+        let ty = name_resolver.resolve_name(self, p.il2cpp_ty, TypeUsage::Parameter, true, false);
         CppParam {
             name: config.name_cpp(&p.name),
             ty: ty.combine_all(),
