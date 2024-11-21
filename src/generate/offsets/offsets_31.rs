@@ -526,7 +526,7 @@ fn get_parent_sa(
         metadata,
         &metadata.metadata.global_metadata.type_definitions[parent_tdi],
         parent_tdi,
-        parent_generics.as_ref().map(|v| v.as_slice()),
+        parent_generics.as_deref(),
         None,
         false,
     )

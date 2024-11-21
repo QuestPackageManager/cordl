@@ -22,7 +22,6 @@ use rayon::prelude::*;
 use std::{
     fs,
     path::{Path, PathBuf},
-    str::FromStr,
     time,
 };
 
@@ -244,7 +243,6 @@ fn main() -> color_eyre::Result<()> {
                 tdi,
                 CsTypeTag::TypeDefinitionIndex(tdi),
                 &metadata,
-                false,
             );
         }
     }

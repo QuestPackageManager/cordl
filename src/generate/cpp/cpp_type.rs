@@ -505,7 +505,7 @@ impl CppType {
     ) {
         for field in fields {
             let field_ty = name_resolver
-                .resolve_name(self, field.field_ty, TypeUsage::Field, true)
+                .resolve_name(self, field.field_ty, TypeUsage::Field, true, false)
                 .combine_all();
             let field_decl = CppFieldDecl {
                 cpp_name: config.name_cpp(&field.name),
@@ -548,7 +548,7 @@ impl CppType {
         name_resolver: &CppNameResolver,
         config: &CppGenerationConfig,
     ) -> CppParam {
-        let ty = name_resolver.resolve_name(self, p.il2cpp_ty, TypeUsage::Parameter, false);
+        let ty = name_resolver.resolve_name(self, p.il2cpp_ty, TypeUsage::Parameter, false, false);
         CppParam {
             name: config.name_cpp(&p.name),
             ty: ty.combine_all(),
@@ -569,7 +569,8 @@ impl CppType {
                 continue;
             }
 
-            let prop_ty = name_resolver.resolve_name(self, prop.prop_ty, TypeUsage::Property, true);
+            let prop_ty =
+                name_resolver.resolve_name(self, prop.prop_ty, TypeUsage::Property, true, false);
             let prop_decl = CppPropertyDecl {
                 cpp_name: config.name_cpp(&prop.name),
                 prop_ty: prop_ty.combine_all(),
@@ -626,7 +627,7 @@ impl CppType {
         let cordl_metadata = name_resolver.cordl_metadata;
         let parent_ty = &cordl_metadata.metadata_registration.types[parent.ty];
 
-        let parent_name = name_resolver.resolve_name(self, parent, TypeUsage::TypeName, true);
+        let parent_name = name_resolver.resolve_name(self, parent, TypeUsage::TypeName, true, true);
 
         let parent_tag = CsTypeTag::from_type_data(parent_ty.data, cordl_metadata.metadata);
         let parent_tdi: TypeDefinitionIndex = parent_tag.into();
@@ -664,7 +665,7 @@ impl CppType {
         for interface in interfaces {
             // We have an interface, lets do something with it
             let interface_name_il2cpp =
-                name_resolver.resolve_name(self, interface, TypeUsage::TypeName, true);
+                name_resolver.resolve_name(self, interface, TypeUsage::TypeName, true, true);
 
             let interface_cpp_name = interface_name_il2cpp.remove_pointer().combine_all();
             let interface_cpp_pointer = interface_name_il2cpp.as_pointer().combine_all();
@@ -832,6 +833,7 @@ impl CppType {
             self,
             method.return_type.clone(),
             TypeUsage::ReturnType,
+            false,
             false,
         );
 
@@ -1072,7 +1074,13 @@ impl CppType {
                 .map(|g| {
                     g.iter()
                         .map(|t| {
-                            name_resolver.resolve_name(self, t.clone(), TypeUsage::TypeName, true)
+                            name_resolver.resolve_name(
+                                self,
+                                t.clone(),
+                                TypeUsage::TypeName,
+                                true,
+                                false,
+                            )
                         })
                         .map(|n| n.combine_all())
                         .collect_vec()
@@ -1290,10 +1298,10 @@ impl CppType {
         &mut self,
         backing_type: ResolvedType,
         name_resolver: &CppNameResolver,
-        config: &CppGenerationConfig,
+        _config: &CppGenerationConfig,
     ) {
         let enum_base = name_resolver
-            .resolve_name(self, backing_type, TypeUsage::TypeName, false)
+            .resolve_name(self, backing_type, TypeUsage::TypeName, true, true)
             .remove_pointer()
             .combine_all();
 
@@ -1311,7 +1319,7 @@ impl CppType {
         &mut self,
         backing_type: ResolvedType,
         name_resolver: &CppNameResolver,
-        config: &CppGenerationConfig,
+        _config: &CppGenerationConfig,
     ) {
         let metadata = name_resolver.cordl_metadata;
 
@@ -1321,7 +1329,7 @@ impl CppType {
         let unwrapped_name = format!("__{}_Unwrapped", self.cpp_name());
 
         let enum_base = name_resolver
-            .resolve_name(self, backing_type, TypeUsage::TypeName, false)
+            .resolve_name(self, backing_type, TypeUsage::TypeName, true, true)
             .remove_pointer()
             .combine_all();
 
@@ -1441,7 +1449,7 @@ impl CppType {
                 }
 
                 let f_type_cpp_name = name_resolver
-                    .resolve_name(self, field.field_ty.clone(), TypeUsage::Field, true)
+                    .resolve_name(self, field.field_ty.clone(), TypeUsage::Field, true, false)
                     .combine_all();
 
                 // Get the inner type of a Generic Inst
@@ -1963,7 +1971,7 @@ impl CppType {
 
     fn create_ref_constructor(
         &mut self,
-        method: &CsMethod,
+        _method: &CsMethod,
         m_params: &[CppParam],
         template: &Option<CppTemplate>,
     ) {
@@ -2090,7 +2098,7 @@ impl ToString for CsValue {
                 // make it include at least one decimal place
 
                 format!("static_cast<float_32>({f:1}f)")
-            },
+            }
             CsValue::F64(f) => {
                 if *f == f64::INFINITY {
                     return "INFINITY".to_owned();
@@ -2103,9 +2111,9 @@ impl ToString for CsValue {
                 }
 
                 format!("static_cast<float_64>({f:1})")
-            },
-            CsValue::Object(bytes) => todo!(),
-            CsValue::ValueType(bytes) => todo!(),
+            }
+            CsValue::Object(_bytes) => todo!(),
+            CsValue::ValueType(_bytes) => todo!(),
             CsValue::Null => "{}".to_string(),
         }
     }

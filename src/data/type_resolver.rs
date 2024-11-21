@@ -135,8 +135,6 @@ impl<'a, 'b> TypeResolver<'a, 'b> {
 
                 // blacklist if needed
                 if let TypeData::TypeDefinitionIndex(tdi) = to_resolve.data {
-                    let td = &metadata.metadata.global_metadata.type_definitions[tdi];
-
 
                     if metadata.blacklisted_types.contains(&tdi) {
                         return ResolvedTypeData::Blacklisted(typ_cpp_tag);
@@ -147,7 +145,7 @@ impl<'a, 'b> TypeResolver<'a, 'b> {
                     declaring_cs_type.requirements.add_dependency_tag(typ_cpp_tag);
                 }
 
-                let to_incl = ctx_collection.get_context(typ_cpp_tag).unwrap_or_else(|| {
+                let _to_incl = ctx_collection.get_context(typ_cpp_tag).unwrap_or_else(|| {
                     let t = &typ_cpp_tag.get_tdi().get_type_definition(metadata.metadata);
 
                     panic!(
@@ -164,7 +162,7 @@ impl<'a, 'b> TypeResolver<'a, 'b> {
                     .get_cs_type(to_resolve.data.into())
                     .unwrap_or_else(|| panic!("Unable to get type to include {:?}", to_resolve.data));
 
-                let own_context = other_context_ty == own_context_ty;
+                let _own_context = other_context_ty == own_context_ty;
 
                 ResolvedTypeData::Type(to_incl_cpp_ty.self_tag)
             }
@@ -202,7 +200,7 @@ impl<'a, 'b> TypeResolver<'a, 'b> {
                     let owner = generic_param.owner(metadata.metadata);
                     assert!(owner.is_method != u32::MAX);
 
-                    let (gen_idx, gen_param) = owner
+                    let (_gen_idx, gen_param) = owner
                         .generic_parameters(metadata.metadata)
                         .iter()
                         .find_position(|&p| p.name_index == generic_param.name_index)
@@ -220,7 +218,7 @@ impl<'a, 'b> TypeResolver<'a, 'b> {
                     let generic_param: &brocolib::global_metadata::Il2CppGenericParameter =
                         &metadata.metadata.global_metadata.generic_parameters[index];
 
-                    let owner = generic_param.owner(metadata.metadata);
+                    let _owner = generic_param.owner(metadata.metadata);
 
                     ResolvedTypeData::GenericArg(index, generic_param.num)
                 }

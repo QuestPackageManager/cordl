@@ -9,7 +9,9 @@ use crate::{
     generate::{metadata::CordlMetadata, type_extensions::TypeDefinitionExtensions},
 };
 
-use super::{cpp_context_collection::CppContextCollection, cpp_type::CppType};
+use super::{
+    cpp_context_collection::CppContextCollection, cpp_members::CppInclude, cpp_type::CppType,
+};
 
 pub const VALUE_WRAPPER_TYPE: &str = "::bs_hook::ValueType";
 pub const ENUM_WRAPPER_TYPE: &str = "::bs_hook::EnumType";
@@ -27,13 +29,19 @@ impl<'a, 'b> CppNameResolver<'a, 'b> {
         declaring_cpp_type: &mut CppType,
         ty: ResolvedType,
         type_usage: TypeUsage,
-        add_include: bool,
+        add_include_def: bool,
+        add_include_impl: bool,
     ) -> NameComponents {
         let metadata = self.cordl_metadata;
         match ty.data {
             ResolvedTypeData::Array(array_type) => {
-                let generic =
-                    self.resolve_name(declaring_cpp_type, *array_type, type_usage, add_include);
+                let generic = self.resolve_name(
+                    declaring_cpp_type,
+                    *array_type,
+                    type_usage,
+                    add_include_def,
+                    add_include_impl,
+                );
                 let generic_formatted = generic.combine_all();
 
                 NameComponents {
@@ -48,12 +56,23 @@ impl<'a, 'b> CppNameResolver<'a, 'b> {
                 }
             }
             ResolvedTypeData::GenericInst(resolved_type, vec) => {
-                let type_def_name_components =
-                    self.resolve_name(declaring_cpp_type, *resolved_type, type_usage, add_include);
+                let type_def_name_components = self.resolve_name(
+                    declaring_cpp_type,
+                    *resolved_type,
+                    type_usage,
+                    add_include_def,
+                    add_include_impl,
+                );
                 let generic_types_formatted = vec
                     .into_iter()
                     .map(|(r, inc)| {
-                        self.resolve_name(declaring_cpp_type, r, type_usage, inc && add_include)
+                        self.resolve_name(
+                            declaring_cpp_type,
+                            r,
+                            type_usage,
+                            inc && add_include_def,
+                            inc && add_include_impl,
+                        )
                     })
                     .map(|n| n.combine_all())
                     .collect_vec();
@@ -64,13 +83,13 @@ impl<'a, 'b> CppNameResolver<'a, 'b> {
                     ..type_def_name_components
                 }
             }
-            ResolvedTypeData::GenericArg(gen_param_idx, arg_idx) => {
+            ResolvedTypeData::GenericArg(gen_param_idx, _arg_idx) => {
                 let generic_param =
                     &metadata.metadata.global_metadata.generic_parameters[gen_param_idx];
 
                 generic_param.name(metadata.metadata).to_string().into()
             }
-            ResolvedTypeData::GenericMethodArg(method_index, gen_param_idx, method_arg) => {
+            ResolvedTypeData::GenericMethodArg(_method_index, gen_param_idx, _method_arg) => {
                 let generic_param =
                     &metadata.metadata.global_metadata.generic_parameters[gen_param_idx];
 
@@ -82,8 +101,13 @@ impl<'a, 'b> CppNameResolver<'a, 'b> {
                 generic_param.name(metadata.metadata).to_string().into()
             }
             ResolvedTypeData::Ptr(resolved_type) => {
-                let generic_formatted =
-                    self.resolve_name(declaring_cpp_type, *resolved_type, type_usage, add_include);
+                let generic_formatted = self.resolve_name(
+                    declaring_cpp_type,
+                    *resolved_type,
+                    type_usage,
+                    add_include_def,
+                    add_include_impl,
+                );
                 NameComponents {
                     namespace: Some("cordl_internals".into()),
                     generics: Some(vec![generic_formatted.combine_all()]),
@@ -107,12 +131,30 @@ impl<'a, 'b> CppNameResolver<'a, 'b> {
                         let td = &metadata.metadata.global_metadata.type_definitions
                             [cs_type_tag.get_tdi()];
 
-                            
-                        
-                        println!("ty {cs_type_tag:#?} vs aliased {:#?}", self.collection.alias_context.get(&cs_type_tag));
+                        println!(
+                            "ty {cs_type_tag:#?} vs aliased {:#?}",
+                            self.collection.alias_context.get(&cs_type_tag)
+                        );
                         println!("{}", incl_context.fundamental_path.display());
-                        panic!("Unable to find type {ty:#?} {}", td.full_name(metadata.metadata, true));
+                        panic!(
+                            "Unable to find type {ty:#?} {}",
+                            td.full_name(metadata.metadata, true)
+                        );
                     });
+
+                if add_include_def {
+                    declaring_cpp_type.requirements.add_def_include(
+                        Some(incl_ty),
+                        CppInclude::new_context_typedef(incl_context),
+                    );
+                }
+
+                if add_include_impl {
+                    declaring_cpp_type.requirements.add_impl_include(
+                        Some(incl_ty),
+                        CppInclude::new_context_typeimpl(incl_context),
+                    );
+                }
 
                 incl_ty.cpp_name_components.clone()
             }
@@ -180,8 +222,13 @@ impl<'a, 'b> CppNameResolver<'a, 'b> {
                 }
             }
             ResolvedTypeData::ByRef(resolved_type) => {
-                let generic =
-                    self.resolve_name(declaring_cpp_type, *resolved_type, type_usage, add_include);
+                let generic = self.resolve_name(
+                    declaring_cpp_type,
+                    *resolved_type,
+                    type_usage,
+                    add_include_def,
+                    add_include_impl,
+                );
                 let generic_formatted = generic.combine_all();
 
                 NameComponents {
@@ -193,8 +240,13 @@ impl<'a, 'b> CppNameResolver<'a, 'b> {
                 }
             }
             ResolvedTypeData::ByRefConst(resolved_type) => {
-                let generic =
-                    self.resolve_name(declaring_cpp_type, *resolved_type, type_usage, add_include);
+                let generic = self.resolve_name(
+                    declaring_cpp_type,
+                    *resolved_type,
+                    type_usage,
+                    add_include_def,
+                    add_include_impl,
+                );
                 let generic_formatted = generic.combine_all();
 
                 NameComponents {

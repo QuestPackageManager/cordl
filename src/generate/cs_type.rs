@@ -22,9 +22,7 @@ use crate::{
     },
     generate::{
         cs_members::CsField,
-        type_extensions::{
-            ParameterDefinitionExtensions, TypeExtentions,
-        },
+        type_extensions::{ParameterDefinitionExtensions, TypeExtentions},
     },
     helpers::cursor::ReadBytesExtensions,
     Endian,
@@ -32,7 +30,8 @@ use crate::{
 
 use super::{
     cs_members::{
-        CSMethodFlags, CsConstructor, CsGenericTemplate, CsMethod, CsMethodData, CsParam, CsParamFlags, CsProperty, CsValue
+        CSMethodFlags, CsConstructor, CsGenericTemplate, CsMethod, CsMethodData, CsParam,
+        CsParamFlags, CsProperty, CsValue,
     },
     cs_type_tag::CsTypeTag,
     metadata::CordlMetadata,
@@ -139,7 +138,7 @@ impl CsType {
         let args = inst
             .types
             .iter()
-            .map(|t| type_resolver.resolve_type(self, *t as usize, TypeUsage::TypeName, true))
+            .map(|t| type_resolver.resolve_type(self, *t, TypeUsage::TypeName, true))
             .collect();
         self.method_generic_instantiation_map
             .insert(method_spec.method_definition_index, args);
@@ -160,12 +159,7 @@ impl CsType {
         // We really just want to call it once for a given size and then move on
         // Every type should have a valid metadata size, even if it is 0
 
-        self.size_info = Some(offsets::get_size_info(
-            t,
-            tdi,
-            Some(&generic_inst),
-            metadata,
-        ));
+        self.size_info = Some(offsets::get_size_info(t, tdi, Some(generic_inst), metadata));
 
         self.generic_instantiations_args_types = Some(
             generic_inst
@@ -295,7 +289,7 @@ impl CsType {
         type_resolver: &TypeResolver,
     ) -> Vec<CsParam> {
         let metadata = type_resolver.cordl_metadata;
-        let tdi = self.self_tag.get_tdi();
+        let _tdi = self.self_tag.get_tdi();
 
         method
             .parameters(metadata.metadata)
@@ -316,9 +310,9 @@ impl CsType {
         type_resolver: &TypeResolver,
     ) -> CsParam {
         let metadata = type_resolver.cordl_metadata;
-        let tdi = self.self_tag.get_tdi();
+        let _tdi = self.self_tag.get_tdi();
 
-        let param_type = metadata
+        let _param_type = metadata
             .metadata_registration
             .types
             .get(param.type_index as usize)
@@ -374,7 +368,7 @@ impl CsType {
             .as_ref()
             .unwrap()[tdi.index() as usize];
 
-        let mut offsets = Vec::<u32>::new();
+        let offsets = Vec::<u32>::new();
         if let Some(sz) = offsets::get_size_of_type_table(metadata, tdi) {
             if sz.instance_size == 0 {
                 // At this point we need to compute the offsets
@@ -446,11 +440,7 @@ impl CsType {
 
             let generic_inst_types: Option<Vec<usize>> =
                 gen_args.map(|list| list.iter().map(|t| t.ty).collect_vec());
-            let sa = offsets::get_il2cpptype_sa(
-                metadata,
-                f_type,
-                generic_inst_types.as_ref().map(|v| v.as_slice()),
-            );
+            let sa = offsets::get_il2cpptype_sa(metadata, f_type, generic_inst_types.as_deref());
 
             sa.size
         }
@@ -553,7 +543,7 @@ impl CsType {
         let t = &metadata.metadata.global_metadata.type_definitions[tdi];
 
         for &interface_index in t.interfaces(metadata.metadata) {
-            let int_ty = &metadata.metadata_registration.types[interface_index as usize];
+            let _int_ty = &metadata.metadata_registration.types[interface_index as usize];
 
             let resolved = type_resolver.resolve_type(
                 self,
@@ -612,7 +602,7 @@ impl CsType {
                 None => p_setter.unwrap().parameters(metadata.metadata)[0].type_index as usize,
             };
 
-            let p_type = metadata
+            let _p_type = metadata
                 .metadata_registration
                 .types
                 .get(p_type_index)
@@ -654,7 +644,7 @@ impl CsType {
             return;
         }
 
-        let m_ret_type = metadata
+        let _m_ret_type = metadata
             .metadata_registration
             .types
             .get(method.return_type as usize)
@@ -697,7 +687,7 @@ impl CsType {
             .is_some_and(|t| !t.names.is_empty())
             .then(|| self.generic_template.clone());
 
-        let literal_types = is_generic_method_inst
+        let _literal_types = is_generic_method_inst
             .then(|| {
                 self.method_generic_instantiation_map
                     .get(&method_index)

@@ -15,8 +15,7 @@ use crate::{
             cpp_members::CppMember,
         },
         cs_context_collection::TypeContextCollection,
-        cs_members::CsMember,
-        metadata::{self, CordlMetadata},
+        metadata::CordlMetadata,
     },
     INTERNALS_DIR,
 };

@@ -8,10 +8,7 @@ use brocolib::{
 use itertools::Itertools;
 use log::{info, warn};
 
-use crate::{
-    data::type_resolver::{self, TypeResolver},
-    generate::cs_type::CsType,
-};
+use crate::{data::type_resolver::TypeResolver, generate::cs_type::CsType};
 
 use super::{
     context::TypeContext,
@@ -44,7 +41,7 @@ impl TypeContextCollection {
         self.filling_types.insert(tag);
 
         let type_resolver = TypeResolver {
-            cordl_metadata: &metadata,
+            cordl_metadata: metadata,
             collection: self,
         };
         cpp_type.fill_from_il2cpp(&type_resolver);
@@ -94,9 +91,7 @@ impl TypeContextCollection {
         owner_tdi: TypeDefinitionIndex,
         root_tag: CsTypeTag,
         metadata: &CordlMetadata,
-        nested: bool,
     ) {
-        let owner_tag = CsTypeTag::TypeDefinitionIndex(owner_tdi);
         let owner_ty = &metadata.metadata.global_metadata.type_definitions[owner_tdi];
 
         for nested_type_tdi in owner_ty.nested_types(metadata.metadata) {
@@ -105,8 +100,8 @@ impl TypeContextCollection {
             let nested_tag = CsTypeTag::TypeDefinitionIndex(*nested_type_tdi);
 
             self.alias_type_to_context(nested_tag, root_tag);
-     
-            self.alias_nested_types_il2cpp(*nested_type_tdi, root_tag, metadata, nested);
+
+            self.alias_nested_types_il2cpp(*nested_type_tdi, root_tag, metadata);
         }
     }
 
@@ -274,7 +269,7 @@ impl TypeContextCollection {
             .expect("Failed to make generic type");
 
         let type_resolver = TypeResolver {
-            cordl_metadata: &metadata,
+            cordl_metadata: metadata,
             collection: self,
         };
         new_cpp_type.add_class_generic_inst(&generic_inst.types, &type_resolver);
@@ -435,7 +430,7 @@ impl TypeContextCollection {
         metadata: &CordlMetadata,
 
         type_data: TypeData,
-        generic_inst: Option<&Vec<usize>>,
+        _generic_inst: Option<&Vec<usize>>,
     ) -> &mut TypeContext {
         let type_tag = CsType::get_tag_tdi(type_data);
         assert!(

@@ -1,13 +1,13 @@
 use bitflags::bitflags;
-use brocolib::global_metadata::{MethodIndex, TypeIndex};
+use brocolib::global_metadata::MethodIndex;
 use bytes::Bytes;
 use itertools::Itertools;
 
 use crate::data::type_resolver::ResolvedType;
 
-use super::{cs_type_tag::CsTypeTag, writer::CppWritable};
+use super::writer::CppWritable;
 
-use std::{hash::Hash, num, rc::Rc, sync::Arc};
+use std::{hash::Hash, sync::Arc};
 
 #[derive(Debug, Eq, Hash, PartialEq, Clone, Default, PartialOrd, Ord)]
 pub struct CsGenericTemplate {

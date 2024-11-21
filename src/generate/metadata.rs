@@ -1,14 +1,9 @@
 use std::collections::{HashMap, HashSet};
 
-use brocolib::{
-    global_metadata::{Il2CppTypeDefinition, MethodIndex, TypeDefinitionIndex},
-    runtime_metadata::Il2CppType,
-};
+use brocolib::global_metadata::{Il2CppTypeDefinition, MethodIndex, TypeDefinitionIndex};
 use itertools::Itertools;
 
-use crate::data::name_components::NameComponents;
-
-use super::{cs_context_collection::TypeContextCollection, cs_type::CsType};
+use super::cs_type::CsType;
 
 pub struct MethodCalculations {
     pub estimated_size: usize,

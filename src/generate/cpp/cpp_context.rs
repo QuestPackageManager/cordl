@@ -82,9 +82,6 @@ impl CppContext {
         let ns = &components.namespace.unwrap_or_default();
         let name = &components.name;
 
-        let cpp_namespace = config.namespace_cpp(ns);
-        let cpp_name = config.namespace_cpp(name);
-
         let ns_path = config.namespace_path(ns);
         let path = if ns_path.is_empty() {
             "GlobalNamespace/".to_string()
@@ -168,7 +165,7 @@ impl CppContext {
 
         // add IWYU
         let typedef_include_path = diff_paths(&self.typedef_path, base_path).unwrap();
-        let typeimpl_include_path = diff_paths(&self.type_impl_path, base_path).unwrap();
+        let _typeimpl_include_path = diff_paths(&self.type_impl_path, base_path).unwrap();
         let fundamental_include_path = diff_paths(&self.fundamental_path, base_path).unwrap();
 
         let fundamental_include_pragma = format!(
