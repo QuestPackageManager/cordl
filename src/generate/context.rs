@@ -25,12 +25,7 @@ impl TypeContext {
     }
 
     // TODO: Move out, this is CSContext
-    pub fn make(
-        metadata: &CordlMetadata,
-        tdi: TypeDefinitionIndex,
-        tag: CsTypeTag,
-        generic_inst: Option<&Vec<usize>>,
-    ) -> TypeContext {
+    pub fn make(metadata: &CordlMetadata, tdi: TypeDefinitionIndex, tag: CsTypeTag) -> TypeContext {
         let t = &metadata.metadata.global_metadata.type_definitions[tdi];
 
         let components = t.get_name_components(metadata.metadata);
@@ -42,7 +37,7 @@ impl TypeContext {
             typedef_types: Default::default(),
         };
 
-        match CsType::make_cs_type(metadata, tdi, tag, generic_inst) {
+        match CsType::make_cs_type(metadata, tdi, tag) {
             Some(cpptype) => {
                 x.insert_cpp_type(cpptype);
             }

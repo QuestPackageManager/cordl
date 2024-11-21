@@ -8,7 +8,10 @@ use brocolib::{
 use itertools::Itertools;
 use log::{info, warn};
 
-use crate::{data::type_resolver::TypeResolver, generate::cs_type::CsType};
+use crate::{
+    data::type_resolver::{self, TypeResolver},
+    generate::cs_type::CsType,
+};
 
 use super::{
     context::TypeContext,
@@ -19,7 +22,7 @@ use super::{
 
 pub struct TypeContextCollection {
     // Should always be a TypeDefinitionIndex
-    all_contexts: HashMap<CsTypeTag, TypeContext>,
+    pub all_contexts: HashMap<CsTypeTag, TypeContext>,
     pub alias_context: HashMap<CsTypeTag, CsTypeTag>,
     pub alias_nested_type_to_parent: HashMap<CsTypeTag, CsTypeTag>,
     filled_types: HashSet<CsTypeTag>,
@@ -28,7 +31,7 @@ pub struct TypeContextCollection {
 }
 
 impl TypeContextCollection {
-    fn fill_cpp_type(&mut self, cpp_type: &mut CsType, type_resolver: &TypeResolver) {
+    fn fill_cpp_type(&mut self, cpp_type: &mut CsType, metadata: &CordlMetadata) {
         let tag = cpp_type.self_tag;
 
         if self.filled_types.contains(&tag) {
@@ -41,13 +44,17 @@ impl TypeContextCollection {
         // Move ownership to local
         self.filling_types.insert(tag);
 
-        cpp_type.fill_from_il2cpp(type_resolver);
+        let type_resolver = TypeResolver {
+            cordl_metadata: &metadata,
+            collection: self,
+        };
+        cpp_type.fill_from_il2cpp(&type_resolver);
 
         self.filled_types.insert(tag);
         self.filling_types.remove(&tag.clone());
     }
 
-    pub fn fill(&mut self, type_resolver: &TypeResolver, type_tag: CsTypeTag) {
+    pub fn fill(&mut self, type_tag: CsTypeTag, metadata: &CordlMetadata) {
         let context_tag = self.get_context_root_tag(type_tag);
 
         if self.filled_types.contains(&type_tag) {
@@ -68,7 +75,7 @@ impl TypeContextCollection {
 
         // In some occasions, the CppContext can be empty
         if let Some((_t, mut cpp_type)) = cpp_type_entry {
-            self.fill_cpp_type(&mut cpp_type, type_resolver);
+            self.fill_cpp_type(&mut cpp_type, metadata);
 
             // Move ownership back up
             self.all_contexts
@@ -155,7 +162,6 @@ impl TypeContextCollection {
         &mut self,
         metadata: &CordlMetadata<'_>,
         tdi: TypeDefinitionIndex,
-        generic_inst: Option<&Vec<usize>>,
     ) -> Option<&mut TypeContext> {
         let ty_tag = CsTypeTag::TypeDefinitionIndex(tdi);
         let ty_def = &metadata.metadata.global_metadata.type_definitions[tdi];
@@ -199,7 +205,7 @@ impl TypeContextCollection {
         match nested_inherits_declaring {
             true => {
                 // If a nested type inherits its declaring type, move it to its own CppContext
-                let context = TypeContext::make(metadata, tdi, ty_tag, generic_inst);
+                let context = TypeContext::make(metadata, tdi, ty_tag);
 
                 // Unnest type does not alias to another context or type
                 self.alias_context.remove(&ty_tag);
@@ -209,7 +215,7 @@ impl TypeContextCollection {
                 self.all_contexts.get_mut(&ty_tag)
             }
             false => {
-                let new_cpp_type = CsType::make_cs_type(metadata, tdi, ty_tag, generic_inst)
+                let new_cpp_type = CsType::make_cs_type(metadata, tdi, ty_tag)
                     .expect("Failed to make nested type");
 
                 let context = self.get_context_mut(ty_tag).unwrap();
@@ -288,13 +294,14 @@ impl TypeContextCollection {
             return self.get_context_mut(generic_class_ty_data);
         }
 
-        let mut new_cpp_type = CsType::make_cs_type(
-            metadata,
-            tdi,
-            generic_class_ty_data,
-            Some(&generic_inst.types),
-        )
-        .expect("Failed to make generic type");
+        let mut new_cpp_type = CsType::make_cs_type(metadata, tdi, generic_class_ty_data)
+            .expect("Failed to make generic type");
+
+        let type_resolver = TypeResolver {
+            cordl_metadata: &metadata,
+            collection: self,
+        };
+        new_cpp_type.add_class_generic_inst(&generic_inst.types, &type_resolver);
         new_cpp_type.self_tag = generic_class_ty_data;
         self.alias_type_to_context(new_cpp_type.self_tag, context_root_tag);
 
@@ -326,7 +333,6 @@ impl TypeContextCollection {
         &mut self,
         method_spec: &Il2CppMethodSpec,
         metadata: &CordlMetadata,
-        type_resolver: &TypeResolver,
     ) -> Option<&mut TypeContext> {
         if method_spec.method_inst_index == u32::MAX {
             return None;
@@ -372,8 +378,12 @@ impl TypeContextCollection {
 
         self.borrow_cs_type(generic_class_ty_data, |collection, mut cpp_type| {
             let method_index = method_spec.method_definition_index;
-            cpp_type.add_method_generic_inst(method_spec, metadata);
-            cpp_type.create_method(method_index, type_resolver, true);
+            let type_resolver = TypeResolver {
+                cordl_metadata: metadata,
+                collection,
+            };
+            cpp_type.add_method_generic_inst(method_spec, &type_resolver);
+            cpp_type.create_method(method_index, &type_resolver, true);
 
             cpp_type
         });
@@ -384,9 +394,8 @@ impl TypeContextCollection {
     pub fn fill_generic_class_inst(
         &mut self,
         method_spec: &Il2CppMethodSpec,
-        type_resolver: &TypeResolver,
+        metadata: &CordlMetadata,
     ) -> Option<&mut TypeContext> {
-        let metadata = type_resolver.cordl_metadata;
         if method_spec.class_inst_index == u32::MAX {
             return None;
         }
@@ -436,7 +445,7 @@ impl TypeContextCollection {
             generic_class_ty_data,
             |collection: &mut TypeContextCollection, mut cpp_type| {
                 // cpp_type.make_generics_args(metadata, collection);
-                collection.fill_cpp_type(&mut cpp_type, type_resolver);
+                collection.fill_cpp_type(&mut cpp_type, metadata);
 
                 cpp_type
             },
@@ -474,7 +483,7 @@ impl TypeContextCollection {
         }
 
         let tdi = context_root_tag.get_tdi();
-        let context = TypeContext::make(metadata, tdi, context_root_tag, generic_inst);
+        let context = TypeContext::make(metadata, tdi, context_root_tag);
         // Now do children
         for cpp_type in context.typedef_types.values() {
             for n in &cpp_type.nested_types {

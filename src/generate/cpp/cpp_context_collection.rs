@@ -9,11 +9,14 @@ use log::{info, trace};
 use pathdiff::diff_paths;
 
 use crate::generate::{
-    cpp::config::STATIC_CONFIG, cs_context_collection::TypeContextCollection,
+    cpp::config::STATIC_CONFIG, cs_context_collection::TypeContextCollection, cs_type::CsType,
     cs_type_tag::CsTypeTag, metadata::CordlMetadata,
 };
 
-use super::{config::CppGenerationConfig, cpp_context::CppContext, cpp_type::CppType};
+use super::{
+    config::CppGenerationConfig, cpp_context::CppContext, cpp_name_resolver::CppNameResolver,
+    cpp_type::CppType,
+};
 
 #[derive(Default)]
 pub struct CppContextCollection {
@@ -34,17 +37,28 @@ impl CppContextCollection {
         let mut cpp_collection = CppContextCollection::default();
 
         for (tag, context) in collection.get() {
-            cpp_collection.all_contexts.insert(
-                *tag,
-                CppContext::make(*tag, context.clone(), metadata, config),
-            );
+            cpp_collection
+                .all_contexts
+                .insert(*tag, CppContext::make(*tag, context, metadata, config));
         }
         cpp_collection.alias_context = collection.alias_context;
+
+        for (_, context) in collection.all_contexts {
+            for (tag, cs_type) in context.typedef_types {
+                cpp_collection.fill(tag, cs_type, metadata, config);
+            }
+        }
 
         cpp_collection
     }
 
-    fn fill_cpp_type(&mut self, cpp_type: &mut CppType, metadata: &CordlMetadata) {
+    fn do_fill_cpp_type(
+        &mut self,
+        cpp_type: &mut CppType,
+        cs_type: CsType,
+        metadata: &CordlMetadata,
+        config: &CppGenerationConfig,
+    ) {
         let tag = cpp_type.self_tag;
 
         if self.filled_types.contains(&tag) {
@@ -57,13 +71,24 @@ impl CppContextCollection {
         // Move ownership to local
         self.filling_types.insert(tag);
 
-        cpp_type.fill_from_il2cpp(metadata, self, &STATIC_CONFIG);
+        let name_resolver = CppNameResolver {
+            cordl_metadata: metadata,
+            collection: self,
+        };
+
+        cpp_type.fill(cs_type, &name_resolver, config);
 
         self.filled_types.insert(tag);
         self.filling_types.remove(&tag.clone());
     }
 
-    pub fn fill(&mut self, metadata: &CordlMetadata, type_tag: CsTypeTag) {
+    pub fn fill(
+        &mut self,
+        type_tag: CsTypeTag,
+        cs_type: CsType,
+        metadata: &CordlMetadata,
+        config: &CppGenerationConfig,
+    ) {
         let context_tag = self.get_context_root_tag(type_tag);
 
         if self.filled_types.contains(&type_tag) {
@@ -84,7 +109,7 @@ impl CppContextCollection {
 
         // In some occasions, the CppContext can be empty
         if let Some((_t, mut cpp_type)) = cpp_type_entry {
-            self.fill_cpp_type(&mut cpp_type, metadata);
+            self.do_fill_cpp_type(&mut cpp_type, cs_type, metadata, config);
 
             // Move ownership back up
             self.all_contexts

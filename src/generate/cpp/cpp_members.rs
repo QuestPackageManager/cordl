@@ -51,14 +51,20 @@ impl CppTemplate {
 impl From<CsGenericTemplate> for CppTemplate {
     fn from(value: CsGenericTemplate) -> Self {
         CppTemplate {
-            names: value.names.into_iter().map(|(constraint, name)| {
-                let cpp_ty = match constraint {
-                    CsGenericTemplateType::Any => "typename".to_string(),
-                    CsGenericTemplateType::Reference => CORDL_REFERENCE_TYPE_CONSTRAINT.to_string(),
-                };
+            names: value
+                .names
+                .into_iter()
+                .map(|(constraint, name)| {
+                    let cpp_ty = match constraint {
+                        CsGenericTemplateType::Any => "typename".to_string(),
+                        CsGenericTemplateType::Reference => {
+                            CORDL_REFERENCE_TYPE_CONSTRAINT.to_string()
+                        }
+                    };
 
-                (cpp_ty, name)
-            }),
+                    (cpp_ty, name)
+                })
+                .collect(),
         }
     }
 }

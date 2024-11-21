@@ -6,19 +6,17 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use brocolib::global_metadata::TypeDefinitionIndex;
-
 use color_eyre::eyre::ContextCompat;
 
 use itertools::Itertools;
-use log::{info, trace};
+use log::trace;
 use pathdiff::diff_paths;
 
 use crate::generate::context::TypeContext;
 use crate::generate::cpp::config::STATIC_CONFIG;
 use crate::generate::cpp::cpp_members::{CppForwardDeclare, CppInclude};
 use crate::generate::cpp::cpp_type::CORDL_NO_INCLUDE_IMPL_DEFINE;
-use crate::generate::cs_type::CsType;
+
 use crate::generate::cs_type_tag::CsTypeTag;
 use crate::generate::metadata::CordlMetadata;
 use crate::generate::type_extensions::TypeDefinitionExtensions;
@@ -72,7 +70,7 @@ impl CppContext {
 
     pub fn make(
         context_tag: CsTypeTag,
-        context: TypeContext,
+        context: &TypeContext,
         metadata: &CordlMetadata,
         config: &CppGenerationConfig,
     ) -> CppContext {
@@ -115,9 +113,9 @@ impl CppContext {
             typealias_types: Default::default(),
         };
 
-        for (tag, ty) in context.typedef_types {
+        for (tag, ty) in &context.typedef_types {
             x.typedef_types
-                .insert(tag, CppType::make_cpp_type(metadata, tag, ty, config));
+                .insert(*tag, CppType::make_cpp_type(*tag, ty, config));
         }
 
         x

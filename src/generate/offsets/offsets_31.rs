@@ -32,7 +32,7 @@ pub struct SizeInfo {
 pub fn get_size_info<'a>(
     t: &'a Il2CppTypeDefinition,
     tdi: TypeDefinitionIndex,
-    generic_inst_types: Option<&Vec<usize>>,
+    generic_inst_types: Option<&[usize]>,
     metadata: &'a CordlMetadata,
 ) -> SizeInfo {
     let size_metadata = get_size_of_type_table(metadata, tdi).unwrap();
@@ -76,7 +76,7 @@ pub fn get_size_info<'a>(
 pub fn get_size_and_packing<'a>(
     t: &'a Il2CppTypeDefinition,
     tdi: TypeDefinitionIndex,
-    generic_inst_types: Option<&Vec<usize>>,
+    generic_inst_types: Option<&[usize]>,
     metadata: &'a CordlMetadata,
 ) -> (u32, Option<u8>) {
     let size_metadata = get_size_of_type_table(metadata, tdi).unwrap();
@@ -101,7 +101,7 @@ pub fn get_size_and_packing<'a>(
 pub fn get_il2cpptype_sa(
     metadata: &CordlMetadata<'_>,
     ty: &Il2CppType,
-    generic_inst_types: Option<&Vec<usize>>,
+    generic_inst_types: Option<&[usize]>,
 ) -> SizeAndAlignment {
     get_type_size_and_alignment(ty, generic_inst_types, metadata)
 }
@@ -109,7 +109,7 @@ pub fn get_il2cpptype_sa(
 pub fn get_sizeof_type<'a>(
     t: &'a Il2CppTypeDefinition,
     tdi: TypeDefinitionIndex,
-    generic_inst_types: Option<&Vec<usize>>,
+    generic_inst_types: Option<&[usize]>,
     metadata: &'a CordlMetadata,
 ) -> u32 {
     let size_metadata = get_size_of_type_table(metadata, tdi).unwrap();
@@ -249,7 +249,7 @@ pub fn layout_fields(
     metadata: &CordlMetadata<'_>,
     declaring_ty_def: &Il2CppTypeDefinition,
     declaring_tdi: TypeDefinitionIndex,
-    generic_inst_types: Option<&Vec<usize>>,
+    generic_inst_types: Option<&[usize]>,
     offsets: Option<&mut Vec<u32>>,
     strictly_calculated: bool,
 ) -> SizeAndAlignment {
@@ -376,7 +376,7 @@ fn layout_instance_fields(
     metadata: &CordlMetadata<'_>,
     declaring_ty_def: &Il2CppTypeDefinition,
     declaring_tdi: TypeDefinitionIndex,
-    generic_inst_types: Option<&Vec<usize>>,
+    generic_inst_types: Option<&[usize]>,
     offsets: Option<&mut Vec<u32>>,
     parent_sa: SizeAndAlignment,
 ) -> SizeAndAlignment {
@@ -469,7 +469,7 @@ fn get_offset_of_type_table(
 fn get_parent_sa(
     metadata: &CordlMetadata<'_>,
     parent_index: u32,
-    generic_inst_types: Option<&Vec<usize>>,
+    generic_inst_types: Option<&[usize]>,
 ) -> SizeAndAlignment {
     let parent_ty = &metadata.metadata_registration.types[parent_index as usize];
     let (parent_tdi, parent_generics) = match parent_ty.data {
@@ -526,7 +526,7 @@ fn get_parent_sa(
         metadata,
         &metadata.metadata.global_metadata.type_definitions[parent_tdi],
         parent_tdi,
-        parent_generics.as_ref(),
+        parent_generics.as_ref().map(|v| v.as_slice()),
         None,
         false,
     )
@@ -603,7 +603,7 @@ fn get_alignment_of_type(ty: OffsetType, pointer_size: PointerSize) -> u8 {
 
 fn get_type_size_and_alignment(
     ty: &Il2CppType,
-    generic_inst_types: Option<&Vec<usize>>,
+    generic_inst_types: Option<&[usize]>,
     metadata: &CordlMetadata,
 ) -> SizeAndAlignment {
     let mut sa = SizeAndAlignment {

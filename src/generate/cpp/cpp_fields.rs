@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::generate::cpp::cpp_type::CORDL_ACCESSOR_FIELD_PREFIX;
-use crate::generate::cs_type::CsType;
+
 use crate::generate::cs_type_tag::CsTypeTag;
 use crate::generate::metadata::CordlMetadata;
 use crate::generate::type_extensions::{

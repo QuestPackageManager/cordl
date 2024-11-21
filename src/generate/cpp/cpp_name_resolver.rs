@@ -4,7 +4,7 @@ use itertools::Itertools;
 use crate::{
     data::{
         name_components::NameComponents,
-        type_resolver::{ResolvedType, TypeUsage},
+        type_resolver::{ResolvedType, ResolvedTypeData, TypeUsage},
     },
     generate::{metadata::CordlMetadata, type_extensions::TypeDefinitionExtensions},
 };
@@ -16,12 +16,12 @@ pub const ENUM_WRAPPER_TYPE: &str = "::bs_hook::EnumType";
 pub const INTERFACE_WRAPPER_TYPE: &str = "::cordl_internals::InterfaceW";
 pub const IL2CPP_OBJECT_TYPE: &str = "Il2CppObject";
 
-pub struct CppNameResolver<'a> {
-    pub metadata: &'a CordlMetadata<'a>,
+pub struct CppNameResolver<'a, 'b> {
+    pub cordl_metadata: &'a CordlMetadata<'b>,
     pub collection: &'a CppContextCollection,
 }
 
-impl<'a> CppNameResolver<'a> {
+impl<'a, 'b> CppNameResolver<'a, 'b> {
     pub fn resolve_name(
         &self,
         declaring_cpp_type: &mut CppType,
@@ -29,9 +29,9 @@ impl<'a> CppNameResolver<'a> {
         type_usage: TypeUsage,
         add_include: bool,
     ) -> NameComponents {
-        let metadata = self.metadata;
+        let metadata = self.cordl_metadata;
         match ty.data {
-            ResolvedType::Array(array_type) => {
+            ResolvedTypeData::Array(array_type) => {
                 let generic =
                     self.resolve_name(declaring_cpp_type, *array_type, type_usage, add_include);
                 let generic_formatted = generic.combine_all();
@@ -47,7 +47,7 @@ impl<'a> CppNameResolver<'a> {
                     ..Default::default()
                 }
             }
-            ResolvedType::GenericInst(resolved_type, vec) => {
+            ResolvedTypeData::GenericInst(resolved_type, vec) => {
                 let type_def_name_components =
                     self.resolve_name(declaring_cpp_type, *resolved_type, type_usage, add_include);
                 let generic_types_formatted = vec
@@ -64,13 +64,13 @@ impl<'a> CppNameResolver<'a> {
                     ..type_def_name_components
                 }
             }
-            ResolvedType::GenericArg(gen_param_idx, arg_idx) => {
+            ResolvedTypeData::GenericArg(gen_param_idx, arg_idx) => {
                 let generic_param =
                     &metadata.metadata.global_metadata.generic_parameters[gen_param_idx];
 
                 generic_param.name(metadata.metadata).to_string().into()
             }
-            ResolvedType::GenericMethodArg(method_index, gen_param_idx, method_arg) => {
+            ResolvedTypeData::GenericMethodArg(method_index, gen_param_idx, method_arg) => {
                 let generic_param =
                     &metadata.metadata.global_metadata.generic_parameters[gen_param_idx];
 
@@ -81,7 +81,7 @@ impl<'a> CppNameResolver<'a> {
 
                 generic_param.name(metadata.metadata).to_string().into()
             }
-            ResolvedType::Ptr(resolved_type) => {
+            ResolvedTypeData::Ptr(resolved_type) => {
                 let generic_formatted =
                     self.resolve_name(declaring_cpp_type, *resolved_type, type_usage, add_include);
                 NameComponents {
@@ -91,7 +91,7 @@ impl<'a> CppNameResolver<'a> {
                     ..Default::default()
                 }
             }
-            ResolvedType::Type(cs_type_tag) => {
+            ResolvedTypeData::Type(cs_type_tag) => {
                 let incl_context = self
                     .collection
                     .get_context(cs_type_tag)
@@ -103,7 +103,7 @@ impl<'a> CppNameResolver<'a> {
 
                 incl_ty.cpp_name_components.clone()
             }
-            ResolvedType::Primitive(il2_cpp_type_enum) => {
+            ResolvedTypeData::Primitive(il2_cpp_type_enum) => {
                 let requirements = &mut declaring_cpp_type.requirements;
 
                 match il2_cpp_type_enum {
@@ -126,33 +126,33 @@ impl<'a> CppNameResolver<'a> {
                 };
 
                 let s: String = match il2_cpp_type_enum {
-                    Il2CppTypeEnum::I1 => "int8_t".to_string().into(),
-                    Il2CppTypeEnum::I2 => "int16_t".to_string().into(),
-                    Il2CppTypeEnum::I4 => "int32_t".to_string().into(),
-                    Il2CppTypeEnum::I8 => "int64_t".to_string().into(),
-                    Il2CppTypeEnum::U1 => "uint8_t".to_string().into(),
-                    Il2CppTypeEnum::U2 => "uint16_t".to_string().into(),
-                    Il2CppTypeEnum::U4 => "uint32_t".to_string().into(),
-                    Il2CppTypeEnum::U8 => "uint64_t".to_string().into(),
+                    Il2CppTypeEnum::I1 => "int8_t".to_string(),
+                    Il2CppTypeEnum::I2 => "int16_t".to_string(),
+                    Il2CppTypeEnum::I4 => "int32_t".to_string(),
+                    Il2CppTypeEnum::I8 => "int64_t".to_string(),
+                    Il2CppTypeEnum::U1 => "uint8_t".to_string(),
+                    Il2CppTypeEnum::U2 => "uint16_t".to_string(),
+                    Il2CppTypeEnum::U4 => "uint32_t".to_string(),
+                    Il2CppTypeEnum::U8 => "uint64_t".to_string(),
 
-                    Il2CppTypeEnum::R4 => "float_t".to_string().into(),
-                    Il2CppTypeEnum::R8 => "double_t".to_string().into(),
+                    Il2CppTypeEnum::R4 => "float_t".to_string(),
+                    Il2CppTypeEnum::R8 => "double_t".to_string(),
 
-                    Il2CppTypeEnum::Void => "void".to_string().into(),
-                    Il2CppTypeEnum::Boolean => "bool".to_string().into(),
-                    Il2CppTypeEnum::Char => "char16_t".to_string().into(),
-                    Il2CppTypeEnum::Object => "void*".to_string().into(),
+                    Il2CppTypeEnum::Void => "void".to_string(),
+                    Il2CppTypeEnum::Boolean => "bool".to_string(),
+                    Il2CppTypeEnum::Char => "char16_t".to_string(),
+                    Il2CppTypeEnum::Object => "void*".to_string(),
 
                     Il2CppTypeEnum::String => {
                         requirements.needs_stringw_include();
-                        "::StringW".to_string().into()
+                        "::StringW".to_string()
                     }
 
                     _ => panic!("Unsupported type {il2_cpp_type_enum:#?}"),
                 };
                 NameComponents::from(s)
             }
-            ResolvedType::Blacklisted(cs_type_tag) => {
+            ResolvedTypeData::Blacklisted(cs_type_tag) => {
                 let td = &metadata.metadata.global_metadata.type_definitions[cs_type_tag.get_tdi()];
 
                 match td.is_value_type() {
@@ -164,6 +164,32 @@ impl<'a> CppNameResolver<'a> {
                         declaring_types: None,
                     },
                     false => Self::wrapper_type_for_tdi(td).to_string().into(),
+                }
+            }
+            ResolvedTypeData::ByRef(resolved_type) => {
+                let generic =
+                    self.resolve_name(declaring_cpp_type, *resolved_type, type_usage, add_include);
+                let generic_formatted = generic.combine_all();
+
+                NameComponents {
+                    name: "ByRef".into(),
+                    namespace: Some("".into()),
+                    generics: Some(vec![generic_formatted.clone()]),
+                    is_pointer: false,
+                    ..Default::default()
+                }
+            }
+            ResolvedTypeData::ByRefConst(resolved_type) => {
+                let generic =
+                    self.resolve_name(declaring_cpp_type, *resolved_type, type_usage, add_include);
+                let generic_formatted = generic.combine_all();
+
+                NameComponents {
+                    name: "ByRefConst".into(),
+                    namespace: Some("".into()),
+                    generics: Some(vec![generic_formatted.clone()]),
+                    is_pointer: false,
+                    ..Default::default()
                 }
             }
         }

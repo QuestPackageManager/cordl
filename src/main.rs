@@ -266,7 +266,7 @@ fn main() -> color_eyre::Result<()> {
                 "Making nested types {:.4}% ({tdi_u64}/{total})",
                 (tdi_u64 as f64 / total as f64 * 100.0)
             );
-            cs_context_collection.make_nested_from(&metadata, tdi, None);
+            cs_context_collection.make_nested_from(&metadata, tdi);
         }
     }
 
@@ -364,7 +364,7 @@ fn main() -> color_eyre::Result<()> {
                 (tdi_u64 as f64 / total as f64 * 100.0)
             );
 
-            cs_context_collection.fill(&metadata, CsTypeTag::TypeDefinitionIndex(tdi));
+            cs_context_collection.fill(CsTypeTag::TypeDefinitionIndex(tdi), &metadata);
         }
     }
 

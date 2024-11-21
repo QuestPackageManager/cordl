@@ -1,7 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
     io::{Cursor, Read},
-    rc::Rc,
 };
 
 use byteorder::ReadBytesExt;
@@ -9,7 +8,7 @@ use byteorder::ReadBytesExt;
 use brocolib::{
     global_metadata::{
         FieldIndex, Il2CppFieldDefinition, Il2CppTypeDefinition, MethodIndex, ParameterIndex,
-        TypeDefinitionIndex, TypeIndex,
+        TypeDefinitionIndex,
     },
     runtime_metadata::{Il2CppMethodSpec, Il2CppType, Il2CppTypeEnum, TypeData},
 };
@@ -24,7 +23,7 @@ use crate::{
     generate::{
         cs_members::CsField,
         type_extensions::{
-            Il2CppTypeEnumExtensions, ParameterDefinitionExtensions, TypeExtentions,
+            ParameterDefinitionExtensions, TypeExtentions,
         },
     },
     helpers::cursor::ReadBytesExtensions,
@@ -32,9 +31,8 @@ use crate::{
 };
 
 use super::{
-    cs_context_collection::TypeContextCollection,
     cs_members::{
-        CsConstructor, CsGenericTemplate, CsMember, CsMethod, CsMethodData, CsParam, CsParamFlags,
+        CsConstructor, CsGenericTemplate, CsMethod, CsMethodData, CsParam, CsParamFlags,
         CsProperty, CsValue,
     },
     cs_type_tag::CsTypeTag,
@@ -92,8 +90,8 @@ pub struct CsType {
     /// contains the array of generic Il2CppType indexes
     ///
     /// for generic instantiation e.g Foo<T> -> Foo<int>
-    pub generic_instantiations_args_types: Option<Vec<usize>>, // GenericArg idx -> Instantiation Arg
-    pub method_generic_instantiation_map: HashMap<MethodIndex, Vec<TypeIndex>>, // MethodIndex -> Generic Args
+    pub generic_instantiations_args_types: Option<Vec<ResolvedType>>, // GenericArg idx -> Instantiation Arg
+    pub method_generic_instantiation_map: HashMap<MethodIndex, Vec<ResolvedType>>, // MethodIndex -> Generic Args
 
     pub is_interface: bool,
     pub nested_types: HashSet<CsTypeTag>,
@@ -125,23 +123,56 @@ impl CsType {
     ////
     ///
     ///
-
     pub fn add_method_generic_inst(
         &mut self,
         method_spec: &Il2CppMethodSpec,
-        metadata: &CordlMetadata,
+        type_resolver: &TypeResolver,
     ) -> &mut CsType {
         assert!(method_spec.method_inst_index != u32::MAX);
 
+        let metadata = type_resolver.cordl_metadata;
         let inst = metadata
             .metadata_registration
             .generic_insts
             .get(method_spec.method_inst_index as usize)
             .unwrap();
 
-        self.method_generic_instantiation_map.insert(
-            method_spec.method_definition_index,
-            inst.types.iter().map(|t| *t as TypeIndex).collect(),
+        let args = inst
+            .types
+            .iter()
+            .map(|t| type_resolver.resolve_type(self, *t as usize, TypeUsage::TypeName, true))
+            .collect();
+        self.method_generic_instantiation_map
+            .insert(method_spec.method_definition_index, args);
+
+        self
+    }
+    pub fn add_class_generic_inst(
+        &mut self,
+        generic_inst: &[usize],
+        type_resolver: &TypeResolver,
+    ) -> &mut CsType {
+        let metadata = type_resolver.cordl_metadata;
+
+        let tdi = self.self_tag.get_tdi();
+        let t = tdi.get_type_definition(metadata.metadata);
+
+        // TODO: Come up with a way to avoid this extra call to layout the entire type
+        // We really just want to call it once for a given size and then move on
+        // Every type should have a valid metadata size, even if it is 0
+
+        self.size_info = Some(offsets::get_size_info(
+            t,
+            tdi,
+            Some(&generic_inst),
+            metadata,
+        ));
+
+        self.generic_instantiations_args_types = Some(
+            generic_inst
+                .iter()
+                .map(|t| type_resolver.resolve_type(self, *t, TypeUsage::TypeName, true))
+                .collect(),
         );
 
         self
@@ -151,7 +182,6 @@ impl CsType {
         metadata: &CordlMetadata,
         tdi: TypeDefinitionIndex,
         tag: CsTypeTag,
-        generic_inst_types: Option<&Vec<usize>>,
     ) -> Option<CsType> {
         // let iface = metadata.interfaces.get(t.interfaces_start);
         // Then, handle interfaces
@@ -196,8 +226,7 @@ impl CsType {
         // TODO: Come up with a way to avoid this extra call to layout the entire type
         // We really just want to call it once for a given size and then move on
         // Every type should have a valid metadata size, even if it is 0
-        let size_info: offsets::SizeInfo =
-            offsets::get_size_info(t, tdi, generic_inst_types, metadata);
+        let size_info: offsets::SizeInfo = offsets::get_size_info(t, tdi, None, metadata);
 
         // best results of cordl are when specified packing is strictly what is used, but experimentation may be required
         let packing = size_info.specified_packing;
@@ -228,7 +257,7 @@ impl CsType {
             is_interface: t.is_interface(),
             generic_template: cpp_template,
 
-            generic_instantiations_args_types: generic_inst_types.cloned(),
+            generic_instantiations_args_types: Default::default(),
             method_generic_instantiation_map: Default::default(),
 
             nested_types: Default::default(),
@@ -301,7 +330,12 @@ impl CsType {
         CsParam {
             name: param.name(metadata.metadata).to_owned(),
             def_value,
-            il2cpp_ty: type_resolver.resolve_type(self, param_type, TypeUsage::Parameter),
+            il2cpp_ty: type_resolver.resolve_type(
+                self,
+                param.type_index as usize,
+                TypeUsage::Parameter,
+                false,
+            ),
             modifiers: CsParamFlags::empty(),
         }
     }
@@ -348,14 +382,6 @@ impl CsType {
                 debug!(
                     "Computing offsets for TDI: {:?}, as it has a size of 0",
                     tdi
-                );
-                let _resulting_size = offsets::layout_fields(
-                    metadata,
-                    t,
-                    tdi,
-                    self.generic_instantiations_args_types.as_ref(),
-                    Some(&mut offsets),
-                    false,
                 );
             }
         }
@@ -410,7 +436,7 @@ impl CsType {
 
         fn get_size(
             field: &Il2CppFieldDefinition,
-            gen_args: Option<&Vec<usize>>,
+            gen_args: Option<&Vec<ResolvedType>>,
             metadata: &&CordlMetadata<'_>,
         ) -> usize {
             let f_type = metadata
@@ -419,7 +445,13 @@ impl CsType {
                 .get(field.type_index as usize)
                 .unwrap();
 
-            let sa = offsets::get_il2cpptype_sa(metadata, f_type, gen_args);
+            let generic_inst_types: Option<Vec<usize>> =
+                gen_args.map(|list| list.iter().map(|t| t.ty).collect_vec());
+            let sa = offsets::get_il2cpptype_sa(
+                metadata,
+                f_type,
+                generic_inst_types.as_ref().map(|v| v.as_slice()),
+            );
 
             sa.size
         }
@@ -452,7 +484,7 @@ impl CsType {
 
                 CsField {
                     name: f_name.to_owned(),
-                    field_ty: type_resolver.resolve_type(self, f_type, TypeUsage::Field),
+                    field_ty: type_resolver.resolve_type(self, field.type_index as usize, TypeUsage::Field, true),
                     offset: f_offset,
                     size: f_size,
                     instance: !f_type.is_static() && !f_type.is_constant(),
@@ -507,7 +539,12 @@ impl CsType {
             );
             assert!(is_ref_type, "Not a class, object or generic inst!");
 
-            self.parent = Some(type_resolver.resolve_type(self, parent_type, TypeUsage::TypeName));
+            self.parent = Some(type_resolver.resolve_type(
+                self,
+                t.parent_index as usize,
+                TypeUsage::TypeName,
+                true,
+            ));
         }
     }
 
@@ -519,8 +556,13 @@ impl CsType {
         for &interface_index in t.interfaces(metadata.metadata) {
             let int_ty = &metadata.metadata_registration.types[interface_index as usize];
 
-            self.interfaces
-                .push(type_resolver.resolve_type(self, int_ty, TypeUsage::TypeName));
+            let resolved = type_resolver.resolve_type(
+                self,
+                interface_index as usize,
+                TypeUsage::TypeName,
+                true,
+            );
+            self.interfaces.push(resolved);
         }
     }
 
@@ -577,23 +619,16 @@ impl CsType {
                 .get(p_type_index)
                 .unwrap();
 
-            let _method_map = |p: MethodIndex| {
-                let method_calc = metadata.method_calculations.get(&p).unwrap();
-                CsMethodData {
-                    estimated_size: method_calc.estimated_size,
-                    addrs: method_calc.addrs,
-                }
-            };
-
             let _abstr = p_getter.is_some_and(|p| p.is_abstract_method())
                 || p_setter.is_some_and(|p| p.is_abstract_method());
 
             let index = p_getter.is_some_and(|p| p.parameter_count > 0);
 
             // Need to include this type
+            let prop_ty = type_resolver.resolve_type(self, p_type_index, TypeUsage::Property, true);
             self.properties.push(CsProperty {
                 name: p_name.to_owned(),
-                prop_ty: type_resolver.resolve_type(self, p_type, TypeUsage::Property),
+                prop_ty,
                 // methods generated in make_methods
                 setter: p_setter.map(|m| m.name(metadata.metadata).to_string()),
                 getter: p_getter.map(|m| m.name(metadata.metadata).to_string()),
@@ -671,14 +706,6 @@ impl CsType {
             })
             .flatten();
 
-        let _resolved_generic_types = literal_types.map(|literal_types| {
-            literal_types
-                .iter()
-                .map(|t| &metadata.metadata_registration.types[*t as usize])
-                .map(|t| CsTypeTag::from_type_data(t.data, metadata.metadata))
-                .collect_vec()
-        });
-
         let method_calc = metadata.method_calculations.get(&method_index);
 
         let mut method_decl = CsMethod {
@@ -691,8 +718,15 @@ impl CsType {
                 method.is_final_method()
             )
             .into(),
+            method_flags: todo!(),
+            method_index,
             name: m_name.to_string(),
-            return_type: type_resolver.resolve_type(self, m_ret_type, TypeUsage::ReturnType),
+            return_type: type_resolver.resolve_type(
+                self,
+                method.return_type as usize,
+                TypeUsage::ReturnType,
+                true,
+            ),
             parameters: m_params_no_def.clone(),
             instance: !method.is_static_method(),
             template: template.clone(),
@@ -714,6 +748,7 @@ impl CsType {
             method_decl.method_data = Some(CsMethodData {
                 addrs: method_calc.addrs,
                 estimated_size: method_calc.estimated_size,
+                slot: (method.slot != u16::MAX).then_some(method.slot),
             })
         }
 
@@ -822,7 +857,10 @@ impl CsType {
         ty
     }
 
-    fn field_default_value(metadata: &CordlMetadata, field_index: FieldIndex) -> Option<CsValue> {
+    pub fn field_default_value(
+        metadata: &CordlMetadata,
+        field_index: FieldIndex,
+    ) -> Option<CsValue> {
         metadata
             .metadata
             .global_metadata

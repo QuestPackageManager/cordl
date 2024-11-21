@@ -1,22 +1,18 @@
-use std::borrow::Cow;
-
 use brocolib::{
-    global_metadata::{GenericParameterIndex, MethodIndex, TypeIndex},
+    global_metadata::{GenericParameterIndex, MethodIndex},
     runtime_metadata::{Il2CppType, Il2CppTypeEnum, TypeData},
 };
-use clap::builder::Str;
+
 use itertools::Itertools;
 use log::warn;
 
 use crate::generate::{
     cs_context_collection::TypeContextCollection,
-    cs_type::{CsType, CsTypeRequirements},
+    cs_type::CsType,
     cs_type_tag::CsTypeTag,
-    metadata::{self, CordlMetadata},
-    type_extensions::TypeDefinitionIndexExtensions,
+    metadata::CordlMetadata,
+    type_extensions::{ParameterDefinitionExtensions, TypeDefinitionIndexExtensions},
 };
-
-use super::name_components::NameComponents;
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum TypeUsage {
@@ -50,27 +46,34 @@ pub enum ResolvedTypeData {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ResolvedType {
     pub data: ResolvedTypeData,
-    pub ty: TypeIndex
+    pub ty: usize,
 }
 
-pub struct TypeResolver<'a> {
-    pub cordl_metadata: &'a CordlMetadata<'a>,
+pub struct TypeResolver<'a, 'b> {
+    pub cordl_metadata: &'a CordlMetadata<'b>,
     pub collection: &'a TypeContextCollection,
 }
 
-impl<'a> TypeResolver<'a> {
+impl<'a, 'b> TypeResolver<'a, 'b> {
     pub fn resolve_type(
         &self,
         declaring_cs_type: &mut CsType,
-        to_resolve_idx: TypeIndex,
+        to_resolve_idx: usize,
         typ_usage: TypeUsage,
+        add_include: bool,
     ) -> ResolvedType {
-        let to_resolve = &self.cordl_metadata.metadata_registration.types[to_resolve_idx as usize];
-        let data = self.resolve_type_recurse(declaring_cs_type, to_resolve, typ_usage, true);
+        let to_resolve = &self.cordl_metadata.metadata_registration.types[to_resolve_idx];
+        let data = self.resolve_type_recurse(
+            declaring_cs_type,
+            to_resolve,
+            to_resolve_idx,
+            typ_usage,
+            add_include,
+        );
 
-        ResolvedType{
+        ResolvedType {
             data,
-            ty: to_resolve,
+            ty: to_resolve_idx,
         }
     }
 
@@ -79,6 +82,7 @@ impl<'a> TypeResolver<'a> {
         &self,
         declaring_cs_type: &mut CsType,
         to_resolve: &Il2CppType,
+        to_resolve_idx: usize,
         typ_usage: TypeUsage,
         add_include: bool,
     ) -> ResolvedTypeData {
@@ -169,11 +173,10 @@ impl<'a> TypeResolver<'a> {
             Il2CppTypeEnum::Szarray => {
                 let generic = match to_resolve.data {
                     TypeData::TypeIndex(e) => {
-                        let ty = &metadata.metadata_registration.types[e];
 
-                        self.resolve_type_recurse(
+                        self.resolve_type(
                             declaring_cs_type,
-                            ty,
+                            e,
                             typ_usage,
                             add_include
                         )
@@ -250,14 +253,14 @@ impl<'a> TypeResolver<'a> {
                     let generic_resolved_args = new_generic_inst_types
                         // let generic_types_formatted = new_generic_inst_types
                         .iter()
-                        .map(|t| mr.types.get(*t).unwrap())
-                        .map(|gen_arg_t| {
+                        .map(|gen_arg_t_idx| {
+                            let gen_arg_ty = mr.types.get(*gen_arg_t_idx).unwrap();
                             // we must include if the type is a value type
-                            let should_include = gen_arg_t.valuetype && add_include;
+                            let should_include = gen_arg_ty.valuetype && add_include;
 
-                            let t =self.resolve_type_recurse(
+                            let t =self.resolve_type(
                                 declaring_cs_type,
-                                gen_arg_t,
+                                *gen_arg_t_idx,
                                 TypeUsage::GenericArg,
                                 should_include
                             );
@@ -265,10 +268,10 @@ impl<'a> TypeResolver<'a> {
                         })
                         .collect_vec();
 
-                    let generic_type_def = &mr.types[generic_class.type_index];
-                    let generic_resolved_type = self.resolve_type_recurse(
+
+                    let generic_resolved_type = self.resolve_type(
                         declaring_cs_type,
-                        generic_type_def,
+                        generic_class.type_index,
                         typ_usage,
                         add_include
                     );
@@ -284,10 +287,9 @@ impl<'a> TypeResolver<'a> {
             Il2CppTypeEnum::Ptr => {
                 let ptr_type = match to_resolve.data {
                     TypeData::TypeIndex(e) => {
-                        let ty = &metadata.metadata_registration.types[e];
-                        self.resolve_type_recurse(
+                        self.resolve_type(
                             declaring_cs_type,
-                            ty,
+                            e,
                             typ_usage,
                             add_include
                         )
@@ -302,11 +304,17 @@ impl<'a> TypeResolver<'a> {
         };
 
         if to_resolve.is_param_out() || (to_resolve.byref && !to_resolve.valuetype) {
-            return ResolvedTypeData::ByRef(ret);
+            return ResolvedTypeData::ByRef(Box::new(ResolvedType {
+                data: ret,
+                ty: to_resolve_idx,
+            }));
         }
 
         if to_resolve.is_param_in() {
-            return ResolvedTypeData::ByRefConst(ret);
+            return ResolvedTypeData::ByRefConst(Box::new(ResolvedType {
+                data: ret,
+                ty: to_resolve_idx,
+            }));
         }
 
         ret

@@ -1,5 +1,5 @@
 use bitflags::bitflags;
-use brocolib::global_metadata::TypeIndex;
+use brocolib::global_metadata::{MethodIndex, TypeIndex};
 use bytes::Bytes;
 use itertools::Itertools;
 
@@ -64,6 +64,7 @@ pub enum CsMember {}
 pub struct CsMethodData {
     pub estimated_size: usize,
     pub addrs: u64,
+    pub slot: Option<u16>,
 }
 
 #[derive(Clone, Debug)]
@@ -135,7 +136,7 @@ pub struct CsField {
     pub field_ty: ResolvedType,
     pub instance: bool,
     pub readonly: bool,
-    // is C# const
+    // is C# const (constant evaluated)
     // could be assumed from value though
     pub is_const: bool,
 
@@ -183,10 +184,16 @@ pub struct CsParam {
 }
 
 bitflags! {
-    pub struct MethodModifiers: u32 {
+    #[derive(Clone, Debug, PartialEq)]
+    pub struct CSMethodFlags: u32 {
         const STATIC = 0b00000001;
         const VIRTUAL = 0b00000010;
         const OPERATOR = 0b00000100;
+        const ABSTRACT = 0b00001000;
+        const OVERRIDE = 0b00010000;
+        const FINAL = 0b00100000;
+        const EXTERN = 0b01000000;
+        const UNSAFE = 0b10000000;
     }
 }
 
@@ -194,12 +201,14 @@ bitflags! {
 #[derive(Clone, Debug, PartialEq)]
 pub struct CsMethod {
     pub name: String,
+    pub method_index: MethodIndex,
     pub return_type: ResolvedType,
     pub parameters: Vec<CsParam>,
     pub instance: bool,
     pub template: Option<CsGenericTemplate>,
     pub method_data: Option<CsMethodData>,
     pub brief: Option<String>,
+    pub method_flags: CSMethodFlags,
 }
 
 // TODO: Generics
