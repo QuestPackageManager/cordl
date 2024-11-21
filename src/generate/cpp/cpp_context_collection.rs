@@ -22,7 +22,7 @@ use super::{
 pub struct CppContextCollection {
     // Should always be a TypeDefinitionIndex
     all_contexts: HashMap<CsTypeTag, CppContext>,
-    alias_context: HashMap<CsTypeTag, CsTypeTag>,
+    pub alias_context: HashMap<CsTypeTag, CsTypeTag>,
     filled_types: HashSet<CsTypeTag>,
     filling_types: HashSet<CsTypeTag>,
     borrowing_types: HashSet<CsTypeTag>,
@@ -36,6 +36,7 @@ impl CppContextCollection {
     ) -> CppContextCollection {
         let mut cpp_collection = CppContextCollection::default();
 
+        info!("Making CppContextCollection from TypeContextCollection");
         for (tag, context) in collection.get() {
             cpp_collection
                 .all_contexts
@@ -43,6 +44,7 @@ impl CppContextCollection {
         }
         cpp_collection.alias_context = collection.alias_context;
 
+        info!("Filling typedefs in CppContextCollection");
         for (_, context) in collection.all_contexts {
             for (tag, cs_type) in context.typedef_types {
                 cpp_collection.fill(tag, cs_type, metadata, config);

@@ -49,6 +49,7 @@ pub fn run_cpp(
 
     const write_all: bool = true;
     if write_all {
+        info!("Writing all");
         cpp_context_collection.write_all(&STATIC_CONFIG)?;
         cpp_context_collection.write_namespace_headers()?;
     } else {

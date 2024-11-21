@@ -24,7 +24,6 @@ pub struct TypeContextCollection {
     // Should always be a TypeDefinitionIndex
     pub all_contexts: HashMap<CsTypeTag, TypeContext>,
     pub alias_context: HashMap<CsTypeTag, CsTypeTag>,
-    pub alias_nested_type_to_parent: HashMap<CsTypeTag, CsTypeTag>,
     filled_types: HashSet<CsTypeTag>,
     filling_types: HashSet<CsTypeTag>,
     borrowing_types: HashSet<CsTypeTag>,
@@ -106,9 +105,7 @@ impl TypeContextCollection {
             let nested_tag = CsTypeTag::TypeDefinitionIndex(*nested_type_tdi);
 
             self.alias_type_to_context(nested_tag, root_tag);
-            if nested {
-                self.alias_type_to_parent(nested_tag, owner_tag);
-            }
+     
             self.alias_nested_types_il2cpp(*nested_type_tdi, root_tag, metadata, nested);
         }
     }
@@ -130,31 +127,11 @@ impl TypeContextCollection {
         self.alias_context.insert(src, dest);
     }
 
-    pub fn alias_type_to_parent(&mut self, src: CsTypeTag, dest: CsTypeTag) {
-        // if context_check && !self.all_contexts.contains_key(&dest) {
-        //     panic!("Aliased nested type {src:?} to {dest:?} doesn't have a parent");
-        // }
-        if src == dest {
-            panic!("Self {src:?} can't point to dest!")
-        }
-        if self.alias_nested_type_to_parent.get(&dest) == Some(&src) {
-            panic!("Parent {dest:?} can't be assigned to src {src:?}!")
-        }
-        self.alias_nested_type_to_parent.insert(src, dest);
-    }
-
     pub fn get_context_root_tag(&self, ty: CsTypeTag) -> CsTypeTag {
         self.alias_context
             .get(&ty)
             .cloned()
             // .map(|t| self.get_context_root_tag(*t))
-            .unwrap_or(ty)
-    }
-    pub fn get_parent_or_self_tag(&self, ty: CsTypeTag) -> CsTypeTag {
-        self.alias_nested_type_to_parent
-            .get(&ty)
-            .cloned()
-            .map(|t| self.get_parent_or_self_tag(t))
             .unwrap_or(ty)
     }
 
@@ -209,7 +186,6 @@ impl TypeContextCollection {
 
                 // Unnest type does not alias to another context or type
                 self.alias_context.remove(&ty_tag);
-                self.alias_nested_type_to_parent.remove(&ty_tag);
 
                 self.all_contexts.insert(ty_tag, context);
                 self.all_contexts.get_mut(&ty_tag)
@@ -487,7 +463,6 @@ impl TypeContextCollection {
         // Now do children
         for cpp_type in context.typedef_types.values() {
             for n in &cpp_type.nested_types {
-                self.alias_type_to_parent(*n, cpp_type.self_tag);
                 self.alias_type_to_context(*n, context_root_tag);
             }
         }
@@ -500,7 +475,6 @@ impl TypeContextCollection {
     ///
     pub fn get_cs_type(&self, ty: CsTypeTag) -> Option<&CsType> {
         let context_root_tag = self.get_context_root_tag(ty);
-        let _parent_root_tag = self.get_parent_or_self_tag(ty);
 
         self.get_context(context_root_tag)
             .and_then(|c| c.get_types().get(&ty))
@@ -511,7 +485,6 @@ impl TypeContextCollection {
     ///
     pub fn get_cs_type_mut(&mut self, ty: CsTypeTag) -> Option<&mut CsType> {
         let context_root_tag = self.get_context_root_tag(ty);
-        let _parent_root_tag = self.get_parent_or_self_tag(ty);
         self.get_context_mut(context_root_tag)
             .and_then(|c| c.get_types_mut().get_mut(&ty))
     }
@@ -525,8 +498,6 @@ impl TypeContextCollection {
             panic!("Already borrowing this context!");
         }
 
-        let declaring_ty = self.get_parent_or_self_tag(ty);
-
         let context = self.all_contexts.get_mut(&context_ty).unwrap();
 
         // TODO: Needed?
@@ -534,8 +505,8 @@ impl TypeContextCollection {
 
         // search in root
         // clone to avoid failing il2cpp_name
-        let Some(declaring_cpp_type) = context.typedef_types.get(&declaring_ty).cloned() else {
-            panic!("No type {declaring_ty:#?} found!")
+        let Some(declaring_cpp_type) = context.typedef_types.get(&ty).cloned() else {
+            panic!("No type {ty:#?} found!")
         };
         let _old_tag = declaring_cpp_type.self_tag;
         let new_cpp_ty = func(self, declaring_cpp_type);
@@ -568,7 +539,6 @@ impl TypeContextCollection {
             all_contexts: Default::default(),
             filled_types: Default::default(),
             filling_types: Default::default(),
-            alias_nested_type_to_parent: Default::default(),
             alias_context: Default::default(),
             borrowing_types: Default::default(),
         }

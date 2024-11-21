@@ -92,6 +92,10 @@ impl<'a, 'b> CppNameResolver<'a, 'b> {
                 }
             }
             ResolvedTypeData::Type(cs_type_tag) => {
+                if cs_type_tag == declaring_cpp_type.self_tag {
+                    return declaring_cpp_type.cpp_name_components.clone();
+                }
+
                 let incl_context = self
                     .collection
                     .get_context(cs_type_tag)
@@ -99,7 +103,16 @@ impl<'a, 'b> CppNameResolver<'a, 'b> {
                 let incl_ty = self
                     .collection
                     .get_cpp_type(cs_type_tag)
-                    .unwrap_or_else(|| panic!("Unable to find type {ty:#?}"));
+                    .unwrap_or_else(|| {
+                        let td = &metadata.metadata.global_metadata.type_definitions
+                            [cs_type_tag.get_tdi()];
+
+                            
+                        
+                        println!("ty {cs_type_tag:#?} vs aliased {:#?}", self.collection.alias_context.get(&cs_type_tag));
+                        println!("{}", incl_context.fundamental_path.display());
+                        panic!("Unable to find type {ty:#?} {}", td.full_name(metadata.metadata, true));
+                    });
 
                 incl_ty.cpp_name_components.clone()
             }
