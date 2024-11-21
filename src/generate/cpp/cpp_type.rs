@@ -22,6 +22,7 @@ use crate::{
         },
         cs_type::CsType,
         cs_type_tag::CsTypeTag,
+        metadata::{self, CordlMetadata},
         offsets::SizeInfo,
         type_extensions::{
             TypeDefinitionExtensions, TypeDefinitionIndexExtensions, TypeExtentions,
@@ -421,6 +422,35 @@ impl CppType {
         }
     }
 
+    pub fn nested_fixup(
+        &mut self,
+        cs_type: &CsType,
+        metadata: &CordlMetadata,
+        config: &CppGenerationConfig,
+    ) {
+        // Nested type unnesting fix
+        let Some(declaring_tag) = cs_type.declaring_ty.as_ref() else {
+            return;
+        };
+
+        let declaring_td = declaring_tag
+            .get_tdi()
+            .get_type_definition(metadata.metadata);
+
+        let combined_name = self
+            .cpp_name_components
+            .clone()
+            .remove_generics()
+            .remove_pointer()
+            .combine_all();
+
+        self.cpp_name_components.namespace =
+            Some(config.namespace_cpp(declaring_td.namespace(metadata.metadata)));
+        self.cpp_name_components.declaring_types = None; // remove declaring types
+
+        self.cpp_name_components.name = config.sanitize_to_cpp_name(&combined_name);
+    }
+
     pub fn fill(
         &mut self,
         cs_type: CsType,
@@ -548,7 +578,7 @@ impl CppType {
         name_resolver: &CppNameResolver,
         config: &CppGenerationConfig,
     ) -> CppParam {
-        let ty = name_resolver.resolve_name(self, p.il2cpp_ty, TypeUsage::Parameter, true, false);
+        let ty = name_resolver.resolve_name(self, p.il2cpp_ty, TypeUsage::Parameter, false, false);
         CppParam {
             name: config.name_cpp(&p.name),
             ty: ty.combine_all(),

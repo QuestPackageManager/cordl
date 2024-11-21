@@ -10,7 +10,7 @@ use crate::{
 };
 
 use super::{
-    cpp_context_collection::CppContextCollection, cpp_members::CppInclude, cpp_type::CppType,
+    cpp_context_collection::CppContextCollection, cpp_members::{CppForwardDeclare, CppInclude}, cpp_type::CppType,
 };
 
 pub const VALUE_WRAPPER_TYPE: &str = "::bs_hook::ValueType";
@@ -147,6 +147,11 @@ impl<'a, 'b> CppNameResolver<'a, 'b> {
                         Some(incl_ty),
                         CppInclude::new_context_typedef(incl_context),
                     );
+                } else {
+                    declaring_cpp_type.requirements.add_forward_declare((
+                        CppForwardDeclare::from_cpp_type(incl_ty),
+                        CppInclude::new_context_typedef(incl_context),
+                    ));
                 }
 
                 if add_include_impl {

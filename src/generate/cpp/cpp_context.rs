@@ -111,8 +111,10 @@ impl CppContext {
         };
 
         for (tag, ty) in &context.typedef_types {
-            x.typedef_types
-                .insert(*tag, CppType::make_cpp_type(*tag, ty, config));
+            let mut cpp_ty = CppType::make_cpp_type(*tag, ty, config);
+            cpp_ty.nested_fixup(ty, metadata, config);
+
+            x.typedef_types.insert(*tag, cpp_ty);
         }
 
         x

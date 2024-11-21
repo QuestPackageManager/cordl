@@ -39,7 +39,7 @@ impl TypeContext {
 
         match CsType::make_cs_type(metadata, tdi, tag) {
             Some(cpptype) => {
-                x.insert_cpp_type(cpptype);
+                x.insert_cs_type(cpptype);
             }
             None => {
                 info!(
@@ -52,13 +52,7 @@ impl TypeContext {
         x
     }
 
-    pub fn insert_cpp_type(&mut self, cpp_type: CsType) {
-        if cpp_type.nested {
-            panic!(
-                "Cannot have a root type as a nested type! {}",
-                &cpp_type.cs_name_components.combine_all()
-            );
-        }
+    pub fn insert_cs_type(&mut self, cpp_type: CsType) {
         self.typedef_types.insert(cpp_type.self_tag, cpp_type);
     }
 }

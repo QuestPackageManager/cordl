@@ -77,7 +77,7 @@ impl TypeContextCollection {
             self.all_contexts
                 .get_mut(&context_tag)
                 .expect("No cpp context")
-                .insert_cpp_type(cpp_type);
+                .insert_cs_type(cpp_type);
         }
     }
 
@@ -193,7 +193,7 @@ impl TypeContextCollection {
                 // self.alias_type_to_context(new_cpp_type.self_tag, context_root_tag, true);
 
                 // context.insert_cpp_type(stub);
-                context.insert_cpp_type(new_cpp_type);
+                context.insert_cs_type(new_cpp_type);
 
                 Some(context)
             }
@@ -292,7 +292,7 @@ impl TypeContextCollection {
         let context = self.get_context_mut(generic_class_ty_data).unwrap();
 
         // context.insert_cpp_type(stub);
-        context.insert_cpp_type(new_cpp_type);
+        context.insert_cs_type(new_cpp_type);
 
         Some(context)
     }
@@ -508,7 +508,7 @@ impl TypeContextCollection {
 
         let context = self.all_contexts.get_mut(&context_ty).unwrap();
 
-        context.insert_cpp_type(new_cpp_ty);
+        context.insert_cs_type(new_cpp_ty);
 
         self.borrowing_types.remove(&context_ty);
     }

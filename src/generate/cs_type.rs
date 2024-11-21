@@ -61,7 +61,7 @@ impl CsTypeRequirements {
 #[derive(Debug, Clone)]
 pub struct CsType {
     pub self_tag: CsTypeTag,
-    pub nested: bool,
+    pub declaring_ty: Option<CsTypeTag>,
 
     pub size_info: Option<SizeInfo>,
     pub packing: Option<u8>,
@@ -212,7 +212,16 @@ impl CsType {
         }
 
         // all nested types are unnested
-        let nested = false; // t.declaring_type_index != u32::MAX;
+        let declaring_ty = (t.declaring_type_index != u32::MAX).then(|| {
+            metadata
+                .metadata_registration
+                .types
+                .get(t.declaring_type_index as usize)
+                .unwrap()
+        });
+        let declaring_tag =
+            declaring_ty.map(|t| CsTypeTag::from_type_data(t.data, metadata.metadata));
+
         let cs_name_components = t.get_name_components(metadata.metadata);
         let is_pointer = cs_name_components.is_pointer;
 
@@ -227,7 +236,7 @@ impl CsType {
         // Modified later for nested types
         let cpptype = CsType {
             self_tag: tag,
-            nested,
+            declaring_ty: declaring_tag,
 
             size_info: Some(size_info),
             packing,
