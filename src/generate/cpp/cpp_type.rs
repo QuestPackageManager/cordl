@@ -650,6 +650,10 @@ impl CppType {
     }
 
     fn make_parent(&mut self, parent: Option<ResolvedType>, name_resolver: &CppNameResolver) {
+        if self.is_enum_type || self.is_value_type {
+            return;
+        }
+        
         let Some(parent) = parent else {
             return;
         };
