@@ -530,6 +530,20 @@ impl CppType {
             self.create_size_padding(cs_type.size_info);
         }
 
+        let dependencies = self
+            .requirements
+            .depending_types
+            .iter()
+            .map(|t| {
+                t.get_tdi()
+                    .get_type_definition(metadata.metadata)
+                    .full_name(metadata.metadata, true)
+            })
+            .sorted()
+            .collect_vec();
+        self.prefix_comments
+            .push(format!("Dependencies {}", dependencies.join(", ")));
+
         // if let Some(func) = metadata.custom_type_handler.get(&tdi) {
         //     func(self)
         // }
@@ -669,8 +683,7 @@ impl CppType {
         let cordl_metadata = name_resolver.cordl_metadata;
         let parent_ty = &cordl_metadata.metadata_registration.types[parent.ty];
 
-        let parent_name =
-            name_resolver.resolve_name(self, &parent, TypeUsage::TypeName, true);
+        let parent_name = name_resolver.resolve_name(self, &parent, TypeUsage::TypeName, true);
 
         let parent_tag = CsTypeTag::from_type_data(parent_ty.data, cordl_metadata.metadata);
         let parent_tdi: TypeDefinitionIndex = parent_tag.into();
@@ -872,12 +885,8 @@ impl CppType {
             Self::create_ref_constructor(self, method, &m_params_with_def, &template);
         }
 
-        let mut cpp_ret_type = name_resolver.resolve_name(
-            self,
-            &method.return_type,
-            TypeUsage::ReturnType,
-            false,
-        );
+        let mut cpp_ret_type =
+            name_resolver.resolve_name(self, &method.return_type, TypeUsage::ReturnType, false);
 
         if cpp_ret_type.combine_all() == "System.Enum" {
             self.requirements.needs_enum_include();
@@ -1108,9 +1117,7 @@ impl CppType {
                 .cloned()
                 .map(|g| {
                     g.iter()
-                        .map(|t| {
-                            name_resolver.resolve_name(self, t, TypeUsage::TypeName, false)
-                        })
+                        .map(|t| name_resolver.resolve_name(self, t, TypeUsage::TypeName, false))
                         .map(|n| n.combine_all())
                         .collect_vec()
                 });
