@@ -301,20 +301,34 @@ impl<'a, 'b> TypeResolver<'a, 'b> {
             _ => panic!("/* UNKNOWN TYPE! {to_resolve:?} */"),
         };
 
-        if to_resolve.is_param_out() || (to_resolve.byref && !to_resolve.valuetype) {
+        let byref_allowed = matches!(
+            typ_usage,
+            TypeUsage::Parameter
+                | TypeUsage::ReturnType
+                | TypeUsage::TypeName
+                | TypeUsage::GenericArg
+        );
+
+        if (to_resolve.is_param_out() || (to_resolve.byref && !to_resolve.valuetype)) && byref_allowed {
             return ResolvedTypeData::ByRef(Box::new(ResolvedType {
-                data: ret,
                 ty: to_resolve_idx,
+                data: ret,
             }));
         }
 
-        if to_resolve.is_param_in() {
+        if to_resolve.is_param_in() && byref_allowed {
             return ResolvedTypeData::ByRefConst(Box::new(ResolvedType {
-                data: ret,
                 ty: to_resolve_idx,
+                data: ret,
             }));
         }
 
         ret
+    }
+}
+
+impl ResolvedType {
+    pub fn get_type<'a>(&self, metadata: &CordlMetadata<'a>) -> &'a Il2CppType {
+        &metadata.metadata_registration.types[self.ty]
     }
 }
