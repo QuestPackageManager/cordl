@@ -377,7 +377,7 @@ impl CsType {
             .as_ref()
             .unwrap()[tdi.index() as usize];
 
-        let offsets = Vec::<u32>::new();
+        let mut offsets = Vec::<u32>::new();
         if let Some(sz) = offsets::get_size_of_type_table(metadata, tdi) {
             if sz.instance_size == 0 {
                 // At this point we need to compute the offsets
@@ -386,6 +386,19 @@ impl CsType {
                     tdi
                 );
             }
+
+            let generic_inst_types = self
+                .generic_instantiations_args_types
+                .as_ref()
+                .map(|v| v.iter().map(|t| t.ty).collect_vec());
+            offsets::layout_fields(
+                metadata,
+                t,
+                tdi,
+                generic_inst_types.as_deref(),
+                Some(&mut offsets),
+                false,
+            );
         }
         let mut offset_iter = offsets.iter();
 
