@@ -32,10 +32,8 @@ impl<'a, 'b> CppNameResolver<'a, 'b> {
         declaring_cpp_type: &mut CppType,
         ty: &ResolvedType,
         type_usage: TypeUsage,
-        add_include_def: bool,
-        mut add_include_impl: bool,
+        hard_include: bool,
     ) -> NameComponents {
-        add_include_impl = false;
         let metadata = self.cordl_metadata;
         match &ty.data {
             ResolvedTypeData::Array(array_type) => {
@@ -43,8 +41,7 @@ impl<'a, 'b> CppNameResolver<'a, 'b> {
                     declaring_cpp_type,
                     array_type,
                     type_usage,
-                    add_include_def,
-                    add_include_impl,
+                    hard_include,
                 );
                 let generic_formatted = generic.combine_all();
 
@@ -64,8 +61,7 @@ impl<'a, 'b> CppNameResolver<'a, 'b> {
                     declaring_cpp_type,
                     resolved_type,
                     type_usage,
-                    add_include_def,
-                    add_include_impl,
+                    hard_include,
                 );
                 let generic_types_formatted = vec
                     .iter()
@@ -74,8 +70,7 @@ impl<'a, 'b> CppNameResolver<'a, 'b> {
                             declaring_cpp_type,
                             r,
                             type_usage,
-                            *inc && add_include_def,
-                            *inc && add_include_impl,
+                            *inc && hard_include,
                         )
                     })
                     .map(|n| n.combine_all())
@@ -109,8 +104,7 @@ impl<'a, 'b> CppNameResolver<'a, 'b> {
                     declaring_cpp_type,
                     resolved_type,
                     type_usage,
-                    add_include_def,
-                    add_include_impl,
+                    hard_include,
                 );
                 NameComponents {
                     namespace: Some("cordl_internals".into()),
@@ -151,23 +145,27 @@ impl<'a, 'b> CppNameResolver<'a, 'b> {
                         );
                     });
 
-                if add_include_def {
+                if hard_include {
                     declaring_cpp_type.requirements.add_dependency(incl_ty);
                 }
 
-                let is_own_context = resolved_context_root_tag != self_context_root_tag;
+                let is_own_context = resolved_context_root_tag == self_context_root_tag;
 
-                if add_include_def {
-                    match is_own_context {
+                if !is_own_context {
+                    match hard_include {
                         // can add include
-                        false => {
+                        true => {
                             declaring_cpp_type.requirements.add_def_include(
                                 Some(incl_ty),
                                 CppInclude::new_context_typedef(incl_context),
                             );
+                            declaring_cpp_type.requirements.add_impl_include(
+                                Some(incl_ty),
+                                CppInclude::new_context_typeimpl(incl_context),
+                            );
                         }
                         // add forward declare
-                        true => {
+                        false => {
                             declaring_cpp_type.requirements.add_forward_declare((
                                 CppForwardDeclare::from_cpp_type(incl_ty),
                                 CppInclude::new_context_typedef(incl_context),
@@ -246,8 +244,7 @@ impl<'a, 'b> CppNameResolver<'a, 'b> {
                     declaring_cpp_type,
                     resolved_type,
                     type_usage,
-                    add_include_def,
-                    add_include_impl,
+                    hard_include,
                 );
                 let generic_formatted = generic.combine_all();
 
@@ -264,8 +261,7 @@ impl<'a, 'b> CppNameResolver<'a, 'b> {
                     declaring_cpp_type,
                     resolved_type,
                     type_usage,
-                    add_include_def,
-                    add_include_impl,
+                    hard_include,
                 );
                 let generic_formatted = generic.combine_all();
 

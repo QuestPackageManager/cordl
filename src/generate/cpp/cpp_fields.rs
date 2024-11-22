@@ -905,7 +905,6 @@ pub fn make_cpp_field_decl(
             field_ty.valuetype
                 || field_ty.ty == Il2CppTypeEnum::Valuetype
                 || field_ty.ty == Il2CppTypeEnum::Enum,
-            false,
         )
         .combine_all();
     let field_decl = CppFieldDecl {
