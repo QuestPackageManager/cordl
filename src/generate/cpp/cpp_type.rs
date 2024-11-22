@@ -893,18 +893,23 @@ impl CppType {
         }
 
         let cpp_m_name = {
-            let cpp_m_name = config.name_cpp(&method.name);
+            let cpp_m_name = config.name_cpp(m_name);
 
-            // Handle operator overloads
-            if cpp_m_name == "op_Implicit" || cpp_m_name == "op_Explicit" {
-                cpp_m_name
-                    + "_"
-                    + &config
-                        .sanitize_to_cpp_name(&cpp_ret_type.combine_all())
-                        .replace('*', "_")
-            } else {
-                cpp_m_name
-            }
+            // static functions with same name and params but
+            // different ret types can exist
+            // so we add their ret types
+            let fixup_name = match cpp_m_name == "op_Implicit" || cpp_m_name == "op_Explicit" {
+                true => {
+                    cpp_m_name
+                        + "_"
+                        + &config
+                            .sanitize_to_cpp_name(&cpp_ret_type.combine_all())
+                            .replace('*', "_")
+                }
+                false => cpp_m_name,
+            };
+
+            fixup_name
         };
 
         let metadata = name_resolver.cordl_metadata;

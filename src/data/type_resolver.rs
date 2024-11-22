@@ -88,9 +88,8 @@ impl<'a, 'b> TypeResolver<'a, 'b> {
     ) -> ResolvedTypeData {
         let typ_tag = to_resolve.data;
         let metadata = self.cordl_metadata;
-        let ctx_collection = self.collection;
 
-        match to_resolve.ty {
+        let ret = match to_resolve.ty {
             // https://learn.microsoft.com/en-us/nimbusml/concepts/types
             // https://en.cppreference.com/w/cpp/types/floating-point
             Il2CppTypeEnum::I1
@@ -113,59 +112,16 @@ impl<'a, 'b> TypeResolver<'a, 'b> {
                         to_resolve.data,
                         self.cordl_metadata.metadata,
                     ));
-                return ResolvedTypeData::Primitive(to_resolve.ty);
+                 ResolvedTypeData::Primitive(to_resolve.ty)
             }
-            _ => (),
-        };
 
-        let ret = match to_resolve.ty {
             Il2CppTypeEnum::Object
             | Il2CppTypeEnum::Valuetype
             | Il2CppTypeEnum::Class
             | Il2CppTypeEnum::Typedbyref
             // ptr types
             | Il2CppTypeEnum::I
-            | Il2CppTypeEnum::U => {
-                let typ_cpp_tag: CsTypeTag = typ_tag.into();
-
-                // Self
-                if typ_cpp_tag == declaring_cs_type.self_tag {
-                    return ResolvedTypeData::Type(typ_cpp_tag);
-                }
-
-                // blacklist if needed
-                if let TypeData::TypeDefinitionIndex(tdi) = to_resolve.data {
-
-                    if metadata.blacklisted_types.contains(&tdi) {
-                        return ResolvedTypeData::Blacklisted(typ_cpp_tag);
-                    }
-                }
-
-                if add_include {
-                    declaring_cs_type.requirements.add_dependency_tag(typ_cpp_tag);
-                }
-
-                let _to_incl = ctx_collection.get_context(typ_cpp_tag).unwrap_or_else(|| {
-                    let t = &typ_cpp_tag.get_tdi().get_type_definition(metadata.metadata);
-
-                    panic!(
-                        "no context for type {to_resolve:?} {}",
-                        t.full_name(metadata.metadata, true)
-                    )
-                });
-
-                let other_context_ty = ctx_collection.get_context_root_tag(typ_cpp_tag);
-                let own_context_ty = ctx_collection.get_context_root_tag(declaring_cs_type.self_tag);
-
-
-                let to_incl_cpp_ty = ctx_collection
-                    .get_cs_type(to_resolve.data.into())
-                    .unwrap_or_else(|| panic!("Unable to get type to include {:?}", to_resolve.data));
-
-                let _own_context = other_context_ty == own_context_ty;
-
-                ResolvedTypeData::Type(to_incl_cpp_ty.self_tag)
-            }
+            | Il2CppTypeEnum::U => self.resolve_ptr(typ_tag, declaring_cs_type, to_resolve, add_include),
 
             // Single dimension array
             Il2CppTypeEnum::Szarray => {
@@ -309,7 +265,9 @@ impl<'a, 'b> TypeResolver<'a, 'b> {
                 | TypeUsage::GenericArg
         );
 
-        if (to_resolve.is_param_out() || (to_resolve.byref && !to_resolve.valuetype)) && byref_allowed {
+        if (to_resolve.is_param_out() || (to_resolve.byref && !to_resolve.valuetype))
+            && byref_allowed
+        {
             return ResolvedTypeData::ByRef(Box::new(ResolvedType {
                 ty: to_resolve_idx,
                 data: ret,
@@ -324,6 +282,42 @@ impl<'a, 'b> TypeResolver<'a, 'b> {
         }
 
         ret
+    }
+
+    fn resolve_ptr(
+        &self,
+        typ_tag: TypeData,
+        declaring_cs_type: &mut CsType,
+        to_resolve: &Il2CppType,
+        add_include: bool,
+    ) -> ResolvedTypeData {
+        let metadata = self.cordl_metadata;
+        let ctx_collection = self.collection;
+        let typ_cpp_tag: CsTypeTag = typ_tag.into();
+        // Self
+        if typ_cpp_tag == declaring_cs_type.self_tag {
+            return ResolvedTypeData::Type(typ_cpp_tag);
+        }
+
+        if let TypeData::TypeDefinitionIndex(tdi) = to_resolve.data
+            && metadata.blacklisted_types.contains(&tdi)
+        {
+            // blacklist if needed
+
+            return ResolvedTypeData::Blacklisted(typ_cpp_tag);
+        }
+
+        if add_include {
+            declaring_cs_type
+                .requirements
+                .add_dependency_tag(typ_cpp_tag);
+        }
+
+        let to_incl_cpp_ty = ctx_collection
+            .get_cs_type(to_resolve.data.into())
+            .unwrap_or_else(|| panic!("Unable to get type to include {:?}", to_resolve.data));
+
+        ResolvedTypeData::Type(to_incl_cpp_ty.self_tag)
     }
 }
 

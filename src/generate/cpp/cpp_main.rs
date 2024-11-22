@@ -26,8 +26,6 @@ pub fn run_cpp(
     cs_collection: TypeContextCollection,
     metadata: &CordlMetadata,
 ) -> color_eyre::Result<()> {
-
-
     let mut cpp_context_collection =
         CppContextCollection::from_cs_collection(cs_collection, metadata, &STATIC_CONFIG);
 
@@ -38,7 +36,6 @@ pub fn run_cpp(
     value_type::register_value_type(metadata, &mut cpp_context_collection)?;
 
     // let e = cpp_context_collection.cyclic_include_check()?;
-
 
     if STATIC_CONFIG.header_path.exists() {
         std::fs::remove_dir_all(&STATIC_CONFIG.header_path)?;

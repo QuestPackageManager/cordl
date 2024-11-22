@@ -71,7 +71,7 @@ impl<'a, 'b> CppNameResolver<'a, 'b> {
                     .map(|(r, inc)| {
                         self.resolve_name(
                             declaring_cpp_type,
-                            &r,
+                            r,
                             type_usage,
                             *inc && add_include_def,
                             *inc && add_include_impl,
@@ -261,7 +261,7 @@ impl<'a, 'b> CppNameResolver<'a, 'b> {
             ResolvedTypeData::ByRefConst(resolved_type) => {
                 let generic = self.resolve_name(
                     declaring_cpp_type,
-                    &*resolved_type,
+                    resolved_type,
                     type_usage,
                     add_include_def,
                     add_include_impl,

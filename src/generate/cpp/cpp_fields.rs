@@ -902,7 +902,9 @@ pub fn make_cpp_field_decl(
             cpp_type,
             &field.field_ty,
             TypeUsage::Field,
-            field_ty.valuetype || field_ty.ty == Il2CppTypeEnum::Valuetype || field_ty.ty == Il2CppTypeEnum::Enum,
+            field_ty.valuetype
+                || field_ty.ty == Il2CppTypeEnum::Valuetype
+                || field_ty.ty == Il2CppTypeEnum::Enum,
             false,
         )
         .combine_all();
