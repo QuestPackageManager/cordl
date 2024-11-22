@@ -45,30 +45,65 @@ pub struct CppContext {
     pub typealias_types: HashSet<(String, CppUsingAlias)>,
 }
 
+/// `CppContext` provides methods to manage and generate C++ type definitions and implementations
+/// based on the provided metadata and configuration.
+///
+/// # Methods
+///
+/// - `get_cpp_type_recursive_mut`: Retrieves a mutable reference to a C++ type based on the given root tag.
+/// - `get_cpp_type_recursive`: Retrieves an immutable reference to a C++ type based on the given root tag.
+/// - `get_include_path`: Returns the include path for the C++ type definitions.
+/// - `get_types`: Returns an immutable reference to the map of C++ types.
+/// - `get_types_mut`: Returns a mutable reference to the map of C++ types.
+/// - `make`: Creates a new `CppContext` instance based on the provided context tag, type context, metadata, and configuration.
+/// - `insert_cpp_type`: Inserts a new C++ type into the context.
+/// - `write`: Writes the C++ type definitions and implementations to the appropriate files.
+///
+/// # Example
+///
+/// ```rust
+/// let cpp_context = CppContext::make(context_tag, &type_context, &metadata, &config);
+/// cpp_context.write(&config)?;
+/// ```
+///
+/// # Errors
+///
+/// The `write` method can return an error if file operations fail, such as creating or removing files and directories.
+///
+/// # Internal Functions
+///
+/// - `write_il2cpp_arg_macros`: Writes IL2CPP argument macros for the given C++ type.
 impl CppContext {
+    /// Retrieves a mutable reference to a C++ type based on the given root tag.
     pub fn get_cpp_type_recursive_mut(&mut self, root_tag: CsTypeTag) -> Option<&mut CppType> {
         let ty = self.typedef_types.get_mut(&root_tag);
 
         ty
     }
+
+    /// Retrieves an immutable reference to a C++ type based on the given root tag.
     pub fn get_cpp_type_recursive(&self, root_tag: CsTypeTag) -> Option<&CppType> {
         let ty = self.typedef_types.get(&root_tag);
 
         ty
     }
 
+    /// Returns the include path for the C++ type definitions.
     pub fn get_include_path(&self) -> &PathBuf {
         &self.typedef_path
     }
 
+    /// Returns an immutable reference to the map of C++ types.
     pub fn get_types(&self) -> &HashMap<CsTypeTag, CppType> {
         &self.typedef_types
     }
 
+    /// Returns a mutable reference to the map of C++ types.
     pub fn get_types_mut(&mut self) -> &mut HashMap<CsTypeTag, CppType> {
         &mut self.typedef_types
     }
 
+    /// Creates a new `CppContext` instance based on the provided context tag, type context, metadata, and configuration.
     pub fn make(
         context_tag: CsTypeTag,
         context: &TypeContext,
@@ -145,26 +180,25 @@ impl CppContext {
         x
     }
 
+    /// Inserts a new C++ type into the context.
     pub fn insert_cpp_type(&mut self, cpp_type: CppType) {
         self.typedef_types.insert(cpp_type.self_tag, cpp_type);
     }
 
+    /// Writes the C++ type definitions and implementations to the appropriate files.
     pub fn write(&self, config: &CppGenerationConfig) -> color_eyre::Result<()> {
         // Write typedef file first
-        if Path::exists(self.typedef_path.as_path()) {
+        if self.typedef_path.exists() {
             remove_file(self.typedef_path.as_path())?;
         }
-        if !Path::is_dir(
-            self.typedef_path
-                .parent()
-                .context("parent is not a directory!")?,
-        ) {
+        if !self
+            .typedef_path
+            .parent()
+            .context("parent is not a directory!")?
+            .is_dir()
+        {
             // Assume it's never a file
-            create_dir_all(
-                self.typedef_path
-                    .parent()
-                    .context("Failed to create all directories!")?,
-            )?;
+            create_dir_all(self.typedef_path.parent().context("Failed to create all directories!")?)?;
         }
 
         let base_path = &config.header_path;
@@ -191,9 +225,12 @@ impl CppContext {
         writeln!(fundamental_writer, "#pragma once")?;
 
         // add IWYU
-        let typedef_include_path = diff_paths(&self.typedef_path, base_path).unwrap();
-        let _typeimpl_include_path = diff_paths(&self.type_impl_path, base_path).unwrap();
-        let fundamental_include_path = diff_paths(&self.fundamental_path, base_path).unwrap();
+        let typedef_include_path = diff_paths(&self.typedef_path, base_path)
+            .context("Failed to get typedef include path")?;
+        let _typeimpl_include_path = diff_paths(&self.type_impl_path, base_path)
+            .context("Failed to get typeimpl include path")?;
+        let fundamental_include_path = diff_paths(&self.fundamental_path, base_path)
+            .context("Failed to get fundamental include path")?;
 
         let fundamental_include_pragma = format!(
             "// IWYU pragma private; include \"{}\"",
@@ -432,10 +469,10 @@ impl CppContext {
             writeln!(fundamental_writer, "// IWYU pragma: end_exports")?;
         }
 
-        // TODO: Write type impl and fundamental files here
         Ok(())
     }
 
+    /// Writes IL2CPP argument macros for the given C++ type.
     fn write_il2cpp_arg_macros(ty: &CppType, writer: &mut CppWriter) -> color_eyre::Result<()> {
         let is_generic_instantiation = ty.generic_instantiations_args_types.is_some();
         if is_generic_instantiation {
