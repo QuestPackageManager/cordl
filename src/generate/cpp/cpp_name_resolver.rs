@@ -155,19 +155,24 @@ impl<'a, 'b> CppNameResolver<'a, 'b> {
                     declaring_cpp_type.requirements.add_dependency(incl_ty);
                 }
 
-                let can_add_include = resolved_context_root_tag != self_context_root_tag;
+                let is_own_context = resolved_context_root_tag != self_context_root_tag;
 
                 if add_include_def {
-                    if can_add_include {
-                        declaring_cpp_type.requirements.add_def_include(
-                            Some(incl_ty),
-                            CppInclude::new_context_typedef(incl_context),
-                        );
-                    } else {
-                        declaring_cpp_type.requirements.add_forward_declare((
-                            CppForwardDeclare::from_cpp_type(incl_ty),
-                            CppInclude::new_context_typedef(incl_context),
-                        ));
+                    match is_own_context {
+                        // can add include
+                        false => {
+                            declaring_cpp_type.requirements.add_def_include(
+                                Some(incl_ty),
+                                CppInclude::new_context_typedef(incl_context),
+                            );
+                        }
+                        // add forward declare
+                        true => {
+                            declaring_cpp_type.requirements.add_forward_declare((
+                                CppForwardDeclare::from_cpp_type(incl_ty),
+                                CppInclude::new_context_typedef(incl_context),
+                            ));
+                        }
                     }
                 }
 
