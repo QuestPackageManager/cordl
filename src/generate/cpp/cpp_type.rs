@@ -613,12 +613,8 @@ impl CppType {
 
             let prop_ty = prop.prop_ty.get_type(name_resolver.cordl_metadata);
 
-            let prop_resolved_ty = name_resolver.resolve_name(
-                self,
-                &prop.prop_ty,
-                TypeUsage::Property,
-                prop_ty.valuetype,
-            );
+            let prop_resolved_ty =
+                name_resolver.resolve_name(self, &prop.prop_ty, TypeUsage::Property, false);
 
             let getter = prop.getter.map(|g| config.name_cpp(&g));
             let setter = prop.setter.map(|s| config.name_cpp(&s));
@@ -1493,8 +1489,15 @@ impl CppType {
                     return None;
                 }
 
+                let field_il2cpp_ty = field.field_ty.get_type(name_resolver.cordl_metadata);
+                
                 let f_type_cpp_name = name_resolver
-                    .resolve_name(self, &field.field_ty, TypeUsage::Field, true)
+                    .resolve_name(
+                        self,
+                        &field.field_ty,
+                        TypeUsage::Field,
+                        field_il2cpp_ty.valuetype,
+                    )
                     .combine_all();
 
                 // Get the inner type of a Generic Inst
