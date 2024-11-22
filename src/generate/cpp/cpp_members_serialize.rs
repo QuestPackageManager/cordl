@@ -565,10 +565,6 @@ impl CppWritable for CppPropertyDecl {
             property_vec.push(format!("put={setter}"));
         }
 
-        if !self.instance {
-            prefix_modifiers.push("static");
-        }
-
         let property = property_vec.join(", ");
         let ty = &self.prop_ty;
         let identifier = &self.cpp_name;
