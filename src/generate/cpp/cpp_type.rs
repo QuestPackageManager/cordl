@@ -99,7 +99,6 @@ impl CppTypeRequirements {
     }
     pub fn add_dependency(&mut self, cpp_type: &CppType) {
         self.add_dependency_tag(cpp_type.self_tag);
-        self.depending_types.insert(cpp_type.self_tag);
     }
 
     pub fn add_dependency_tag(&mut self, tag: CsTypeTag) {

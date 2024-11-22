@@ -33,8 +33,9 @@ impl<'a, 'b> CppNameResolver<'a, 'b> {
         ty: &ResolvedType,
         type_usage: TypeUsage,
         add_include_def: bool,
-        add_include_impl: bool,
+        mut add_include_impl: bool,
     ) -> NameComponents {
+        add_include_impl = false;
         let metadata = self.cordl_metadata;
         match &ty.data {
             ResolvedTypeData::Array(array_type) => {
@@ -150,10 +151,14 @@ impl<'a, 'b> CppNameResolver<'a, 'b> {
                         );
                     });
 
+                if add_include_def {
+                    declaring_cpp_type.requirements.add_dependency(incl_ty);
+                }
+
                 let can_add_include = resolved_context_root_tag != self_context_root_tag;
 
-                if can_add_include {
-                    if add_include_def {
+                if add_include_def {
+                    if can_add_include {
                         declaring_cpp_type.requirements.add_def_include(
                             Some(incl_ty),
                             CppInclude::new_context_typedef(incl_context),
@@ -164,16 +169,7 @@ impl<'a, 'b> CppNameResolver<'a, 'b> {
                             CppInclude::new_context_typedef(incl_context),
                         ));
                     }
-
-                    if add_include_impl {
-                        declaring_cpp_type.requirements.add_impl_include(
-                            Some(incl_ty),
-                            CppInclude::new_context_typeimpl(incl_context),
-                        );
-                    }
                 }
-
-                declaring_cpp_type.requirements.add_dependency(incl_ty);
 
                 self.resolve_redirect(incl_ty, type_usage)
             }
