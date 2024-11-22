@@ -25,6 +25,7 @@ use crate::helpers::sorting::DependencyGraph;
 
 use super::config::CppGenerationConfig;
 use super::cpp_members::CppUsingAlias;
+use super::cpp_name_resolver::{IL2CPP_OBJECT_TYPE, VALUE_WRAPPER_TYPE};
 use super::cpp_type::CppType;
 
 // Holds the contextual information for creating a C++ file
@@ -111,8 +112,32 @@ impl CppContext {
         };
 
         for (tag, ty) in &context.typedef_types {
+            let tdi = tag.get_tdi();
+
             let mut cpp_ty = CppType::make_cpp_type(*tag, ty, config);
             cpp_ty.nested_fixup(ty, metadata, config);
+
+            if metadata.blacklisted_types.contains(&tdi) {
+                let result = match t.is_value_type() {
+                    true => format!(
+                        "{VALUE_WRAPPER_TYPE}<{:x}>",
+                        ty.size_info.as_ref().unwrap().instance_size
+                    ),
+                    false => IL2CPP_OBJECT_TYPE.to_string(),
+                };
+
+                if !t.is_value_type() {
+                    x.typealias_types.insert((
+                        cpp_ty.cpp_namespace(),
+                        CppUsingAlias {
+                            alias: cpp_ty.name().to_string(),
+                            result,
+                            template: Default::default(),
+                        },
+                    ));
+                    continue;
+                }
+            }
 
             x.typedef_types.insert(*tag, cpp_ty);
         }

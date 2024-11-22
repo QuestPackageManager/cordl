@@ -439,7 +439,7 @@ impl CsType {
         fn get_size(
             field: &Il2CppFieldDefinition,
             gen_args: Option<&Vec<ResolvedType>>,
-            metadata: &&CordlMetadata<'_>,
+            metadata: &CordlMetadata<'_>,
         ) -> usize {
             let f_type = metadata
                 .metadata_registration
@@ -746,7 +746,7 @@ impl CsType {
             parameters: m_params_no_def.clone(),
             instance: !method.is_static_method(),
             template: template.clone(),
-            method_data: None,
+            method_data: Default::default(),
         };
 
         // if type is a generic
@@ -756,16 +756,13 @@ impl CsType {
             .is_some_and(|t| !t.names.is_empty());
 
         // don't emit method size structs for generic methods
-        if let Some(method_calc) = method_calc
-            && template.is_none()
-            && !has_template_args
-            && !is_generic_method_inst
-        {
-            method_decl.method_data = Some(CsMethodData {
-                addrs: method_calc.addrs,
-                estimated_size: method_calc.estimated_size,
+        if let Some(method_calc) = method_calc {
+            let is_concrete = !method.is_abstract_method();
+            method_decl.method_data = CsMethodData {
+                addrs: is_concrete.then_some(method_calc.addrs),
+                estimated_size: is_concrete.then_some(method_calc.estimated_size),
                 slot: (method.slot != u16::MAX).then_some(method.slot),
-            })
+            }
         }
 
         if !is_generic_method_inst {

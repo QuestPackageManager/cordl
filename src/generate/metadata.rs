@@ -47,8 +47,8 @@ pub struct CordlMetadata<'a> {
     pub parent_to_child_map: HashMap<TypeDefinitionIndex, Vec<TypeDefinitionPair<'a>>>,
     pub child_to_parent_map: HashMap<TypeDefinitionIndex, TypeDefinitionPair<'a>>,
 
-    //
-    pub custom_type_handler: HashMap<TypeDefinitionIndex, TypeHandlerFn>,
+    pub unity_object_tdi: TypeDefinitionIndex,
+
     pub name_to_tdi: HashMap<Il2cppFullName<'a>, TypeDefinitionIndex>,
     pub blacklisted_types: HashSet<TypeDefinitionIndex>,
 

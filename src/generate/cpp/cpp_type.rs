@@ -22,7 +22,7 @@ use crate::{
         },
         cs_type::CsType,
         cs_type_tag::CsTypeTag,
-        metadata::{self, CordlMetadata},
+        metadata::CordlMetadata,
         offsets::SizeInfo,
         type_extensions::{
             TypeDefinitionExtensions, TypeDefinitionIndexExtensions, TypeExtentions,
@@ -33,6 +33,7 @@ use crate::{
 
 use super::{
     config::CppGenerationConfig,
+    cpp_fields,
     cpp_members::{
         CppConstructorDecl, CppConstructorImpl, CppFieldDecl, CppForwardDeclare, CppInclude,
         CppLine, CppMember, CppMethodData, CppMethodDecl, CppMethodImpl, CppNestedStruct,
@@ -65,8 +66,9 @@ pub const VT_PTR_TYPE: &str = "::bs_hook::VTPtr";
 
 const SIZEOF_IL2CPP_OBJECT: u32 = 0x10;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct CppTypeRequirements {
+    pub self_tag: CsTypeTag,
     pub forward_declares: HashSet<(CppForwardDeclare, CppInclude)>,
 
     // Only value types or classes
@@ -85,20 +87,26 @@ impl CppTypeRequirements {
 
     pub fn add_def_include(&mut self, cpp_type: Option<&CppType>, cpp_include: CppInclude) {
         if let Some(cpp_type) = cpp_type {
-            self.depending_types.insert(cpp_type.self_tag);
+            self.add_dependency(cpp_type);
         }
         self.required_def_includes.insert(cpp_include);
     }
     pub fn add_impl_include(&mut self, cpp_type: Option<&CppType>, cpp_include: CppInclude) {
         if let Some(cpp_type) = cpp_type {
-            self.depending_types.insert(cpp_type.self_tag);
+            self.add_dependency(cpp_type);
         }
         self.required_impl_includes.insert(cpp_include);
     }
     pub fn add_dependency(&mut self, cpp_type: &CppType) {
+        self.add_dependency_tag(cpp_type.self_tag);
         self.depending_types.insert(cpp_type.self_tag);
     }
+
     pub fn add_dependency_tag(&mut self, tag: CsTypeTag) {
+        if tag == self.self_tag {
+            panic!("Cannot depend on self!");
+        }
+
         self.depending_types.insert(tag);
     }
 
@@ -177,7 +185,6 @@ pub struct CppType {
     pub cpp_template: Option<CppTemplate>,
     pub cs_name_components: NameComponents,
     pub cpp_name_components: NameComponents,
-    pub tag: CsTypeTag,
     pub(crate) prefix_comments: Vec<String>,
     pub packing: Option<u32>,
     pub size_info: Option<SizeInfo>,
@@ -405,7 +412,13 @@ impl CppType {
             is_enum_type: cs_type.is_enum_type,
             is_reference_type: cs_type.is_reference_type,
 
-            requirements: CppTypeRequirements::default(),
+            requirements: CppTypeRequirements {
+                self_tag: tag,
+                forward_declares: Default::default(),
+                required_def_includes: Default::default(),
+                required_impl_includes: Default::default(),
+                depending_types: Default::default(),
+            },
             self_tag: tag,
 
             generic_instantiations_args_types,
@@ -414,7 +427,6 @@ impl CppType {
             cpp_template: cs_type.generic_template.clone().map(|t| t.into()),
             cpp_name_components, // TODO
             cs_name_components: cs_type.cs_name_components.clone(),
-            tag,
             prefix_comments: vec![],
             packing: cs_type.packing.map(|p| p as u32),
             size_info: cs_type.size_info.clone(),
@@ -473,11 +485,8 @@ impl CppType {
                 let backing_field_idx = t.element_type_index as usize;
                 let backing_field_ty = &metadata.metadata_registration.types[backing_field_idx];
 
-                let backing_field_tag =
-                    CsTypeTag::from_type_data(backing_field_ty.data, metadata.metadata);
-
                 let backing_field_resolved_ty = ResolvedType {
-                    data: ResolvedTypeData::Type(backing_field_tag),
+                    data: ResolvedTypeData::Primitive(backing_field_ty.ty),
                     ty: backing_field_idx,
                 };
 
@@ -533,26 +542,16 @@ impl CppType {
         name_resolver: &CppNameResolver,
         config: &CppGenerationConfig,
     ) {
-        for field in fields {
-            let field_ty = name_resolver
-                .resolve_name(self, field.field_ty, TypeUsage::Field, true, false)
-                .combine_all();
-            let field_decl = CppFieldDecl {
-                cpp_name: config.name_cpp(&field.name),
-                field_ty,
-                offset: field.offset,
-                instance: field.instance,
-                readonly: field.readonly,
-                const_expr: field.is_const,
-                value: field.value.as_ref().map(|v| v.to_string()),
-                brief_comment: field.brief_comment.clone(),
-                is_private: false,
-            };
-
-            self.declarations
-                .push(CppMember::FieldDecl(field_decl).into());
+        if self.is_value_type || self.is_enum_type {
+            cpp_fields::handle_valuetype_fields(self, &fields, name_resolver, config);
+        } else {
+            cpp_fields::handle_referencetype_fields(self, &fields, name_resolver, config);
         }
+
+        cpp_fields::handle_static_fields(self, &fields, name_resolver, config);
+        cpp_fields::handle_const_fields(self, &fields, name_resolver, config);
     }
+
     fn make_methods(
         &mut self,
         methods: Vec<CsMethod>,
@@ -578,7 +577,7 @@ impl CppType {
         name_resolver: &CppNameResolver,
         config: &CppGenerationConfig,
     ) -> CppParam {
-        let ty = name_resolver.resolve_name(self, p.il2cpp_ty, TypeUsage::Parameter, false, false);
+        let ty = name_resolver.resolve_name(self, &p.il2cpp_ty, TypeUsage::Parameter, false, false);
         CppParam {
             name: config.name_cpp(&p.name),
             ty: ty.combine_all(),
@@ -599,13 +598,24 @@ impl CppType {
                 continue;
             }
 
-            let prop_ty =
-                name_resolver.resolve_name(self, prop.prop_ty, TypeUsage::Property, true, false);
+            let prop_ty = prop.prop_ty.get_type(name_resolver.cordl_metadata);
+
+            let prop_resolved_ty = name_resolver.resolve_name(
+                self,
+                &prop.prop_ty,
+                TypeUsage::Property,
+                prop_ty.valuetype,
+                false,
+            );
+
+            let getter = prop.getter.map(|g| config.name_cpp(&g));
+            let setter = prop.setter.map(|s| config.name_cpp(&s));
+
             let prop_decl = CppPropertyDecl {
                 cpp_name: config.name_cpp(&prop.name),
-                prop_ty: prop_ty.combine_all(),
-                getter: prop.getter.clone(),
-                setter: prop.setter.clone(),
+                prop_ty: prop_resolved_ty.combine_all(),
+                getter,
+                setter,
                 indexable: prop.indexable,
                 brief_comment: prop.brief_comment.clone(),
                 instance: prop.instance,
@@ -653,7 +663,7 @@ impl CppType {
         if self.is_enum_type || self.is_value_type {
             return;
         }
-        
+
         let Some(parent) = parent else {
             return;
         };
@@ -661,7 +671,8 @@ impl CppType {
         let cordl_metadata = name_resolver.cordl_metadata;
         let parent_ty = &cordl_metadata.metadata_registration.types[parent.ty];
 
-        let parent_name = name_resolver.resolve_name(self, parent, TypeUsage::TypeName, true, true);
+        let parent_name =
+            name_resolver.resolve_name(self, &parent, TypeUsage::TypeName, true, true);
 
         let parent_tag = CsTypeTag::from_type_data(parent_ty.data, cordl_metadata.metadata);
         let parent_tdi: TypeDefinitionIndex = parent_tag.into();
@@ -699,7 +710,7 @@ impl CppType {
         for interface in interfaces {
             // We have an interface, lets do something with it
             let interface_name_il2cpp =
-                name_resolver.resolve_name(self, interface, TypeUsage::TypeName, true, true);
+                name_resolver.resolve_name(self, &interface, TypeUsage::TypeName, true, true);
 
             let interface_cpp_name = interface_name_il2cpp.remove_pointer().combine_all();
             let interface_cpp_pointer = interface_name_il2cpp.as_pointer().combine_all();
@@ -865,7 +876,7 @@ impl CppType {
 
         let mut cpp_ret_type = name_resolver.resolve_name(
             self,
-            method.return_type.clone(),
+            &method.return_type,
             TypeUsage::ReturnType,
             false,
             false,
@@ -910,16 +921,8 @@ impl CppType {
             body: None,
             brief: format!(
                 "Method {m_name}, addr 0x{:x}, size 0x{:x}, virtual {}, abstract: {}, final {}",
-                method
-                    .method_data
-                    .as_ref()
-                    .map(|m| m.addrs)
-                    .unwrap_or(u64::MAX),
-                method
-                    .method_data
-                    .as_ref()
-                    .map(|m| m.estimated_size)
-                    .unwrap_or(usize::MAX),
+                method.method_data.addrs.unwrap_or(u64::MAX),
+                method.method_data.estimated_size.unwrap_or(usize::MAX),
                 is_virtual,
                 is_abstract,
                 is_final
@@ -967,9 +970,7 @@ impl CppType {
             .join(", ");
         let params_types_count = method_decl.parameters.len();
 
-        let resolve_instance_slot_lines = if let Some(method_data) = &method.method_data
-            && let Some(slot) = method_data.slot
-        {
+        let resolve_instance_slot_lines = if let Some(slot) = method.method_data.slot {
             vec![format!(
                 "auto* {METHOD_INFO_VAR_NAME} = THROW_UNLESS((::il2cpp_utils::ResolveVtableSlot(
                     {extract_self_class},
@@ -1091,10 +1092,8 @@ impl CppType {
             .is_some_and(|t| !t.names.is_empty());
 
         // don't emit method size structs for generic methods
-        if let Some(method_calc) = &method.method_data
-            && template.is_none()
-            && !has_template_args
-            && !is_generic_method_inst
+        if let Some(addr) = &method.method_data.addrs
+            && let Some(size) = method.method_data.estimated_size
         {
             let il2cpp_method = &metadata.metadata.global_metadata.methods[method.method_index];
             let declaring_tdi = &il2cpp_method.declaring_type;
@@ -1108,13 +1107,7 @@ impl CppType {
                 .map(|g| {
                     g.iter()
                         .map(|t| {
-                            name_resolver.resolve_name(
-                                self,
-                                t.clone(),
-                                TypeUsage::TypeName,
-                                true,
-                                false,
-                            )
+                            name_resolver.resolve_name(self, t, TypeUsage::TypeName, false, false)
                         })
                         .map(|n| n.combine_all())
                         .collect_vec()
@@ -1139,17 +1132,18 @@ impl CppType {
                         method_info_var: METHOD_INFO_VAR_NAME.to_string(),
                         instance: method_decl.instance,
                         params: method_decl.parameters.clone(),
+                        declaring_template: self.cpp_template.clone(),
                         template: template.clone(),
                         generic_literals: resolved_generic_types,
                         method_data: CppMethodData {
-                            addrs: method_calc.addrs,
-                            estimated_size: method_calc.estimated_size,
+                            addrs: *addr,
+                            estimated_size: size,
                         },
                         interface_clazz_of: interface_declaring_cpp_type
                             .map(|d| d.classof_cpp_name())
                             .unwrap_or_else(|| format!("Bad stuff happened {declaring_td:?}")),
                         is_final,
-                        slot: method.method_data.as_ref().and_then(|m| m.slot),
+                        slot: method.method_data.slot,
                     }
                     .into(),
                 )));
@@ -1184,7 +1178,7 @@ impl CppType {
         }
 
         if let Some(size) = self.size_info.as_ref().map(|s| s.instance_size) {
-            let cpp_name = self.cpp_name_components.remove_pointer().combine_all();
+            let cpp_name: String = self.cpp_name_components.remove_pointer().combine_all();
 
             assert!(!cpp_name.trim().is_empty(), "CPP Name cannot be empty!");
 
@@ -1335,7 +1329,7 @@ impl CppType {
         _config: &CppGenerationConfig,
     ) {
         let enum_base = name_resolver
-            .resolve_name(self, backing_type, TypeUsage::TypeName, true, true)
+            .resolve_name(self, &backing_type, TypeUsage::TypeName, true, true)
             .remove_pointer()
             .combine_all();
 
@@ -1357,13 +1351,13 @@ impl CppType {
     ) {
         let metadata = name_resolver.cordl_metadata;
 
-        let tdi = self.self_tag.get_tdi();
+        let tdi: TypeDefinitionIndex = self.self_tag.get_tdi();
         let t = tdi.get_type_definition(metadata.metadata);
 
         let unwrapped_name = format!("__{}_Unwrapped", self.cpp_name());
 
         let enum_base = name_resolver
-            .resolve_name(self, backing_type, TypeUsage::TypeName, true, true)
+            .resolve_name(self, &backing_type, TypeUsage::TypeName, true, true)
             .remove_pointer()
             .combine_all();
 
@@ -1483,7 +1477,7 @@ impl CppType {
                 }
 
                 let f_type_cpp_name = name_resolver
-                    .resolve_name(self, field.field_ty.clone(), TypeUsage::Field, true, false)
+                    .resolve_name(self, &field.field_ty, TypeUsage::Field, true, false)
                     .combine_all();
 
                 // Get the inner type of a Generic Inst

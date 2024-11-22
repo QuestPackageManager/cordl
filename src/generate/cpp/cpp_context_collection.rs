@@ -2,20 +2,29 @@ use std::{
     collections::{HashMap, HashSet},
     fs::File,
     io::Write,
+    path::{Path, PathBuf},
 };
 
+use rayon::collections::hash_map::Iter;
+use rayon::prelude::*;
+
+use color_eyre::eyre::bail;
 use itertools::Itertools;
 use log::{info, trace};
 use pathdiff::diff_paths;
+use rayon::iter::{IntoParallelRefIterator, ParallelBridge, ParallelIterator};
 
 use crate::generate::{
     cpp::config::STATIC_CONFIG, cs_context_collection::TypeContextCollection, cs_type::CsType,
     cs_type_tag::CsTypeTag, metadata::CordlMetadata,
 };
 
+unsafe impl Send for CsTypeTag {}
+unsafe impl Send for CppContext {}
+
 use super::{
-    config::CppGenerationConfig, cpp_context::CppContext, cpp_name_resolver::CppNameResolver,
-    cpp_type::CppType,
+    config::CppGenerationConfig, cpp_context::CppContext, cpp_members::CppInclude,
+    cpp_name_resolver::CppNameResolver, cpp_type::CppType,
 };
 
 #[derive(Default)]
@@ -197,6 +206,9 @@ impl CppContextCollection {
     pub(crate) fn get(&self) -> &HashMap<CsTypeTag, CppContext> {
         &self.all_contexts
     }
+    pub(crate) fn get_mut(&mut self) -> &mut HashMap<CsTypeTag, CppContext> {
+        &mut self.all_contexts
+    }
 
     pub fn write_all(&self, config: &CppGenerationConfig) -> color_eyre::Result<()> {
         let amount = self.all_contexts.len() as f64;
@@ -287,6 +299,77 @@ impl CppContextCollection {
 
                 Ok(())
             })?;
+        Ok(())
+    }
+
+    pub(crate) fn cyclic_include_check(&self) -> color_eyre::Result<()> {
+        info!("Checking for cyclic includes");
+
+        fn get_headers(context: &CppContext) -> HashSet<&CppInclude> {
+            let headers: HashSet<&CppInclude> = context
+                .get_types()
+                .values()
+                .flat_map(|t| &t.requirements.required_def_includes)
+                .collect();
+            headers
+        }
+
+        fn check_includes(
+            collection: &HashMap<CsTypeTag, CppContext>,
+            typedef_path: &Path,
+            context_headers: HashSet<&CppInclude>,
+            visited: &HashSet<PathBuf>,
+        ) -> bool {
+            for header in context_headers {
+                if visited.contains(&header.include) {
+                    return true;
+                }
+
+                // find a context from the header
+                let Some(next_context) = collection
+                    .values()
+                    .find(|next_context| next_context.typedef_path.ends_with(&header.include))
+                else {
+                    println!("No context found for include: {:?}", header.include);
+                    continue;
+                };
+
+                let mut visited_copy = visited.clone();
+                visited_copy.insert(header.include.clone());
+
+                if check_includes(
+                    collection,
+                    &next_context.typedef_path,
+                    get_headers(next_context),
+                    &visited_copy,
+                ) {
+                    println!(
+                        "Context {} includes -> {}",
+                        typedef_path.display(),
+                        next_context.typedef_path.display()
+                    );
+                    return true;
+                }
+
+                return false;
+            }
+
+            false
+        }
+
+        self.all_contexts
+            .values()
+            .map(|c| (&c.typedef_path, get_headers(c)))
+            .try_for_each(|(path, headers)| {
+                let mut visited = HashSet::new();
+                visited.insert(path.clone());
+
+                if check_includes(&self.all_contexts, path, headers, &visited) {
+                    bail!("Cyclic include detected in context: {:?}", path);
+                }
+                Ok(())
+            })?;
+
         Ok(())
     }
 }

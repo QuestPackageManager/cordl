@@ -11,8 +11,10 @@ use walkdir::DirEntry;
 use crate::{
     generate::{
         cpp::{
-            config::STATIC_CONFIG, cpp_context_collection::CppContextCollection,
+            config::STATIC_CONFIG,
+            cpp_context_collection::{self, CppContextCollection},
             cpp_members::CppMember,
+            handlers::{object, unity, value_type},
         },
         cs_context_collection::TypeContextCollection,
         metadata::CordlMetadata,
@@ -24,6 +26,20 @@ pub fn run_cpp(
     cs_collection: TypeContextCollection,
     metadata: &CordlMetadata,
 ) -> color_eyre::Result<()> {
+
+
+    let mut cpp_context_collection =
+        CppContextCollection::from_cs_collection(cs_collection, metadata, &STATIC_CONFIG);
+
+    info!("Registering handlers!");
+    // il2cpp_internals::register_il2cpp_types(&mut metadata)?;
+    unity::register_unity(metadata, &mut cpp_context_collection)?;
+    object::register_system(metadata, &mut cpp_context_collection)?;
+    value_type::register_value_type(metadata, &mut cpp_context_collection)?;
+
+    // let e = cpp_context_collection.cyclic_include_check()?;
+
+
     if STATIC_CONFIG.header_path.exists() {
         std::fs::remove_dir_all(&STATIC_CONFIG.header_path)?;
     }
@@ -38,13 +54,6 @@ pub fn run_cpp(
 
     // extract contents of the cordl internals folder into destination
     INTERNALS_DIR.extract(&STATIC_CONFIG.dst_internals_path)?;
-
-    //
-    //
-    //
-    //
-    let cpp_context_collection =
-        CppContextCollection::from_cs_collection(cs_collection, metadata, &STATIC_CONFIG);
 
     const write_all: bool = true;
     if write_all {

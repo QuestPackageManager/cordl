@@ -183,6 +183,7 @@ pub struct CppMethodSizeStruct {
     pub method_info_lines: Vec<String>,
     pub method_info_var: String,
 
+    pub declaring_template: Option<CppTemplate>,
     pub template: Option<CppTemplate>,
     pub generic_literals: Option<Vec<String>>,
 

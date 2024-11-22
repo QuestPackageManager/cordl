@@ -607,6 +607,7 @@ impl CppWritable for CppMethodSizeStruct {
             "//  Writing Method size for method: {}.{}",
             self.declaring_type_name, self.cpp_method_name
         )?;
+
         let template = self.template.clone().unwrap_or_default();
 
         let complete_type_name = &self.declaring_type_name;
@@ -643,6 +644,9 @@ impl CppWritable for CppMethodSizeStruct {
             "".to_string()
         };
 
+        if let Some(declaring_template) = self.declaring_template.as_ref() {
+            declaring_template.write(writer)?;
+        }
         template.write(writer)?;
 
         writeln!(

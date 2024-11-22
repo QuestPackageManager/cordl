@@ -102,6 +102,14 @@ fn main() -> color_eyre::Result<()> {
     })?;
     let il2cpp_metadata = brocolib::Metadata::parse(&global_metadata_data, &elf_data)?;
 
+    let unity_object_tdi_idx = il2cpp_metadata
+        .global_metadata
+        .type_definitions
+        .as_vec()
+        .iter()
+        .position(|v| v.full_name(&il2cpp_metadata, false) == "UnityEngine.Object")
+        .unwrap();
+
     let mut metadata = CordlMetadata {
         metadata: &il2cpp_metadata,
         code_registration: &il2cpp_metadata.runtime_metadata.code_registration,
@@ -109,8 +117,7 @@ fn main() -> color_eyre::Result<()> {
         method_calculations: Default::default(),
         parent_to_child_map: Default::default(),
         child_to_parent_map: Default::default(),
-        // TODO: These should come from args to the program?
-        custom_type_handler: Default::default(),
+        unity_object_tdi: TypeDefinitionIndex::new(unity_object_tdi_idx as u32),
         name_to_tdi: Default::default(),
         blacklisted_types: Default::default(),
         pointer_size: generate::metadata::PointerSize::Bytes8,

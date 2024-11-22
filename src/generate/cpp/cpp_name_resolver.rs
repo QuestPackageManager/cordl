@@ -40,7 +40,7 @@ impl<'a, 'b> CppNameResolver<'a, 'b> {
             ResolvedTypeData::Array(array_type) => {
                 let generic = self.resolve_name(
                     declaring_cpp_type,
-                    &*array_type,
+                    array_type,
                     type_usage,
                     add_include_def,
                     add_include_impl,
@@ -61,13 +61,13 @@ impl<'a, 'b> CppNameResolver<'a, 'b> {
             ResolvedTypeData::GenericInst(resolved_type, vec) => {
                 let type_def_name_components = self.resolve_name(
                     declaring_cpp_type,
-                    &*resolved_type,
+                    resolved_type,
                     type_usage,
                     add_include_def,
                     add_include_impl,
                 );
                 let generic_types_formatted = vec
-                    .into_iter()
+                    .iter()
                     .map(|(r, inc)| {
                         self.resolve_name(
                             declaring_cpp_type,
@@ -106,7 +106,7 @@ impl<'a, 'b> CppNameResolver<'a, 'b> {
             ResolvedTypeData::Ptr(resolved_type) => {
                 let generic_formatted = self.resolve_name(
                     declaring_cpp_type,
-                    &*resolved_type,
+                    resolved_type,
                     type_usage,
                     add_include_def,
                     add_include_impl,
@@ -123,7 +123,11 @@ impl<'a, 'b> CppNameResolver<'a, 'b> {
                     return declaring_cpp_type.cpp_name_components.clone();
                 }
 
-                let context_root_tag = self.collection.get_context_root_tag(*resolved_tag);
+                let resolved_context_root_tag = self.collection.get_context_root_tag(*resolved_tag);
+                let self_context_root_tag = self
+                    .collection
+                    .get_context_root_tag(declaring_cpp_type.self_tag);
+
                 let incl_context = self
                     .collection
                     .get_context(*resolved_tag)
@@ -137,7 +141,7 @@ impl<'a, 'b> CppNameResolver<'a, 'b> {
 
                         println!(
                             "ty {resolved_tag:#?} vs aliased {:#?}",
-                            self.collection.alias_context.get(&resolved_tag)
+                            self.collection.alias_context.get(resolved_tag)
                         );
                         println!("{}", incl_context.fundamental_path.display());
                         panic!(
@@ -146,8 +150,7 @@ impl<'a, 'b> CppNameResolver<'a, 'b> {
                         );
                     });
 
-                let can_add_include = self.collection.get_context_root_tag(*resolved_tag)
-                    != declaring_cpp_type.self_tag;
+                let can_add_include = resolved_context_root_tag != self_context_root_tag;
 
                 if can_add_include {
                     if add_include_def {
@@ -169,6 +172,8 @@ impl<'a, 'b> CppNameResolver<'a, 'b> {
                         );
                     }
                 }
+
+                declaring_cpp_type.requirements.add_dependency(incl_ty);
 
                 self.resolve_redirect(incl_ty, type_usage)
             }

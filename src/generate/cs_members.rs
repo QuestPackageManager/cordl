@@ -60,10 +60,10 @@ pub struct CsUsingAlias {
 #[derive(Clone, Debug, PartialEq)]
 pub enum CsMember {}
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Debug, Default, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct CsMethodData {
-    pub estimated_size: usize,
-    pub addrs: u64,
+    pub estimated_size: Option<usize>,
+    pub addrs: Option<u64>,
     pub slot: Option<u16>,
 }
 
@@ -206,7 +206,7 @@ pub struct CsMethod {
     pub parameters: Vec<CsParam>,
     pub instance: bool,
     pub template: Option<CsGenericTemplate>,
-    pub method_data: Option<CsMethodData>,
+    pub method_data: CsMethodData,
     pub brief: Option<String>,
     pub method_flags: CSMethodFlags,
 }
