@@ -10,7 +10,10 @@ use crate::{
 };
 
 use super::{
-    cpp_context_collection::CppContextCollection, cpp_members::{CppForwardDeclare, CppInclude}, cpp_type::CppType,
+    cpp_context_collection::CppContextCollection,
+    cpp_members::{CppForwardDeclare, CppInclude},
+    cpp_type::CppType,
+    handlers::unity,
 };
 
 pub const VALUE_WRAPPER_TYPE: &str = "::bs_hook::ValueType";
@@ -27,17 +30,17 @@ impl<'a, 'b> CppNameResolver<'a, 'b> {
     pub fn resolve_name(
         &self,
         declaring_cpp_type: &mut CppType,
-        ty: ResolvedType,
+        ty: &ResolvedType,
         type_usage: TypeUsage,
         add_include_def: bool,
         add_include_impl: bool,
     ) -> NameComponents {
         let metadata = self.cordl_metadata;
-        match ty.data {
+        match &ty.data {
             ResolvedTypeData::Array(array_type) => {
                 let generic = self.resolve_name(
                     declaring_cpp_type,
-                    *array_type,
+                    &*array_type,
                     type_usage,
                     add_include_def,
                     add_include_impl,
@@ -58,7 +61,7 @@ impl<'a, 'b> CppNameResolver<'a, 'b> {
             ResolvedTypeData::GenericInst(resolved_type, vec) => {
                 let type_def_name_components = self.resolve_name(
                     declaring_cpp_type,
-                    *resolved_type,
+                    &*resolved_type,
                     type_usage,
                     add_include_def,
                     add_include_impl,
@@ -68,10 +71,10 @@ impl<'a, 'b> CppNameResolver<'a, 'b> {
                     .map(|(r, inc)| {
                         self.resolve_name(
                             declaring_cpp_type,
-                            r,
+                            &r,
                             type_usage,
-                            inc && add_include_def,
-                            inc && add_include_impl,
+                            *inc && add_include_def,
+                            *inc && add_include_impl,
                         )
                     })
                     .map(|n| n.combine_all())
@@ -85,13 +88,13 @@ impl<'a, 'b> CppNameResolver<'a, 'b> {
             }
             ResolvedTypeData::GenericArg(gen_param_idx, _arg_idx) => {
                 let generic_param =
-                    &metadata.metadata.global_metadata.generic_parameters[gen_param_idx];
+                    &metadata.metadata.global_metadata.generic_parameters[*gen_param_idx];
 
                 generic_param.name(metadata.metadata).to_string().into()
             }
             ResolvedTypeData::GenericMethodArg(_method_index, gen_param_idx, _method_arg) => {
                 let generic_param =
-                    &metadata.metadata.global_metadata.generic_parameters[gen_param_idx];
+                    &metadata.metadata.global_metadata.generic_parameters[*gen_param_idx];
 
                 // let arg = declaring_cpp_type
                 //     .method_generic_instantiation_map
@@ -103,7 +106,7 @@ impl<'a, 'b> CppNameResolver<'a, 'b> {
             ResolvedTypeData::Ptr(resolved_type) => {
                 let generic_formatted = self.resolve_name(
                     declaring_cpp_type,
-                    *resolved_type,
+                    &*resolved_type,
                     type_usage,
                     add_include_def,
                     add_include_impl,
@@ -115,25 +118,26 @@ impl<'a, 'b> CppNameResolver<'a, 'b> {
                     ..Default::default()
                 }
             }
-            ResolvedTypeData::Type(cs_type_tag) => {
-                if cs_type_tag == declaring_cpp_type.self_tag {
+            ResolvedTypeData::Type(resolved_tag) => {
+                if *resolved_tag == declaring_cpp_type.self_tag {
                     return declaring_cpp_type.cpp_name_components.clone();
                 }
 
+                let context_root_tag = self.collection.get_context_root_tag(*resolved_tag);
                 let incl_context = self
                     .collection
-                    .get_context(cs_type_tag)
+                    .get_context(*resolved_tag)
                     .unwrap_or_else(|| panic!("Unable to find type {ty:#?}"));
                 let incl_ty = self
                     .collection
-                    .get_cpp_type(cs_type_tag)
+                    .get_cpp_type(*resolved_tag)
                     .unwrap_or_else(|| {
                         let td = &metadata.metadata.global_metadata.type_definitions
-                            [cs_type_tag.get_tdi()];
+                            [resolved_tag.get_tdi()];
 
                         println!(
-                            "ty {cs_type_tag:#?} vs aliased {:#?}",
-                            self.collection.alias_context.get(&cs_type_tag)
+                            "ty {resolved_tag:#?} vs aliased {:#?}",
+                            self.collection.alias_context.get(&resolved_tag)
                         );
                         println!("{}", incl_context.fundamental_path.display());
                         panic!(
@@ -142,26 +146,31 @@ impl<'a, 'b> CppNameResolver<'a, 'b> {
                         );
                     });
 
-                if add_include_def {
-                    declaring_cpp_type.requirements.add_def_include(
-                        Some(incl_ty),
-                        CppInclude::new_context_typedef(incl_context),
-                    );
-                } else {
-                    declaring_cpp_type.requirements.add_forward_declare((
-                        CppForwardDeclare::from_cpp_type(incl_ty),
-                        CppInclude::new_context_typedef(incl_context),
-                    ));
+                let can_add_include = self.collection.get_context_root_tag(*resolved_tag)
+                    != declaring_cpp_type.self_tag;
+
+                if can_add_include {
+                    if add_include_def {
+                        declaring_cpp_type.requirements.add_def_include(
+                            Some(incl_ty),
+                            CppInclude::new_context_typedef(incl_context),
+                        );
+                    } else {
+                        declaring_cpp_type.requirements.add_forward_declare((
+                            CppForwardDeclare::from_cpp_type(incl_ty),
+                            CppInclude::new_context_typedef(incl_context),
+                        ));
+                    }
+
+                    if add_include_impl {
+                        declaring_cpp_type.requirements.add_impl_include(
+                            Some(incl_ty),
+                            CppInclude::new_context_typeimpl(incl_context),
+                        );
+                    }
                 }
 
-                if add_include_impl {
-                    declaring_cpp_type.requirements.add_impl_include(
-                        Some(incl_ty),
-                        CppInclude::new_context_typeimpl(incl_context),
-                    );
-                }
-
-                incl_ty.cpp_name_components.clone()
+                self.resolve_redirect(incl_ty, type_usage)
             }
             ResolvedTypeData::Primitive(il2_cpp_type_enum) => {
                 let requirements = &mut declaring_cpp_type.requirements;
@@ -229,7 +238,7 @@ impl<'a, 'b> CppNameResolver<'a, 'b> {
             ResolvedTypeData::ByRef(resolved_type) => {
                 let generic = self.resolve_name(
                     declaring_cpp_type,
-                    *resolved_type,
+                    resolved_type,
                     type_usage,
                     add_include_def,
                     add_include_impl,
@@ -247,7 +256,7 @@ impl<'a, 'b> CppNameResolver<'a, 'b> {
             ResolvedTypeData::ByRefConst(resolved_type) => {
                 let generic = self.resolve_name(
                     declaring_cpp_type,
-                    *resolved_type,
+                    &*resolved_type,
                     type_usage,
                     add_include_def,
                     add_include_impl,
@@ -263,6 +272,17 @@ impl<'a, 'b> CppNameResolver<'a, 'b> {
                 }
             }
         }
+    }
+
+    fn resolve_redirect(&self, incl_ty: &CppType, type_usage: TypeUsage) -> NameComponents {
+        let mut name_components = incl_ty.cpp_name_components.clone();
+        name_components = unity::unity_object_resolve_handler(
+            name_components,
+            incl_ty,
+            self.cordl_metadata,
+            type_usage,
+        );
+        name_components
     }
 
     fn wrapper_type_for_tdi(td: &Il2CppTypeDefinition) -> &str {
