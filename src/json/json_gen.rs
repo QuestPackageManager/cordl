@@ -1,7 +1,7 @@
 use std::{
     fs::{self, File},
     io::BufWriter,
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 
 use brocolib::global_metadata::{
@@ -10,12 +10,11 @@ use brocolib::global_metadata::{
 };
 use color_eyre::eyre::Result;
 use itertools::Itertools;
-use rayon::vec;
+
 use serde::{Deserialize, Serialize};
 
 use crate::generate::{
-    config::GenerationConfig,
-    metadata::Metadata,
+    metadata::CordlMetadata,
     offsets,
     type_extensions::{ParameterDefinitionExtensions, TypeDefinitionExtensions, TypeExtentions},
 };
@@ -75,9 +74,9 @@ struct JsonParam {
 fn make_field(
     field: &Il2CppFieldDefinition,
     field_index: usize,
-    td: &Il2CppTypeDefinition,
+    _td: &Il2CppTypeDefinition,
     tdi: TypeDefinitionIndex,
-    metadata: &Metadata,
+    metadata: &CordlMetadata,
 ) -> JsonField {
     let ty = metadata
         .metadata
@@ -103,8 +102,8 @@ fn make_field(
 fn make_property(
     property: &Il2CppPropertyDefinition,
     td: &Il2CppTypeDefinition,
-    tdi: TypeDefinitionIndex,
-    metadata: &Metadata,
+    _tdi: TypeDefinitionIndex,
+    metadata: &CordlMetadata,
 ) -> JsonProperty {
     let p_setter = (property.set != u32::MAX).then(|| property.set_method(td, metadata.metadata));
     let p_getter = (property.get != u32::MAX).then(|| property.get_method(td, metadata.metadata));
@@ -131,9 +130,9 @@ fn make_property(
 }
 fn make_param(
     param: &Il2CppParameterDefinition,
-    td: &Il2CppTypeDefinition,
-    tdi: TypeDefinitionIndex,
-    metadata: &Metadata,
+    _td: &Il2CppTypeDefinition,
+    _tdi: TypeDefinitionIndex,
+    metadata: &CordlMetadata,
 ) -> JsonParam {
     let param_type = metadata
         .metadata
@@ -161,7 +160,7 @@ fn make_method(
     method: &Il2CppMethodDefinition,
     td: &Il2CppTypeDefinition,
     tdi: TypeDefinitionIndex,
-    metadata: &Metadata,
+    metadata: &CordlMetadata,
 ) -> JsonMethod {
     let ret_ty = metadata
         .metadata
@@ -182,7 +181,11 @@ fn make_method(
     }
 }
 
-fn make_type(td: &Il2CppTypeDefinition, tdi: TypeDefinitionIndex, metadata: &Metadata) -> JsonType {
+fn make_type(
+    td: &Il2CppTypeDefinition,
+    tdi: TypeDefinitionIndex,
+    metadata: &CordlMetadata,
+) -> JsonType {
     let fields = td
         .fields(metadata.metadata)
         .iter()
@@ -236,7 +239,7 @@ fn make_type(td: &Il2CppTypeDefinition, tdi: TypeDefinitionIndex, metadata: &Met
 /// Essentially check if the type is compiler generated or
 /// not useful to emit
 ///
-pub fn is_real_declaring_type(td: &Il2CppTypeDefinition, metadata: &Metadata) -> bool {
+pub fn is_real_declaring_type(td: &Il2CppTypeDefinition, metadata: &CordlMetadata) -> bool {
     let condition1 = !td.name(metadata.metadata).contains("<>c__")
         && !td.name(metadata.metadata).contains(">d__");
     let condition2 = !td
@@ -260,7 +263,7 @@ pub fn is_real_declaring_type(td: &Il2CppTypeDefinition, metadata: &Metadata) ->
         && condition4
 }
 
-pub fn make_json(metadata: &Metadata, _config: &GenerationConfig, file: PathBuf) -> Result<()> {
+pub fn make_json(metadata: &CordlMetadata, file: &Path) -> Result<()> {
     // we could use a map here but sorting
     // wouldn't be guaranteed
     // we want sorting so diffs are more readable
@@ -286,11 +289,7 @@ pub fn make_json(metadata: &Metadata, _config: &GenerationConfig, file: PathBuf)
     Ok(())
 }
 
-pub fn make_json_folder(
-    metadata: &Metadata,
-    config: &GenerationConfig,
-    folder: PathBuf,
-) -> Result<()> {
+pub fn make_json_folder(metadata: &CordlMetadata, folder: &Path) -> Result<()> {
     // we could use a map here but sorting
     // wouldn't be guaranteed
     // we want sorting so diffs are more readable
@@ -307,17 +306,14 @@ pub fn make_json_folder(
         .map(|(tdi, td)| make_type(td, tdi, metadata))
         .sorted_by(|a, b| a.full_name.cmp(&b.full_name))
         .try_for_each(|t| -> Result<()> {
-            let mut namespace_cpp = config.sanitize_to_cpp_name(&t.namespace);
-            let name_cpp = config.name_cpp(&t.name);
+            let mut namespace = t.namespace.clone();
+            let name = t.name.clone();
 
-            if namespace_cpp.is_empty() {
-                namespace_cpp = "GlobalNamespace".to_string();
+            if namespace.is_empty() {
+                namespace = "GlobalNamespace".to_string();
             }
 
-            let file: PathBuf = folder
-                .join(namespace_cpp)
-                .join(name_cpp)
-                .with_extension("json");
+            let file: PathBuf = folder.join(namespace).join(name).with_extension("json");
 
             fs::create_dir_all(file.parent().unwrap())?;
 

@@ -1,14 +1,9 @@
 use std::collections::{HashMap, HashSet};
 
-use brocolib::{
-    global_metadata::{Il2CppTypeDefinition, MethodIndex, TypeDefinitionIndex},
-    runtime_metadata::Il2CppType,
-};
+use brocolib::global_metadata::{Il2CppTypeDefinition, MethodIndex, TypeDefinitionIndex};
 use itertools::Itertools;
 
-use crate::data::name_components::NameComponents;
-
-use super::{context_collection::CppContextCollection, cpp_type::CppType};
+use super::cs_type::CsType;
 
 pub struct MethodCalculations {
     pub estimated_size: usize,
@@ -34,39 +29,15 @@ impl<'a> TypeDefinitionPair<'a> {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
-pub enum TypeUsage {
-    // Method usage
-    Parameter,
-    ReturnType,
+pub type TypeHandlerFn = Box<dyn Fn(&mut CsType)>;
 
-    // References
-    FieldName,
-    PropertyName,
-
-    // naming the CppType itself
-    TypeName,
-    GenericArg,
-}
-
-pub type TypeHandlerFn = Box<dyn Fn(&mut CppType)>;
-pub type TypeResolveHandlerFn = Box<
-    dyn Fn(
-        NameComponents,
-        &CppType,
-        &CppContextCollection,
-        &Metadata,
-        &Il2CppType,
-        TypeUsage,
-    ) -> NameComponents,
->;
 pub type Il2cppNamespace<'a> = &'a str;
 pub type Il2cppName<'a> = &'a str;
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Il2cppFullName<'a>(pub Il2cppNamespace<'a>, pub Il2cppName<'a>);
 
-pub struct Metadata<'a> {
+pub struct CordlMetadata<'a> {
     pub metadata: &'a brocolib::Metadata<'a, 'a>,
     pub metadata_registration: &'a brocolib::runtime_metadata::Il2CppMetadataRegistration,
     pub code_registration: &'a brocolib::runtime_metadata::Il2CppCodeRegistration<'a>,
@@ -76,9 +47,8 @@ pub struct Metadata<'a> {
     pub parent_to_child_map: HashMap<TypeDefinitionIndex, Vec<TypeDefinitionPair<'a>>>,
     pub child_to_parent_map: HashMap<TypeDefinitionIndex, TypeDefinitionPair<'a>>,
 
-    //
-    pub custom_type_handler: HashMap<TypeDefinitionIndex, TypeHandlerFn>,
-    pub custom_type_resolve_handler: Vec<TypeResolveHandlerFn>,
+    pub unity_object_tdi: TypeDefinitionIndex,
+
     pub name_to_tdi: HashMap<Il2cppFullName<'a>, TypeDefinitionIndex>,
     pub blacklisted_types: HashSet<TypeDefinitionIndex>,
 
@@ -89,7 +59,7 @@ pub struct Metadata<'a> {
     pub packing_is_default_offset: u8,
 }
 
-impl<'a> Metadata<'a> {
+impl<'a> CordlMetadata<'a> {
     /// Returns the size of the base object.
     /// To be used for boxing/unboxing and various offset computations.
     pub fn object_size(&self) -> u8 {

@@ -6,10 +6,13 @@ use std::{
 };
 
 use crate::generate::{
-    cpp_type::CppType,
-    cs_type::VALUE_TYPE_WRAPPER_SIZE,
-    members::{CppConstructorDecl, CppLine, CppMember, CppMethodDecl, CppParam},
-    metadata::{Il2cppFullName, Metadata},
+    cpp::{
+        cpp_context_collection::CppContextCollection,
+        cpp_members::{CppConstructorDecl, CppLine, CppMember, CppMethodDecl, CppParam},
+        cpp_type::{CppType, VALUE_TYPE_WRAPPER_SIZE},
+    },
+    cs_type_tag::CsTypeTag,
+    metadata::{CordlMetadata, Il2cppFullName},
 };
 
 static EQUIVALENTS: LazyLock<HashMap<&str, &str>> = LazyLock::new(|| {
@@ -93,8 +96,10 @@ static EQUIVALENTS: LazyLock<HashMap<&str, &str>> = LazyLock::new(|| {
         ),
     ])
 });
-
-pub fn register_il2cpp_types(metadata: &mut Metadata) -> Result<()> {
+pub fn register_il2cpp_types(
+    metadata: &mut CordlMetadata,
+    cpp_context_collection: &mut CppContextCollection,
+) -> Result<()> {
     info!("Registering il2cpp type handler!");
 
     for (cordl_t, il2cpp_t) in EQUIVALENTS.iter() {
@@ -104,13 +109,14 @@ pub fn register_il2cpp_types(metadata: &mut Metadata) -> Result<()> {
         let il2cpp_name = Il2cppFullName(cordl_t_ns, cordl_t_name);
 
         let cordl_tdi = metadata.name_to_tdi.get(&il2cpp_name);
+        let cpp_type = cordl_tdi.and_then(|cordl_tdi| {
+            let tag = CsTypeTag::TypeDefinitionIndex(*cordl_tdi);
+            cpp_context_collection.get_cpp_type_mut(tag)
+        });
 
-        match cordl_tdi {
-            Some(cordl_tdi) => {
-                metadata.custom_type_handler.insert(
-                    *cordl_tdi,
-                    Box::new(|cpp_type| il2cpp_alias_handler(cpp_type, cordl_t, il2cpp_t)),
-                );
+        match cpp_type {
+            Some(cpp_type) => {
+                il2cpp_alias_handler(cpp_type, cordl_t, il2cpp_t);
             }
             None => {
                 warn!("Could not find TDI for {cordl_t}");

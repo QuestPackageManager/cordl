@@ -1,12 +1,9 @@
 use itertools::Itertools;
 use pathdiff::diff_paths;
 
-use crate::STATIC_CONFIG;
-
-use super::{
-    context::CppContext,
-    cpp_type::{CppType, CORDL_REFERENCE_TYPE_CONSTRAINT},
-    writer::Writable,
+use crate::generate::{
+    cs_members::{CsGenericTemplate, CsGenericTemplateType},
+    writer::CppWritable,
 };
 
 use std::{
@@ -15,6 +12,12 @@ use std::{
     path::{Path, PathBuf},
     rc::Rc,
     sync::Arc,
+};
+
+use super::{
+    config::STATIC_CONFIG,
+    cpp_context::CppContext,
+    cpp_type::{CppType, CORDL_REFERENCE_TYPE_CONSTRAINT},
 };
 
 #[derive(Debug, Eq, Hash, PartialEq, Clone, Default, PartialOrd, Ord)]
@@ -42,6 +45,27 @@ impl CppTemplate {
 
     pub fn just_names(&self) -> impl Iterator<Item = &String> {
         self.names.iter().map(|(_constraint, t)| t)
+    }
+}
+
+impl From<CsGenericTemplate> for CppTemplate {
+    fn from(value: CsGenericTemplate) -> Self {
+        CppTemplate {
+            names: value
+                .names
+                .into_iter()
+                .map(|(constraint, name)| {
+                    let cpp_ty = match constraint {
+                        CsGenericTemplateType::Any => "typename".to_string(),
+                        CsGenericTemplateType::Reference => {
+                            CORDL_REFERENCE_TYPE_CONSTRAINT.to_string()
+                        }
+                    };
+
+                    (cpp_ty, name)
+                })
+                .collect(),
+        }
     }
 }
 
@@ -159,6 +183,7 @@ pub struct CppMethodSizeStruct {
     pub method_info_lines: Vec<String>,
     pub method_info_var: String,
 
+    pub declaring_template: Option<CppTemplate>,
     pub template: Option<CppTemplate>,
     pub generic_literals: Option<Vec<String>>,
 
@@ -170,7 +195,7 @@ pub struct CppMethodSizeStruct {
 pub struct CppFieldDecl {
     pub cpp_name: String,
     pub field_ty: String,
-    pub offset: u32,
+    pub offset: Option<u32>,
     pub instance: bool,
     pub readonly: bool,
     pub const_expr: bool,
@@ -260,7 +285,7 @@ pub struct CppMethodDecl {
     pub is_inline: bool,
 
     pub brief: Option<String>,
-    pub body: Option<Vec<Arc<dyn Writable>>>,
+    pub body: Option<Vec<Arc<dyn CppWritable>>>,
 }
 
 impl PartialEq for CppMethodDecl {
@@ -364,7 +389,7 @@ pub struct CppMethodImpl {
     pub prefix_modifiers: Vec<String>,
 
     pub brief: Option<String>,
-    pub body: Vec<Arc<dyn Writable>>,
+    pub body: Vec<Arc<dyn CppWritable>>,
 }
 
 impl PartialEq for CppMethodImpl {
@@ -445,7 +470,7 @@ pub struct CppConstructorDecl {
     pub initialized_values: HashMap<String, String>,
 
     pub brief: Option<String>,
-    pub body: Option<Vec<Arc<dyn Writable>>>,
+    pub body: Option<Vec<Arc<dyn CppWritable>>>,
 }
 
 impl PartialEq for CppConstructorDecl {
@@ -496,7 +521,7 @@ pub struct CppConstructorImpl {
 
     pub template: Option<CppTemplate>,
 
-    pub body: Vec<Arc<dyn Writable>>,
+    pub body: Vec<Arc<dyn CppWritable>>,
 }
 
 impl PartialEq for CppConstructorImpl {
@@ -578,19 +603,17 @@ impl CppForwardDeclare {
         Self::from_cpp_type_long(cpp_type, false)
     }
     pub fn from_cpp_type_long(cpp_type: &CppType, force_generics: bool) -> Self {
-        let ns = if !cpp_type.nested {
-            Some(cpp_type.cpp_namespace().to_string())
-        } else {
-            None
-        };
+        let ns = cpp_type.cpp_namespace().to_string();
 
-        assert!(
-            cpp_type.cpp_name_components.declaring_types.is_none(),
-            "Can't forward declare nested types!"
-        );
+        // TODO: Proper nested check
+        // assert!(
+        //     cpp_type.is_nested,
+        //     "Can't forward declare nested types! {:#?}",
+        //     cpp_type.cpp_name_components
+        // );
 
         // literals should only be added for generic specializations
-        let literals = if cpp_type.generic_instantiations_args_types.is_some() || force_generics {
+        let literals = if force_generics {
             cpp_type.cpp_name_components.generics.clone()
         } else {
             None
@@ -598,7 +621,7 @@ impl CppForwardDeclare {
 
         Self {
             is_struct: cpp_type.is_value_type,
-            cpp_namespace: ns,
+            cpp_namespace: Some(ns),
             cpp_name: cpp_type.cpp_name().clone(),
             templates: cpp_type.cpp_template.clone(),
             literals,

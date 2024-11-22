@@ -1,24 +1,21 @@
-use std::rc::Rc;
+use std::sync::Arc;
 
-use color_eyre::Result;
+use color_eyre::{eyre::ContextCompat, Result};
 
 use crate::generate::{
-    cpp_type::CppType,
-    cs_type::{ENUM_WRAPPER_TYPE, VALUE_WRAPPER_TYPE},
-    members::CppMember,
-    metadata::{Il2cppFullName, Metadata},
+    cpp::{
+        cpp_context_collection::CppContextCollection, cpp_members::CppMember, cpp_type::CppType,
+    },
+    cs_type_tag::CsTypeTag,
+    metadata::{CordlMetadata, Il2cppFullName},
 };
 
 use log::info;
 
-pub fn register_value_type(metadata: &mut Metadata) -> Result<()> {
-    info!("Registering value type handler!");
-    register_value_type_object_handler(metadata)?;
-
-    Ok(())
-}
-
-fn register_value_type_object_handler(metadata: &mut Metadata) -> Result<()> {
+pub fn register_value_type(
+    metadata: &CordlMetadata,
+    cpp_context_collection: &mut CppContextCollection,
+) -> Result<()> {
     info!("Registering System.ValueType handler!");
     info!("Registering System.Enum handler!");
 
@@ -31,17 +28,25 @@ fn register_value_type_object_handler(metadata: &mut Metadata) -> Result<()> {
         .get(&Il2cppFullName("System", "Enum"))
         .expect("No System.ValueType TDI found");
 
-    metadata
-        .custom_type_handler
-        .insert(*value_type_tdi, Box::new(value_type_handler));
-    metadata
-        .custom_type_handler
-        .insert(*enum_type_tdi, Box::new(enum_type_handler));
+    let value_type_tag = CsTypeTag::TypeDefinitionIndex(*value_type_tdi);
+    let enum_type_tag = CsTypeTag::TypeDefinitionIndex(*enum_type_tdi);
+
+    let value_cpp_type = cpp_context_collection
+        .get_cpp_type_mut(value_type_tag)
+        .wrap_err("No System.Object type found")?;
+
+    value_type_handler(value_cpp_type);
+
+    let enum_cpp_type = cpp_context_collection
+        .get_cpp_type_mut(enum_type_tag)
+        .wrap_err("No System.Object type found")?;
+
+    enum_type_handler(enum_cpp_type);
 
     Ok(())
 }
 
-fn unified_type_handler(cpp_type: &mut CppType, _base_ctor: &str) {
+fn unified_type_handler(cpp_type: &mut CppType) {
     // We don't replace parent anymore
     // cpp_type.inherit = vec![base_ctor.to_string()];
 
@@ -54,7 +59,7 @@ fn unified_type_handler(cpp_type: &mut CppType, _base_ctor: &str) {
         .iter_mut()
         .filter(|t| matches!(t.as_ref(), CppMember::ConstructorDecl(_)))
         .for_each(|d| {
-            let CppMember::ConstructorDecl(constructor) = Rc::get_mut(d).unwrap() else {
+            let CppMember::ConstructorDecl(constructor) = Arc::get_mut(d).unwrap() else {
                 panic!()
             };
 
@@ -78,31 +83,9 @@ fn unified_type_handler(cpp_type: &mut CppType, _base_ctor: &str) {
 }
 fn value_type_handler(cpp_type: &mut CppType) {
     info!("Found System.ValueType, removing inheritance!");
-    unified_type_handler(
-        cpp_type,
-        format!(
-            "{VALUE_WRAPPER_TYPE}<0x{:x}>",
-            cpp_type
-                .size_info
-                .as_ref()
-                .map(|s| s.calculated_instance_size)
-                .unwrap()
-        )
-        .as_str(),
-    );
+    unified_type_handler(cpp_type);
 }
 fn enum_type_handler(cpp_type: &mut CppType) {
     info!("Found System.Enum type, removing inheritance!");
-    unified_type_handler(
-        cpp_type,
-        format!(
-            "{ENUM_WRAPPER_TYPE}<0x{:x}>",
-            cpp_type
-                .size_info
-                .as_ref()
-                .map(|s| s.calculated_instance_size)
-                .unwrap()
-        )
-        .as_str(),
-    );
+    unified_type_handler(cpp_type);
 }

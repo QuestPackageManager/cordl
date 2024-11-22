@@ -1,15 +1,13 @@
 use core::panic;
 
 use brocolib::{
-    global_metadata::{Il2CppMethodDefinition, Il2CppTypeDefinition},
+    global_metadata::{Il2CppMethodDefinition, Il2CppTypeDefinition, TypeDefinitionIndex},
     runtime_metadata::{Il2CppType, Il2CppTypeEnum, TypeData},
     Metadata,
 };
 use itertools::Itertools;
 
 use crate::data::name_components::NameComponents;
-
-use super::config::GenerationConfig;
 
 pub const PARAM_ATTRIBUTE_IN: u16 = 0x0001;
 pub const PARAM_ATTRIBUTE_OUT: u16 = 0x0002;
@@ -178,18 +176,10 @@ pub trait TypeDefinitionExtensions {
 
     fn get_name_components(&self, metadata: &Metadata) -> NameComponents;
 
-    fn full_name_cpp(
-        &self,
-        metadata: &Metadata,
-        config: &GenerationConfig,
-        with_generics: bool,
-    ) -> String;
-    fn full_name_nested(
-        &self,
-        metadata: &Metadata,
-        config: &GenerationConfig,
-        with_generics: bool,
-    ) -> String;
+    // fn full_name_cpp(&self, metadata: &Metadata, with_generics: bool) -> String;
+    // fn full_name_nested(&self, metadata: &Metadata, with_generics: bool) -> String;
+
+    fn is_reference_type(&self, metadata: &Metadata) -> bool;
 }
 
 impl TypeDefinitionExtensions for Il2CppTypeDefinition {
@@ -304,10 +294,9 @@ impl TypeDefinitionExtensions for Il2CppTypeDefinition {
             false => None,
         };
 
-        let ty =
+        let _ty =
             &metadata.runtime_metadata.metadata_registration.types[self.byval_type_index as usize];
-        let is_pointer =
-            (!self.is_value_type() && !self.is_enum_type()) || ty.ty == Il2CppTypeEnum::Class;
+        let is_pointer = self.is_reference_type(metadata);
 
         match self.declaring_type_index != u32::MAX {
             true => {
@@ -344,84 +333,81 @@ impl TypeDefinitionExtensions for Il2CppTypeDefinition {
     }
 
     // TODO: Use name components
-    fn full_name_cpp(
-        &self,
-        metadata: &Metadata,
-        config: &GenerationConfig,
-        with_generics: bool,
-    ) -> String {
-        let namespace = config.namespace_cpp(self.namespace(metadata));
-        let name = config.name_cpp(self.name(metadata));
+    // fn full_name_cpp(&self, metadata: &Metadata, with_generics: bool) -> String {
+    //     let namespace = config.namespace_cpp(self.namespace(metadata));
+    //     let name = config.name_cpp(self.name(metadata));
 
-        let mut full_name = String::new();
+    //     let mut full_name = String::new();
 
-        if self.declaring_type_index != u32::MAX {
-            let declaring_ty = metadata.runtime_metadata.metadata_registration.types
-                [self.declaring_type_index as usize];
+    //     if self.declaring_type_index != u32::MAX {
+    //         let declaring_ty = metadata.runtime_metadata.metadata_registration.types
+    //             [self.declaring_type_index as usize];
 
-            let s = match declaring_ty.data {
-                brocolib::runtime_metadata::TypeData::TypeDefinitionIndex(tdi) => {
-                    let declaring_td = &metadata.global_metadata.type_definitions[tdi];
-                    declaring_td.full_name_cpp(metadata, config, with_generics)
-                }
-                _ => declaring_ty.full_name(metadata),
-            };
+    //         let s = match declaring_ty.data {
+    //             brocolib::runtime_metadata::TypeData::TypeDefinitionIndex(tdi) => {
+    //                 let declaring_td = &metadata.global_metadata.type_definitions[tdi];
+    //                 declaring_td.full_name_cpp(metadata, config, with_generics)
+    //             }
+    //             _ => declaring_ty.full_name(metadata),
+    //         };
 
-            full_name.push_str(&s);
-            full_name.push_str("::");
-        } else {
-            // only write namespace if no declaring type
-            full_name.push_str(&namespace);
-            full_name.push_str("::");
-        }
+    //         full_name.push_str(&s);
+    //         full_name.push_str("::");
+    //     } else {
+    //         // only write namespace if no declaring type
+    //         full_name.push_str(&namespace);
+    //         full_name.push_str("::");
+    //     }
 
-        full_name.push_str(&name);
-        if self.generic_container_index.is_valid() && with_generics {
-            let gc = self.generic_container(metadata);
-            full_name.push_str(&gc.to_string(metadata));
-        }
-        full_name
-    }
+    //     full_name.push_str(&name);
+    //     if self.generic_container_index.is_valid() && with_generics {
+    //         let gc = self.generic_container(metadata);
+    //         full_name.push_str(&gc.to_string(metadata));
+    //     }
+    //     full_name
+    // }
 
     // separates nested types with /
     // TODO: Use name components
-    fn full_name_nested(
-        &self,
-        metadata: &Metadata,
-        config: &GenerationConfig,
-        with_generics: bool,
-    ) -> String {
-        let namespace = config.namespace_cpp(self.namespace(metadata));
-        let name = config.name_cpp(self.name(metadata));
+    // fn full_name_nested(&self, metadata: &Metadata, with_generics: bool) -> String {
+    //     let namespace = config.namespace_cpp(self.namespace(metadata));
+    //     let name = config.name_cpp(self.name(metadata));
 
-        let mut full_name = String::new();
+    //     let mut full_name = String::new();
 
-        if self.declaring_type_index != u32::MAX {
-            let declaring_ty = metadata.runtime_metadata.metadata_registration.types
-                [self.declaring_type_index as usize];
+    //     if self.declaring_type_index != u32::MAX {
+    //         let declaring_ty = metadata.runtime_metadata.metadata_registration.types
+    //             [self.declaring_type_index as usize];
 
-            let declaring_ty = match declaring_ty.data {
-                brocolib::runtime_metadata::TypeData::TypeDefinitionIndex(tdi) => {
-                    let declaring_td = &metadata.global_metadata.type_definitions[tdi];
-                    declaring_td.full_name_nested(metadata, config, with_generics)
-                }
-                _ => declaring_ty.full_name(metadata),
-            };
+    //         let declaring_ty = match declaring_ty.data {
+    //             brocolib::runtime_metadata::TypeData::TypeDefinitionIndex(tdi) => {
+    //                 let declaring_td = &metadata.global_metadata.type_definitions[tdi];
+    //                 declaring_td.full_name_nested(metadata, config, with_generics)
+    //             }
+    //             _ => declaring_ty.full_name(metadata),
+    //         };
 
-            full_name.push_str(&declaring_ty);
-            full_name.push('/');
-        } else {
-            // only write namespace if no declaring type
-            full_name.push_str(&namespace);
-            full_name.push('.');
-        }
+    //         full_name.push_str(&declaring_ty);
+    //         full_name.push('/');
+    //     } else {
+    //         // only write namespace if no declaring type
+    //         full_name.push_str(&namespace);
+    //         full_name.push('.');
+    //     }
 
-        full_name.push_str(&name);
-        if self.generic_container_index.is_valid() && with_generics {
-            let gc = self.generic_container(metadata);
-            full_name.push_str(&gc.to_string(metadata));
-        }
-        full_name
+    //     full_name.push_str(&name);
+    //     if self.generic_container_index.is_valid() && with_generics {
+    //         let gc = self.generic_container(metadata);
+    //         full_name.push_str(&gc.to_string(metadata));
+    //     }
+    //     full_name
+    // }
+
+    fn is_reference_type(&self, metadata: &Metadata) -> bool {
+        let ty =
+            &metadata.runtime_metadata.metadata_registration.types[self.byval_type_index as usize];
+
+        (!self.is_value_type() && !self.is_enum_type()) || ty.ty == Il2CppTypeEnum::Class
     }
 }
 
@@ -453,5 +439,15 @@ impl Il2CppTypeEnumExtensions for Il2CppTypeEnum {
                 | Il2CppTypeEnum::Pinned
                 | Il2CppTypeEnum::Enum
         )
+    }
+}
+
+pub trait TypeDefinitionIndexExtensions {
+    fn get_type_definition<'a>(&self, metadata: &'a Metadata) -> &'a Il2CppTypeDefinition;
+}
+
+impl TypeDefinitionIndexExtensions for TypeDefinitionIndex {
+    fn get_type_definition<'a>(&self, metadata: &'a Metadata) -> &'a Il2CppTypeDefinition {
+        &metadata.global_metadata.type_definitions[*self]
     }
 }

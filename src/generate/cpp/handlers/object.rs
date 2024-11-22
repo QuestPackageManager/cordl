@@ -1,21 +1,19 @@
-use color_eyre::Result;
+use color_eyre::{eyre::ContextCompat, Result};
 use log::info;
 
 use crate::generate::{
-    cpp_type::CppType,
-    cs_type::IL2CPP_OBJECT_TYPE,
-    members::CppMember,
-    metadata::{Il2cppFullName, Metadata},
+    cpp::{
+        cpp_context_collection::CppContextCollection, cpp_members::CppMember,
+        cpp_name_resolver::IL2CPP_OBJECT_TYPE, cpp_type::CppType,
+    },
+    cs_type_tag::CsTypeTag,
+    metadata::{CordlMetadata, Il2cppFullName},
 };
 
-pub fn register_system(metadata: &mut Metadata) -> Result<()> {
-    info!("Registering system handler!");
-    register_system_object_type_handler(metadata)?;
-
-    Ok(())
-}
-
-fn register_system_object_type_handler(metadata: &mut Metadata) -> Result<()> {
+pub fn register_system(
+    metadata: &CordlMetadata,
+    cpp_context_collection: &mut CppContextCollection,
+) -> Result<()> {
     info!("Registering System.Object handler!");
 
     let system_object_tdi = metadata
@@ -23,9 +21,12 @@ fn register_system_object_type_handler(metadata: &mut Metadata) -> Result<()> {
         .get(&Il2cppFullName("System", "Object"))
         .expect("No System.Object TDI found");
 
-    metadata
-        .custom_type_handler
-        .insert(*system_object_tdi, Box::new(system_object_handler));
+    let tag = CsTypeTag::TypeDefinitionIndex(*system_object_tdi);
+
+    let cpp_type = cpp_context_collection
+        .get_cpp_type_mut(tag)
+        .wrap_err("No System.Object type found")?;
+    system_object_handler(cpp_type);
 
     Ok(())
 }
@@ -34,7 +35,7 @@ fn system_object_handler(cpp_type: &mut CppType) {
     info!("Found System.Object type, adding systemW!");
     // clear inherit so that bs hook can dof include order shenanigans
     cpp_type.requirements.need_wrapper();
-    cpp_type.inherit = vec![IL2CPP_OBJECT_TYPE.to_string()];
+    cpp_type.parent = Some(IL2CPP_OBJECT_TYPE.to_string());
 
     // Remove field because it does not size properly and is not necessary
     cpp_type
