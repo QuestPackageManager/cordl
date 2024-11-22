@@ -1120,33 +1120,41 @@ impl CppType {
                     name_resolver.collection.get_cpp_type(declaring_tag)
                 };
 
-            self.nonmember_implementations
-                .push(Arc::new(CppNonMember::SizeStruct(
-                    CppMethodSizeStruct {
-                        ret_ty: method_decl.return_type.clone(),
-                        cpp_method_name: method_decl.cpp_name.clone(),
-                        method_name: m_name.to_string(),
-                        declaring_type_name: method_impl.declaring_cpp_full_name.clone(),
-                        declaring_classof_call,
-                        method_info_lines,
-                        method_info_var: METHOD_INFO_VAR_NAME.to_string(),
-                        instance: method_decl.instance,
-                        params: method_decl.parameters.clone(),
-                        declaring_template: self.cpp_template.clone(),
-                        template: template.clone(),
-                        generic_literals: resolved_generic_types,
-                        method_data: CppMethodData {
-                            addrs: *addr,
-                            estimated_size: size,
-                        },
-                        interface_clazz_of: interface_declaring_cpp_type
-                            .map(|d| d.classof_cpp_name())
-                            .unwrap_or_else(|| format!("Bad stuff happened {declaring_td:?}")),
-                        is_final,
-                        slot: method.method_data.slot,
-                    }
-                    .into(),
-                )));
+            let has_template_args = self
+                .cpp_template
+                .as_ref()
+                .is_some_and(|t| !t.names.is_empty());
+
+            // don't emit method size structs for generic methods
+            if template.is_none() && !has_template_args && !is_generic_method_inst {
+                self.nonmember_implementations
+                    .push(Arc::new(CppNonMember::SizeStruct(
+                        CppMethodSizeStruct {
+                            ret_ty: method_decl.return_type.clone(),
+                            cpp_method_name: method_decl.cpp_name.clone(),
+                            method_name: m_name.to_string(),
+                            declaring_type_name: method_impl.declaring_cpp_full_name.clone(),
+                            declaring_classof_call,
+                            method_info_lines,
+                            method_info_var: METHOD_INFO_VAR_NAME.to_string(),
+                            instance: method_decl.instance,
+                            params: method_decl.parameters.clone(),
+                            declaring_template: self.cpp_template.clone(),
+                            template: template.clone(),
+                            generic_literals: resolved_generic_types,
+                            method_data: CppMethodData {
+                                addrs: *addr,
+                                estimated_size: size,
+                            },
+                            interface_clazz_of: interface_declaring_cpp_type
+                                .map(|d| d.classof_cpp_name())
+                                .unwrap_or_else(|| format!("Bad stuff happened {declaring_td:?}")),
+                            is_final,
+                            slot: method.method_data.slot,
+                        }
+                        .into(),
+                    )));
+            }
         }
 
         // TODO: Revise this
