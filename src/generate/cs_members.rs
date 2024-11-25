@@ -152,8 +152,8 @@ pub struct CsProperty {
     pub name: String,
     pub prop_ty: ResolvedType,
     pub instance: bool,
-    pub getter: Option<String>,
-    pub setter: Option<String>,
+    pub getter: Option<(MethodIndex, String)>,
+    pub setter: Option<(MethodIndex, String)>,
     /// Whether this property is one that's indexable (accessor methods take an index argument)
     pub indexable: bool,
     pub brief_comment: Option<String>,
@@ -162,9 +162,9 @@ pub struct CsProperty {
 bitflags! {
     #[derive(Debug, Clone, Hash, PartialEq, PartialOrd, Eq, Ord)]
     pub struct CsParamFlags: u8 {
-        const A = 1;
-        const B = 1 << 1;
-        const C = 0b0000_0100;
+        const REF = 1;
+        const IN = 1 << 1;
+        const OUT = 1 << 2;
     }
 }
 

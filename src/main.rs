@@ -10,12 +10,11 @@
 use brocolib::{global_metadata::TypeDefinitionIndex, runtime_metadata::TypeData};
 use byteorder::LittleEndian;
 use color_eyre::eyre::Context;
-use generate::{cpp, metadata::CordlMetadata};
+use generate::{cpp, json, metadata::CordlMetadata};
 use itertools::Itertools;
 extern crate pretty_env_logger;
 
 use include_dir::{include_dir, Dir};
-use json::json_gen::{make_json, make_json_folder};
 use log::{info, trace, warn};
 use rayon::prelude::*;
 
@@ -32,7 +31,6 @@ mod data;
 mod generate;
 // mod handlers;
 mod helpers;
-mod json;
 
 #[derive(Clone, Copy, Debug, clap::ValueEnum)]
 enum TargetLang {
@@ -383,13 +381,13 @@ fn main() -> color_eyre::Result<()> {
         TargetLang::SingleJSON => {
             let json = Path::new("./json");
             println!("Writing json file {json:?}");
-            make_json(&metadata, json)
+            json::make_json(&metadata, &cs_context_collection, json)
         }
         TargetLang::MultiJSON => {
             let json_folder = Path::new("./multi_json");
 
             println!("Writing json file {json_folder:?}");
-            make_json_folder(&metadata, json_folder)
+            json::make_json_folder(&metadata, &cs_context_collection, json_folder)
         }
     }?;
 

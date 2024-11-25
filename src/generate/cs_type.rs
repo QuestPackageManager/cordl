@@ -641,8 +641,18 @@ impl CsType {
                 name: p_name.to_owned(),
                 prop_ty,
                 // methods generated in make_methods
-                setter: p_setter.map(|m| m.name(metadata.metadata).to_string()),
-                getter: p_getter.map(|m| m.name(metadata.metadata).to_string()),
+                setter: p_setter.map(|m| {
+                    (
+                        prop.set_method_index(t),
+                        m.name(metadata.metadata).to_string(),
+                    )
+                }),
+                getter: p_getter.map(|m| {
+                    (
+                        prop.get_method_index(t),
+                        m.name(metadata.metadata).to_string(),
+                    )
+                }),
                 indexable: index,
                 brief_comment: None,
                 instance: true,
@@ -763,7 +773,7 @@ impl CsType {
         };
 
         // if type is a generic
-        let has_template_args = self
+        let _has_template_args = self
             .generic_template
             .as_ref()
             .is_some_and(|t| !t.names.is_empty());
