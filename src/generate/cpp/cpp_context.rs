@@ -3,7 +3,7 @@ use std::io::Write;
 use std::{
     collections::{HashMap, HashSet},
     fs::{create_dir_all, remove_file, File},
-    path::{Path, PathBuf},
+    path::PathBuf,
 };
 
 use color_eyre::eyre::ContextCompat;
@@ -198,7 +198,11 @@ impl CppContext {
             .is_dir()
         {
             // Assume it's never a file
-            create_dir_all(self.typedef_path.parent().context("Failed to create all directories!")?)?;
+            create_dir_all(
+                self.typedef_path
+                    .parent()
+                    .context("Failed to create all directories!")?,
+            )?;
         }
 
         let base_path = &config.header_path;

@@ -29,7 +29,7 @@ pub fn register_unity(
 
     let tag = CsTypeTag::TypeDefinitionIndex(unity_object_tdi);
 
-    let cpp_type = cpp_context_collection
+    let _cpp_type = cpp_context_collection
         .get_cpp_type_mut(tag)
         .wrap_err("No System.Object type found")?;
     // unity_object_handler(cpp_type);

@@ -553,7 +553,7 @@ impl Sortable for CppConstructorImpl {
 
 impl CppWritable for CppPropertyDecl {
     fn write(&self, writer: &mut CppWriter) -> color_eyre::Result<()> {
-        let mut prefix_modifiers: Vec<&str> = vec![];
+        let prefix_modifiers: Vec<&str> = vec![];
         let suffix_modifiers: Vec<&str> = vec![];
 
         let mut property_vec: Vec<String> = vec![];

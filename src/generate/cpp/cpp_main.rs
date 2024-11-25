@@ -12,7 +12,7 @@ use crate::{
     generate::{
         cpp::{
             config::STATIC_CONFIG,
-            cpp_context_collection::{self, CppContextCollection},
+            cpp_context_collection::CppContextCollection,
             cpp_members::CppMember,
             handlers::{object, unity, value_type},
         },

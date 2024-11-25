@@ -5,16 +5,14 @@ use brocolib::{
 
 use itertools::Itertools;
 use log::warn;
+use serde::{Deserialize, Serialize};
 
 use crate::generate::{
-    cs_context_collection::TypeContextCollection,
-    cs_type::CsType,
-    cs_type_tag::CsTypeTag,
-    metadata::CordlMetadata,
-    type_extensions::{ParameterDefinitionExtensions, TypeDefinitionIndexExtensions},
+    cs_context_collection::TypeContextCollection, cs_type::CsType, cs_type_tag::CsTypeTag,
+    metadata::CordlMetadata, type_extensions::ParameterDefinitionExtensions,
 };
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Serialize, Deserialize)]
 pub enum TypeUsage {
     // Method usage
     Parameter,
