@@ -5,7 +5,7 @@ use itertools::Itertools;
 
 use crate::data::type_resolver::ResolvedType;
 
-use super::writer::CppWritable;
+use super::writer::Writable;
 
 use std::{hash::Hash, sync::Arc};
 
@@ -219,7 +219,6 @@ pub struct CsConstructor {
     pub template: Option<CsGenericTemplate>,
 
     pub brief: Option<String>,
-    pub body: Option<Vec<Arc<dyn CppWritable>>>,
 }
 
 impl PartialEq for CsConstructor {
@@ -228,7 +227,5 @@ impl PartialEq for CsConstructor {
             && self.parameters == other.parameters
             && self.template == other.template
             && self.brief == other.brief
-            // can't guarantee equality
-            && self.body.is_some() == other.body.is_some()
     }
 }

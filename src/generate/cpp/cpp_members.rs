@@ -3,7 +3,7 @@ use pathdiff::diff_paths;
 
 use crate::generate::{
     cs_members::{CsGenericTemplate, CsGenericTemplateType},
-    writer::CppWritable,
+    writer::Writable,
 };
 
 use std::{
@@ -285,7 +285,7 @@ pub struct CppMethodDecl {
     pub is_inline: bool,
 
     pub brief: Option<String>,
-    pub body: Option<Vec<Arc<dyn CppWritable>>>,
+    pub body: Option<Vec<Arc<dyn Writable>>>,
 }
 
 impl PartialEq for CppMethodDecl {
@@ -389,7 +389,7 @@ pub struct CppMethodImpl {
     pub prefix_modifiers: Vec<String>,
 
     pub brief: Option<String>,
-    pub body: Vec<Arc<dyn CppWritable>>,
+    pub body: Vec<Arc<dyn Writable>>,
 }
 
 impl PartialEq for CppMethodImpl {
@@ -470,7 +470,7 @@ pub struct CppConstructorDecl {
     pub initialized_values: HashMap<String, String>,
 
     pub brief: Option<String>,
-    pub body: Option<Vec<Arc<dyn CppWritable>>>,
+    pub body: Option<Vec<Arc<dyn Writable>>>,
 }
 
 impl PartialEq for CppConstructorDecl {
@@ -521,7 +521,7 @@ pub struct CppConstructorImpl {
 
     pub template: Option<CppTemplate>,
 
-    pub body: Vec<Arc<dyn CppWritable>>,
+    pub body: Vec<Arc<dyn Writable>>,
 }
 
 impl PartialEq for CppConstructorImpl {

@@ -20,7 +20,7 @@ use crate::generate::cpp::cpp_type::CORDL_NO_INCLUDE_IMPL_DEFINE;
 use crate::generate::cs_type_tag::CsTypeTag;
 use crate::generate::metadata::CordlMetadata;
 use crate::generate::type_extensions::TypeDefinitionExtensions;
-use crate::generate::writer::{CppWritable, CppWriter};
+use crate::generate::writer::{Writable, Writer};
 use crate::helpers::sorting::DependencyGraph;
 
 use super::config::CppGenerationConfig;
@@ -208,17 +208,17 @@ impl CppContext {
         let base_path = &config.header_path;
 
         trace!("Writing {:?}", self.typedef_path.as_path());
-        let mut typedef_writer = CppWriter {
+        let mut typedef_writer = Writer {
             stream: File::create(self.typedef_path.as_path())?,
             indent: 0,
             newline: true,
         };
-        let mut typeimpl_writer = CppWriter {
+        let mut typeimpl_writer = Writer {
             stream: File::create(self.type_impl_path.as_path())?,
             indent: 0,
             newline: true,
         };
-        let mut fundamental_writer = CppWriter {
+        let mut fundamental_writer = Writer {
             stream: File::create(self.fundamental_path.as_path())?,
             indent: 0,
             newline: true,
@@ -477,7 +477,7 @@ impl CppContext {
     }
 
     /// Writes IL2CPP argument macros for the given C++ type.
-    fn write_il2cpp_arg_macros(ty: &CppType, writer: &mut CppWriter) -> color_eyre::Result<()> {
+    fn write_il2cpp_arg_macros(ty: &CppType, writer: &mut Writer) -> color_eyre::Result<()> {
         let is_generic_instantiation = ty.generic_instantiations_args_types.is_some();
         if is_generic_instantiation {
             return Ok(());

@@ -1,12 +1,12 @@
 use std::{fs::File, io::Write};
 
-pub struct CppWriter {
+pub struct Writer {
     pub stream: File,
     pub indent: u16,
     pub newline: bool,
 }
 
-impl CppWriter {
+impl Writer {
     pub fn indent(&mut self) {
         self.indent += 1;
     }
@@ -18,7 +18,7 @@ impl CppWriter {
     }
 }
 
-impl Write for CppWriter {
+impl Write for Writer {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
         // TODO: One day we will write indented
         // if self.indent > 0 && self.newline {
@@ -37,8 +37,8 @@ impl Write for CppWriter {
     }
 }
 
-pub trait CppWritable: std::fmt::Debug {
-    fn write(&self, writer: &mut CppWriter) -> color_eyre::Result<()>;
+pub trait Writable: std::fmt::Debug {
+    fn write(&self, writer: &mut Writer) -> color_eyre::Result<()>;
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord)]

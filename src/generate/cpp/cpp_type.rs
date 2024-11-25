@@ -27,7 +27,7 @@ use crate::{
         type_extensions::{
             TypeDefinitionExtensions, TypeDefinitionIndexExtensions, TypeExtentions,
         },
-        writer::{CppWritable, CppWriter, Sortable},
+        writer::{Sortable, Writable, Writer},
     },
 };
 
@@ -190,15 +190,15 @@ pub struct CppType {
 }
 
 impl CppType {
-    pub fn write_impl(&self, writer: &mut CppWriter) -> color_eyre::Result<()> {
+    pub fn write_impl(&self, writer: &mut Writer) -> color_eyre::Result<()> {
         self.write_impl_internal(writer)
     }
 
-    pub fn write_def(&self, writer: &mut CppWriter) -> color_eyre::Result<()> {
+    pub fn write_def(&self, writer: &mut Writer) -> color_eyre::Result<()> {
         self.write_def_internal(writer, Some(&self.cpp_namespace()))
     }
 
-    pub fn write_impl_internal(&self, writer: &mut CppWriter) -> color_eyre::Result<()> {
+    pub fn write_impl_internal(&self, writer: &mut Writer) -> color_eyre::Result<()> {
         self.nonmember_implementations
             .iter()
             .try_for_each(|d| d.write(writer))?;
@@ -214,7 +214,7 @@ impl CppType {
 
     fn write_def_internal(
         &self,
-        writer: &mut CppWriter,
+        writer: &mut Writer,
         namespace: Option<&str>,
     ) -> color_eyre::Result<()> {
         self.prefix_comments
@@ -332,7 +332,7 @@ impl CppType {
         Ok(())
     }
 
-    pub fn write_type_trait(&self, writer: &mut CppWriter) -> color_eyre::Result<()> {
+    pub fn write_type_trait(&self, writer: &mut Writer) -> color_eyre::Result<()> {
         if self.cpp_template.is_some() {
             // generic
             // macros from bs hook
@@ -640,30 +640,82 @@ impl CppType {
         name_resolver: &CppNameResolver,
         config: &CppGenerationConfig,
     ) {
+        if self.is_value_type || self.is_enum_type {
+            return;
+        }
+
         self.declarations.reserve(constructors.len());
         for ctor in constructors {
-            let ctor_decl = CppConstructorDecl {
-                cpp_name: ctor.cpp_name.clone(),
-                parameters: ctor
-                    .parameters
-                    .into_iter()
-                    .map(|p| self.make_param(p, name_resolver, config))
-                    .collect(),
+            let m_params = ctor
+                .parameters
+                .into_iter()
+                .map(|p| self.make_param(p, name_resolver, config))
+                .collect_vec();
+
+            let params_no_default = m_params
+                .iter()
+                .cloned()
+                .map(|mut c| {
+                    c.def_value = None;
+                    c
+                })
+                .collect_vec();
+
+            let ty_full_cpp_name = self.cpp_name_components.combine_all();
+
+            let decl: CppMethodDecl = CppMethodDecl {
+                cpp_name: "New_ctor".into(),
+                return_type: ty_full_cpp_name.clone(),
+                parameters: params_no_default,
                 template: ctor.template.clone().map(|t| t.into()),
-                brief: ctor.brief.clone(),
-                is_constexpr: true,
-                is_explicit: false,
-                is_default: false,
-                is_no_except: true,
-                is_delete: false,
-                is_protected: false,
-                base_ctor: None,
-                initialized_values: Default::default(),
-                body: ctor.body.clone(),
+                body: None, // TODO:
+                brief: None,
+                is_no_except: false,
+                is_constexpr: false,
+                instance: false,
+                is_const: false,
+                is_implicit_operator: false,
+                is_explicit_operator: false,
+
+                is_virtual: false,
+                is_inline: true,
+                prefix_modifiers: vec![],
+                suffix_modifiers: vec![],
             };
 
-            self.declarations
-                .push(CppMember::ConstructorDecl(ctor_decl).into());
+            // To avoid trailing ({},)
+            let base_ctor_params = CppParam::params_names(&decl.parameters).join(", ");
+
+            let allocate_call = format!(
+                "THROW_UNLESS(::il2cpp_utils::NewSpecific<{ty_full_cpp_name}>({base_ctor_params}))"
+            );
+
+            let declaring_template = if self
+                .cpp_template
+                .as_ref()
+                .is_some_and(|t| !t.names.is_empty())
+            {
+                self.cpp_template.clone()
+            } else {
+                None
+            };
+
+            let cpp_constructor_impl = CppMethodImpl {
+                body: vec![Arc::new(CppLine::make(format!("return {allocate_call};")))],
+
+                declaring_cpp_full_name: self
+                    .cpp_name_components
+                    .remove_pointer()
+                    .combine_all(),
+                parameters: m_params.to_vec(),
+                template: declaring_template,
+                ..decl.clone().into()
+            };
+
+            self.implementations
+                .push(CppMember::MethodImpl(cpp_constructor_impl).into());
+
+            self.declarations.push(CppMember::MethodDecl(decl).into());
         }
     }
 
@@ -764,7 +816,7 @@ impl CppType {
                 false => "static_cast<void*>(this)".to_string(),
             };
 
-            let body: Vec<Arc<dyn CppWritable>> = vec![Arc::new(CppLine::make(format!(
+            let body: Vec<Arc<dyn Writable>> = vec![Arc::new(CppLine::make(format!(
                 "return static_cast<{interface_cpp_pointer}>({convert_line});"
             )))];
             let declaring_cpp_full_name = self.cpp_name_components.remove_pointer().combine_all();
@@ -1063,13 +1115,13 @@ impl CppType {
                 .iter()
                 .chain(method_body_lines.iter())
                 .cloned()
-                .map(|l| -> Arc<dyn CppWritable> { Arc::new(CppLine::make(l)) })
+                .map(|l| -> Arc<dyn Writable> { Arc::new(CppLine::make(l)) })
                 .collect_vec(),
             false => method_info_lines
                 .iter()
                 .chain(method_body_lines.iter())
                 .cloned()
-                .map(|l| -> Arc<dyn CppWritable> { Arc::new(CppLine::make(l)) })
+                .map(|l| -> Arc<dyn Writable> { Arc::new(CppLine::make(l)) })
                 .collect_vec(),
         };
 
@@ -1523,7 +1575,7 @@ impl CppType {
         // so then Parent()
         let base_ctor = self.parent.as_ref().map(|s| (s.clone(), "".to_string()));
 
-        let body: Vec<Arc<dyn CppWritable>> = instance_fields
+        let body: Vec<Arc<dyn Writable>> = instance_fields
             .iter()
             .map(|p| {
                 let name = &p.name;
@@ -1531,7 +1583,7 @@ impl CppType {
             })
             .map(Arc::new)
             // Why is this needed? _sigh_
-            .map(|arc| -> Arc<dyn CppWritable> { arc })
+            .map(|arc| -> Arc<dyn Writable> { arc })
             .collect_vec();
 
         let params_no_def = instance_fields

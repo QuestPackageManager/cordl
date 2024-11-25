@@ -7,7 +7,7 @@ use crate::generate::metadata::CordlMetadata;
 use crate::generate::type_extensions::{
     TypeDefinitionExtensions, TypeDefinitionIndexExtensions, TypeExtentions,
 };
-use crate::generate::writer::CppWritable;
+use crate::generate::writer::Writable;
 
 use itertools::Itertools;
 use log::warn;
@@ -640,7 +640,7 @@ pub(crate) fn prop_methods_from_fieldinfo(
     };
 
     // construct getter and setter bodies
-    let getter_body: Vec<Arc<dyn CppWritable>> =
+    let getter_body: Vec<Arc<dyn Writable>> =
         if let Some(instance_null_check) = instance_null_check {
             vec![
                 Arc::new(CppLine::make(instance_null_check.into())),
@@ -650,7 +650,7 @@ pub(crate) fn prop_methods_from_fieldinfo(
             vec![Arc::new(CppLine::make(getter_call))]
         };
 
-    let setter_body: Vec<Arc<dyn CppWritable>> =
+    let setter_body: Vec<Arc<dyn Writable>> =
         if let Some(instance_null_check) = instance_null_check {
             vec![
                 Arc::new(CppLine::make(instance_null_check.into())),
