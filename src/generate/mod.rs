@@ -10,3 +10,4 @@ pub mod writer;
 
 pub mod cpp;
 pub mod json;
+pub mod rust;
