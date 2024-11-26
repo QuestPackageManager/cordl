@@ -74,19 +74,6 @@ pub struct CppContext {
 ///
 /// - `write_il2cpp_arg_macros`: Writes IL2CPP argument macros for the given C++ type.
 impl CppContext {
-    /// Retrieves a mutable reference to a C++ type based on the given root tag.
-    pub fn get_cpp_type_recursive_mut(&mut self, root_tag: CsTypeTag) -> Option<&mut CppType> {
-        let ty = self.typedef_types.get_mut(&root_tag);
-
-        ty
-    }
-
-    /// Retrieves an immutable reference to a C++ type based on the given root tag.
-    pub fn get_cpp_type_recursive(&self, root_tag: CsTypeTag) -> Option<&CppType> {
-        let ty = self.typedef_types.get(&root_tag);
-
-        ty
-    }
 
     /// Returns the include path for the C++ type definitions.
     pub fn get_include_path(&self) -> &PathBuf {
