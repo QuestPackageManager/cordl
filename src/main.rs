@@ -10,7 +10,7 @@
 use brocolib::{global_metadata::TypeDefinitionIndex, runtime_metadata::TypeData};
 use byteorder::LittleEndian;
 use color_eyre::eyre::Context;
-use generate::{cpp, json, metadata::CordlMetadata};
+use generate::metadata::CordlMetadata;
 use itertools::Itertools;
 extern crate pretty_env_logger;
 
@@ -34,9 +34,14 @@ mod helpers;
 
 #[derive(Clone, Copy, Debug, clap::ValueEnum)]
 enum TargetLang {
+    #[cfg(feature = "cpp")]
     Cpp,
+    #[cfg(feature = "json")]
     SingleJSON,
+    #[cfg(feature = "json")]
     MultiJSON,
+    #[cfg(feature = "rust")]
+    Rust,
 }
 
 #[derive(Parser)]
@@ -377,18 +382,40 @@ fn main() -> color_eyre::Result<()> {
     }
 
     match cli.target {
-        TargetLang::Cpp => cpp::cpp_main::run_cpp(cs_context_collection, &metadata),
+        #[cfg(feature = "cpp")]
+        TargetLang::Cpp => {
+            use generate::cpp;
+
+            cpp::cpp_main::run_cpp(cs_context_collection, &metadata)?;
+            Ok(())
+        }
+        #[cfg(feature = "json")]
         TargetLang::SingleJSON => {
+            use generate::json;
+
             let json = Path::new("./json");
             println!("Writing json file {json:?}");
-            json::make_json(&metadata, &cs_context_collection, json)
+            json::make_json(&metadata, &cs_context_collection, json)?;
+            Ok(())
         }
+        #[cfg(feature = "json")]
         TargetLang::MultiJSON => {
+            use generate::json;
+
             let json_folder = Path::new("./multi_json");
 
             println!("Writing json file {json_folder:?}");
-            json::make_json_folder(&metadata, &cs_context_collection, json_folder)
+            json::make_json_folder(&metadata, &cs_context_collection, json_folder)?;
+            Ok(())
         }
+
+        #[cfg(feature = "rust")]
+        TargetLang::Rust => {
+            use generate::rust;
+
+            Ok(())
+        }
+        _ => color_eyre::Result::<()>::Ok(()),
     }?;
 
     Ok(())
