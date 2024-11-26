@@ -1,4 +1,4 @@
-use std::{collections::HashMap, path::PathBuf};
+use std::{collections::HashMap, path::{self, PathBuf}};
 
 use crate::generate::cs_type_tag::CsTypeTag;
 
@@ -38,5 +38,13 @@ impl RustContext {
     
     pub(crate) fn insert_rust_type(&self, new_cpp_ty: RustType) {
         todo!()
+    }
+
+    pub fn get_module_path(&self, config: &super::config::RustGenerationConfig) -> String {
+        let relative_path = pathdiff::diff_paths(&self.fundamental_path, &config.source_path).unwrap();
+
+
+        let module_path = relative_path.file_stem().unwrap().to_str().unwrap().replace(path::MAIN_SEPARATOR, "::");
+        format!("crate::{module_path}")
     }
 }

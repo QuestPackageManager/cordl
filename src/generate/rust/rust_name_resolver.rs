@@ -7,13 +7,14 @@ use crate::{
 };
 
 use super::{
-    rust_context_collection::RustContextCollection, rust_name_components::RustNameComponents,
-    rust_type::RustType,
+    config::RustGenerationConfig, rust_context_collection::RustContextCollection,
+    rust_name_components::RustNameComponents, rust_type::RustType,
 };
 
 pub struct RustNameResolver<'a, 'b> {
     pub cordl_metadata: &'a CordlMetadata<'b>,
     pub collection: &'a RustContextCollection,
+    pub config: &'a RustGenerationConfig,
 }
 
 impl<'a, 'b> RustNameResolver<'a, 'b> {
@@ -31,8 +32,10 @@ impl<'a, 'b> RustNameResolver<'a, 'b> {
                     self.resolve_name(declaring_cpp_type, array_type, type_usage, hard_include);
                 let generic_formatted = generic.combine_all();
 
+                declaring_cpp_type.requirements.needs_array_include();
+
                 RustNameComponents {
-                    name: "ArrayW".into(),
+                    name: "Il2CppArray".into(),
                     namespace: Some("".into()),
                     generics: Some(vec![generic_formatted.clone()]),
                     ..Default::default()
@@ -114,83 +117,41 @@ impl<'a, 'b> RustNameResolver<'a, 'b> {
                         );
                     });
 
-                if hard_include {
-                    declaring_cpp_type.requirements.add_dependency(incl_ty);
-                }
-
                 let is_own_context = resolved_context_root_tag == self_context_root_tag;
 
                 if !is_own_context {
-                    match hard_include {
-                        // can add include
-                        true => {
-                            declaring_cpp_type.requirements.add_def_include(
-                                Some(incl_ty),
-                                CppInclude::new_context_typedef(incl_context),
-                            );
-                            declaring_cpp_type.requirements.add_impl_include(
-                                Some(incl_ty),
-                                CppInclude::new_context_typeimpl(incl_context),
-                            );
-                        }
-                        // add forward declare
-                        false => {
-                            declaring_cpp_type.requirements.add_forward_declare((
-                                CppForwardDeclare::from_cpp_type(incl_ty),
-                                CppInclude::new_context_typedef(incl_context),
-                            ));
-                        }
-                    }
+                    declaring_cpp_type
+                        .requirements
+                        .add_module(&incl_context.get_module_path(self.config));
                 }
 
-                {
-                    let this = &self;
-
-                    incl_ty.rs_name_components
-                }
+                incl_ty.rs_name_components.clone()
             }
             ResolvedTypeData::Primitive(il2_cpp_type_enum) => {
                 let requirements = &mut declaring_cpp_type.requirements;
 
-                match il2_cpp_type_enum {
-                    Il2CppTypeEnum::I1
-                    | Il2CppTypeEnum::U1
-                    | Il2CppTypeEnum::I2
-                    | Il2CppTypeEnum::U2
-                    | Il2CppTypeEnum::I4
-                    | Il2CppTypeEnum::U4
-                    | Il2CppTypeEnum::I8
-                    | Il2CppTypeEnum::U8
-                    | Il2CppTypeEnum::I
-                    | Il2CppTypeEnum::U => {
-                        requirements.needs_int_include();
-                    }
-                    Il2CppTypeEnum::R4 | Il2CppTypeEnum::R8 => {
-                        requirements.needs_math_include();
-                    }
-                    _ => (),
-                };
-
                 let s: String = match il2_cpp_type_enum {
-                    Il2CppTypeEnum::I1 => "int8_t".to_string(),
-                    Il2CppTypeEnum::I2 => "int16_t".to_string(),
-                    Il2CppTypeEnum::I4 => "int32_t".to_string(),
-                    Il2CppTypeEnum::I8 => "int64_t".to_string(),
-                    Il2CppTypeEnum::U1 => "uint8_t".to_string(),
-                    Il2CppTypeEnum::U2 => "uint16_t".to_string(),
-                    Il2CppTypeEnum::U4 => "uint32_t".to_string(),
-                    Il2CppTypeEnum::U8 => "uint64_t".to_string(),
+                    Il2CppTypeEnum::I1 => "i8".to_string(),
+                    Il2CppTypeEnum::I2 => "i16".to_string(),
+                    Il2CppTypeEnum::I4 => "i32".to_string(),
+                    Il2CppTypeEnum::I8 => "i64".to_string(),
+                    Il2CppTypeEnum::U1 => "u8".to_string(),
+                    Il2CppTypeEnum::U2 => "u16".to_string(),
+                    Il2CppTypeEnum::U4 => "u32".to_string(),
+                    Il2CppTypeEnum::U8 => "u64".to_string(),
 
-                    Il2CppTypeEnum::R4 => "float_t".to_string(),
-                    Il2CppTypeEnum::R8 => "double_t".to_string(),
+                    Il2CppTypeEnum::R4 => "f32".to_string(),
+                    Il2CppTypeEnum::R8 => "f64".to_string(),
 
-                    Il2CppTypeEnum::Void => "void".to_string(),
+                    Il2CppTypeEnum::Void => "()".to_string(),
                     Il2CppTypeEnum::Boolean => "bool".to_string(),
-                    Il2CppTypeEnum::Char => "char16_t".to_string(),
-                    Il2CppTypeEnum::Object => "void*".to_string(),
-
+                    Il2CppTypeEnum::Char => "char".to_string(),
+                    Il2CppTypeEnum::Object => {
+                        requirements.needs_object_include();
+                        "Il2CppObject".to_string()
+                    }
                     Il2CppTypeEnum::String => {
-                        requirements.needs_stringw_include();
+                        requirements.needs_string_include();
                         "::StringW".to_string()
                     }
 
@@ -208,9 +169,10 @@ impl<'a, 'b> RustNameResolver<'a, 'b> {
                     self.resolve_name(declaring_cpp_type, resolved_type, type_usage, hard_include);
                 let generic_formatted = generic.combine_all();
 
+                declaring_cpp_type.requirements.needs_byref_include();
+
                 RustNameComponents {
                     name: "ByRef".into(),
-                    namespace: Some("".into()),
                     generics: Some(vec![generic_formatted.clone()]),
                     ..Default::default()
                 }
@@ -220,13 +182,18 @@ impl<'a, 'b> RustNameResolver<'a, 'b> {
                     self.resolve_name(declaring_cpp_type, resolved_type, type_usage, hard_include);
                 let generic_formatted = generic.combine_all();
 
+                declaring_cpp_type.requirements.needs_byref_const_include();
+
                 RustNameComponents {
                     name: "ByRefConst".into(),
-                    namespace: Some("".into()),
                     generics: Some(vec![generic_formatted.clone()]),
                     ..Default::default()
                 }
             }
         }
+    }
+
+    fn wrapper_type_for_tdi(td: &Il2CppTypeDefinition) -> RustNameComponents {
+        todo!()
     }
 }

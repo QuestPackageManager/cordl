@@ -1,21 +1,11 @@
 use std::{path::PathBuf, sync::LazyLock};
 
 pub static STATIC_CONFIG: LazyLock<RustGenerationConfig> = LazyLock::new(|| RustGenerationConfig {
-    header_path: PathBuf::from("./codegen-rs/include"),
     source_path: PathBuf::from("./codegen-rs/src"),
-    dst_internals_path: PathBuf::from("./codegen-rs/include/cordl_internals"),
-    dst_header_internals_file: PathBuf::from(
-        "./codegen-rs/include/cordl_internals/cordl_internals.rs",
-    ),
-    use_anonymous_namespace: false,
 });
 
 pub struct RustGenerationConfig {
     pub source_path: PathBuf,
-    pub header_path: PathBuf,
-    pub dst_internals_path: PathBuf,
-    pub dst_header_internals_file: PathBuf,
-    pub use_anonymous_namespace: bool,
 }
 
 impl RustGenerationConfig {
@@ -26,10 +16,7 @@ impl RustGenerationConfig {
             string.replace(['<', '>', '`', '/'], "_").replace('.', "::")
         };
 
-        match self.use_anonymous_namespace {
-            true => format!("::{final_ns}"),
-            false => final_ns,
-        }
+        final_ns
     }
 
     #[inline]

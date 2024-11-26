@@ -81,6 +81,7 @@ impl RustContextCollection {
         let name_resolver = RustNameResolver {
             cordl_metadata: metadata,
             collection: self,
+            config,
         };
 
         rs_type.fill(cs_type, &name_resolver, config);
@@ -229,7 +230,7 @@ impl RustContextCollection {
             .into_group_map_by(|(_, c)| c.fundamental_path.parent())
             .into_iter()
             .try_for_each(|(dir, contexts)| -> color_eyre::Result<()> {
-                let namespace = if dir.unwrap() == STATIC_CONFIG.header_path {
+                let namespace = if dir.unwrap() == STATIC_CONFIG.source_path {
                     "GlobalNamespace"
                 } else {
                     dir.unwrap().file_name().unwrap().to_str().unwrap()
@@ -251,7 +252,7 @@ impl RustContextCollection {
                     // add includes
                     .map(|(_, c)| {
                         let stripped_path =
-                            diff_paths(&c.fundamental_path, &STATIC_CONFIG.header_path).unwrap();
+                            diff_paths(&c.fundamental_path, &STATIC_CONFIG.source_path).unwrap();
 
                         let stripped_path_friendly = if cfg!(windows) {
                             stripped_path.to_string_lossy().replace('\\', "/")
