@@ -18,7 +18,10 @@ use crate::generate::{
     metadata::CordlMetadata, rust::config::STATIC_CONFIG,
 };
 
-use super::{config::RustGenerationConfig, rust_context::RustContext};
+use super::{
+    config::RustGenerationConfig, rust_context::RustContext, rust_name_resolver::RustNameResolver,
+    rust_type::RustType,
+};
 
 #[derive(Default)]
 pub struct RustContextCollection {
@@ -58,12 +61,12 @@ impl RustContextCollection {
 
     fn do_fill_rust_type(
         &mut self,
-        cpp_type: &mut RustType,
+        rs_type: &mut RustType,
         cs_type: CsType,
         metadata: &CordlMetadata,
         config: &RustGenerationConfig,
     ) {
-        let tag = cpp_type.self_tag;
+        let tag = rs_type.self_tag;
 
         if self.filled_types.contains(&tag) {
             return;
@@ -80,7 +83,7 @@ impl RustContextCollection {
             collection: self,
         };
 
-        cpp_type.fill(cs_type, &name_resolver, config);
+        rs_type.fill(cs_type, &name_resolver, config);
 
         self.filled_types.insert(tag);
         self.filling_types.remove(&tag.clone());
@@ -119,7 +122,7 @@ impl RustContextCollection {
             self.all_contexts
                 .get_mut(&context_tag)
                 .expect("No cpp context")
-                .insert_cpp_type(cpp_type);
+                .insert_rust_type(cpp_type);
         }
     }
 
@@ -167,7 +170,7 @@ impl RustContextCollection {
 
         let context = self.all_contexts.get_mut(&context_ty).unwrap();
 
-        context.insert_cpp_type(new_cpp_ty);
+        context.insert_rust_type(new_cpp_ty);
 
         self.borrowing_types.remove(&context_ty);
     }

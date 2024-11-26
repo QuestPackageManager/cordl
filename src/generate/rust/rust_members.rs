@@ -1,37 +1,37 @@
 
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum RustItem {
     Struct(RustStruct),
     Enum(RustEnum),
     Function(RustFunction),
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct RustStruct {
     pub name: String,
     pub fields: Vec<RustField>,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct RustField {
     pub name: String,
     pub field_type: String,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct RustEnum {
     pub name: String,
     pub variants: Vec<RustVariant>,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct RustVariant {
     pub name: String,
     pub fields: Vec<RustField>,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct RustFunction {
     pub name: String,
     pub params: Vec<RustParam>,
@@ -43,7 +43,7 @@ pub struct RustFunction {
     pub is_mut: bool,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct RustParam {
     pub name: String,
     pub param_type: String,
@@ -51,13 +51,13 @@ pub struct RustParam {
     pub is_mut: bool,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct RustTrait {
     pub name: String,
     pub methods: Vec<RustFunction>,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct RustImpl {
     pub trait_name: Option<String>,
     pub type_name: String,
