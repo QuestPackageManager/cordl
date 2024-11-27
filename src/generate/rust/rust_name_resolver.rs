@@ -194,6 +194,6 @@ impl<'a, 'b> RustNameResolver<'a, 'b> {
     }
 
     fn wrapper_type_for_tdi(td: &Il2CppTypeDefinition) -> RustNameComponents {
-        todo!()
+        "Blacklisted".to_string().into()
     }
 }

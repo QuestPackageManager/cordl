@@ -9,7 +9,7 @@ pub struct RustGenerationConfig {
 }
 
 impl RustGenerationConfig {
-    pub fn namespace_cpp(&self, string: &str) -> String {
+    pub fn namespace_rs(&self, string: &str) -> String {
         let final_ns = if string.is_empty() {
             "GlobalNamespace".to_owned()
         } else {
@@ -20,11 +20,11 @@ impl RustGenerationConfig {
     }
 
     #[inline]
-    pub fn name_cpp(&self, string: &str) -> String {
-        self.name_cpp_plus(string, &[])
+    pub fn name_rs(&self, string: &str) -> String {
+        self.name_rs_plus(string, &[])
     }
 
-    pub fn name_cpp_plus(&self, string: &str, additional_exclude: &[&str]) -> String {
+    pub fn name_rs_plus(&self, string: &str, additional_exclude: &[&str]) -> String {
         if string.trim().is_empty() {
             // TODO: handle when multiple params are empty whitespace
             return "_cordl_fixed_empty_name_whitespace".to_string();
@@ -85,7 +85,7 @@ impl RustGenerationConfig {
         }
     }
     /// for converting C++ names into just a single C++ word
-    pub fn sanitize_to_cpp_name(&self, string: &str) -> String {
+    pub fn sanitize_to_rs_name(&self, string: &str) -> String {
         // Coincidentally the same as path_name
         string.replace(['<', '`', '>', '/', '.', ':', '|', ',', '(', ')', '*'], "_")
     }

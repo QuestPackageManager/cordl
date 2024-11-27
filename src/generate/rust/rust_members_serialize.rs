@@ -20,7 +20,10 @@ impl Writable for RustItem {
 
 impl Writable for RustStruct {
     fn write(&self, writer: &mut Writer) -> Result<()> {
-        writeln!(writer, "struct {} {{", self.name)?;
+        let visibility = self.visibility.to_string();
+        let name = &self.name;
+
+        writeln!(writer, "{visibility} struct {name} {{")?;
         for field in &self.fields {
             field.write(writer)?;
         }
@@ -31,14 +34,20 @@ impl Writable for RustStruct {
 
 impl Writable for RustField {
     fn write(&self, writer: &mut Writer) -> Result<()> {
-        writeln!(writer, "{}: {},", self.name, self.field_type)?;
+        let visibility = self.visibility.to_string();
+        let name = &self.name;
+        let field_type = &self.field_type;
+        writeln!(writer, "{visibility} {name}: {field_type},")?;
         Ok(())
     }
 }
 
 impl Writable for RustEnum {
     fn write(&self, writer: &mut Writer) -> Result<()> {
-        writeln!(writer, "enum {} {{", self.name)?;
+        let visibility = self.visibility.to_string();
+        let name = &self.name;
+
+        writeln!(writer, "{visibility} enum {name} {{")?;
         for variant in &self.variants {
             variant.write(writer)?;
             writeln!(writer, ",")?;
@@ -70,8 +79,9 @@ impl Writable for RustVariant {
 
 impl Writable for RustFunction {
     fn write(&self, writer: &mut Writer) -> Result<()> {
+        let visibility = self.visibility.to_string();
         let name = &self.name;
-        write!(writer, "fn {name}(",)?;
+        write!(writer, "{visibility} fn {name}(",)?;
         if self.is_self {
             if self.is_ref {
                 write!(writer, "&")?;

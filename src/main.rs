@@ -412,6 +412,7 @@ fn main() -> color_eyre::Result<()> {
         #[cfg(feature = "rust")]
         TargetLang::Rust => {
             use generate::rust;
+            rust::rust_main::run_rust(cs_context_collection, &metadata)?;
 
             Ok(())
         }

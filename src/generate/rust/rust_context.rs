@@ -1,6 +1,16 @@
-use std::{collections::HashMap, path::{self, PathBuf}};
+use std::{
+    collections::{HashMap, HashSet},
+    fs::{create_dir_all, File},
+    path::{self, Path, PathBuf},
+};
 
-use crate::generate::cs_type_tag::CsTypeTag;
+use color_eyre::eyre::ContextCompat;
+use log::trace;
+use std::io::Write;
+
+use crate::generate::{
+    cs_type_tag::CsTypeTag, type_extensions::TypeDefinitionExtensions, writer::Writer,
+};
 
 use super::rust_type::RustType;
 
@@ -10,16 +20,79 @@ pub struct RustContext {
 
     // Types to write, typedef
     pub typedef_types: HashMap<CsTypeTag, RustType>,
+
+    // Name -> alias
+    pub typealias_types: HashSet<(String, String)>,
 }
 
 impl RustContext {
     pub(crate) fn make(
-        tag: crate::generate::cs_type_tag::CsTypeTag,
+        context_tag: crate::generate::cs_type_tag::CsTypeTag,
         context: &crate::generate::context::TypeContext,
         metadata: &crate::generate::metadata::CordlMetadata<'_>,
         config: &super::config::RustGenerationConfig,
     ) -> RustContext {
-        todo!()
+        let tdi = context_tag.get_tdi();
+        let t = &metadata.metadata.global_metadata.type_definitions[tdi];
+
+        let components = t.get_name_components(metadata.metadata);
+
+        let ns = &components.namespace.as_deref().unwrap_or("GlobalNamespace");
+        let name = &components.name;
+
+        let path = PathBuf::from(config.namespace_path(ns));
+
+        let path_name = match t.declaring_type_index != u32::MAX {
+            true => {
+                let name = config.path_name(name);
+                let base_name = components.declaring_types.unwrap_or_default().join("_");
+
+                format!("{base_name}_{name}")
+            }
+            false => config.path_name(name),
+        };
+
+        let fundamental_path = config
+            .source_path
+            .join(path.join(path_name).with_extension("rs"));
+
+        let mut x: RustContext = RustContext {
+            fundamental_path,
+            typedef_types: Default::default(),
+            typealias_types: Default::default(),
+        };
+
+        for (tag, ty) in &context.typedef_types {
+            let mut rs_ty = RustType::make_rust_type(*tag, ty, config);
+
+            // TODO: Implement blacklist
+            // let tdi = tag.get_tdi();
+            // if metadata.blacklisted_types.contains(&tdi) {
+            //     let result = match t.is_value_type() {
+            //         true => format!(
+            //             "{VALUE_WRAPPER_TYPE}<{:x}>",
+            //             ty.size_info.as_ref().unwrap().instance_size
+            //         ),
+            //         false => IL2CPP_OBJECT_TYPE.to_string(),
+            //     };
+
+            //     if !t.is_value_type() {
+            //         x.typealias_types.insert((
+            //             rs_ty.cpp_namespace(),
+            //             CppUsingAlias {
+            //                 alias: rs_ty.name().to_string(),
+            //                 result,
+            //                 template: Default::default(),
+            //             },
+            //         ));
+            //         continue;
+            //     }
+            // }
+
+            x.typedef_types.insert(*tag, rs_ty);
+        }
+
+        x
     }
 
     /// Returns an immutable reference to the map of C++ types.
@@ -31,20 +104,65 @@ impl RustContext {
     pub fn get_types_mut(&mut self) -> &mut HashMap<CsTypeTag, RustType> {
         &mut self.typedef_types
     }
-    
-    pub(crate) fn write(&self, config: &super::config::RustGenerationConfig) -> Result<(), color_eyre::eyre::Error> {
-        todo!()
+
+    pub(crate) fn write(
+        &self,
+        config: &super::config::RustGenerationConfig,
+    ) -> Result<(), color_eyre::eyre::Error> {
+        let base_path = &config.source_path;
+
+        if !self
+            .fundamental_path
+            .parent()
+            .context("parent is not a directory!")?
+            .is_dir()
+        {
+            // Assume it's never a file
+            create_dir_all(
+                self.fundamental_path
+                    .parent()
+                    .context("Failed to create all directories!")?,
+            )?;
+        }
+
+        trace!("Writing {:?}", self.fundamental_path.as_path());
+        let mut typedef_writer = Writer {
+            stream: File::create(self.fundamental_path.as_path())?,
+            indent: 0,
+            newline: true,
+        };
+
+        let modules: HashSet<&String> = self
+            .typedef_types
+            .values()
+            .flat_map(|t| t.requirements.get_modules().iter())
+            .collect();
+
+        for m in modules {
+            writeln!(typedef_writer, "use {m};")?;
+        }
+
+        for t in self.typedef_types.values() {
+            t.write(&mut typedef_writer, config)?;
+        }
+
+        Ok(())
     }
-    
-    pub(crate) fn insert_rust_type(&self, new_cpp_ty: RustType) {
-        todo!()
+
+    pub(crate) fn insert_rust_type(&mut self, new_rs_ty: RustType) {
+        self.typedef_types.insert(new_rs_ty.self_tag, new_rs_ty);
     }
 
     pub fn get_module_path(&self, config: &super::config::RustGenerationConfig) -> String {
-        let relative_path = pathdiff::diff_paths(&self.fundamental_path, &config.source_path).unwrap();
+        let relative_path =
+            pathdiff::diff_paths(&self.fundamental_path, &config.source_path).unwrap();
 
-
-        let module_path = relative_path.file_stem().unwrap().to_str().unwrap().replace(path::MAIN_SEPARATOR, "::");
+        let module_path = relative_path
+            .file_stem()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .replace(path::MAIN_SEPARATOR, "::");
         format!("crate::{module_path}")
     }
 }

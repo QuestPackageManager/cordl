@@ -1,4 +1,13 @@
+use std::default;
 
+
+#[derive(Clone, Debug, Default)]
+pub enum Visibility {
+    Public,
+    PublicCrate,
+    #[default]
+    Private,
+}
 
 #[derive(Clone, Debug)]
 pub enum RustItem {
@@ -11,18 +20,21 @@ pub enum RustItem {
 pub struct RustStruct {
     pub name: String,
     pub fields: Vec<RustField>,
+    pub visibility: Visibility,
 }
 
 #[derive(Clone, Debug)]
 pub struct RustField {
     pub name: String,
     pub field_type: String,
+    pub visibility: Visibility,
 }
 
 #[derive(Clone, Debug)]
 pub struct RustEnum {
     pub name: String,
     pub variants: Vec<RustVariant>,
+    pub visibility: Visibility,
 }
 
 #[derive(Clone, Debug)]
@@ -41,6 +53,7 @@ pub struct RustFunction {
     pub is_self: bool,
     pub is_ref: bool,
     pub is_mut: bool,
+    pub visibility: Visibility,
 }
 
 #[derive(Clone, Debug)]
@@ -55,6 +68,7 @@ pub struct RustParam {
 pub struct RustTrait {
     pub name: String,
     pub methods: Vec<RustFunction>,
+    pub visibility: Visibility,
 }
 
 #[derive(Clone, Debug)]
@@ -70,3 +84,13 @@ pub struct RustImpl {
 
 type Generic = String;
 type Lifetime = String;
+
+impl ToString for Visibility {
+    fn to_string(&self) -> String {
+        match self {
+            Visibility::Public => "pub".to_string(),
+            Visibility::PublicCrate => "pub(crate)".to_string(),
+            Visibility::Private => "".to_string(),
+        }
+    }
+}
