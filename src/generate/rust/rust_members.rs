@@ -1,5 +1,7 @@
 use std::default;
 
+use super::rust_name_components::RustNameComponents;
+
 
 #[derive(Clone, Debug, Default)]
 pub enum Visibility {
@@ -47,7 +49,7 @@ pub struct RustVariant {
 pub struct RustFunction {
     pub name: String,
     pub params: Vec<RustParam>,
-    pub return_type: Option<String>,
+    pub return_type: Option<RustNameComponents>,
     pub body: Option<String>,
 
     pub is_self: bool,
@@ -59,8 +61,8 @@ pub struct RustFunction {
 #[derive(Clone, Debug)]
 pub struct RustParam {
     pub name: String,
-    pub param_type: String,
-    pub is_ref: bool,
+    pub param_type: RustNameComponents,
+
     pub is_mut: bool,
 }
 

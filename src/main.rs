@@ -7,10 +7,10 @@
 #![feature(exit_status_error)]
 #![feature(iterator_try_collect)]
 
-#[cfg(feature="il2cpp_v31")]
+#[cfg(feature = "il2cpp_v31")]
 extern crate brocolib_il2cpp_v31 as brocolib;
 
-#[cfg(feature="il2cpp_v29")]
+#[cfg(feature = "il2cpp_v29")]
 extern crate brocolib_il2cpp_v29 as brocolib;
 
 use brocolib::{global_metadata::TypeDefinitionIndex, runtime_metadata::TypeData};
@@ -111,13 +111,22 @@ fn main() -> color_eyre::Result<()> {
     })?;
     let il2cpp_metadata = brocolib::Metadata::parse(&global_metadata_data, &elf_data)?;
 
-    let unity_object_tdi_idx = il2cpp_metadata
-        .global_metadata
-        .type_definitions
-        .as_vec()
-        .iter()
-        .position(|v| v.full_name(&il2cpp_metadata, false) == "UnityEngine.Object")
-        .unwrap();
+    let get_tdi = |full_name: &str| {
+        let tdi = il2cpp_metadata
+            .global_metadata
+            .type_definitions
+            .as_vec()
+            .iter()
+            .position(|t| t.full_name(&il2cpp_metadata, false) == full_name)
+            .unwrap_or_else(|| panic!("Unable to find TDI for {full_name}"));
+
+        TypeDefinitionIndex::new(tdi as u32)
+    };
+
+    let unity_object_tdi_idx = get_tdi("UnityEngine.Object");
+    let object_tdi_idx = get_tdi("System.Object");
+    let str_tdi_idx = get_tdi("System.String");
+        
 
     let mut metadata = CordlMetadata {
         metadata: &il2cpp_metadata,
@@ -126,7 +135,11 @@ fn main() -> color_eyre::Result<()> {
         method_calculations: Default::default(),
         parent_to_child_map: Default::default(),
         child_to_parent_map: Default::default(),
-        unity_object_tdi: TypeDefinitionIndex::new(unity_object_tdi_idx as u32),
+        
+        unity_object_tdi: unity_object_tdi_idx,
+        object_tdi: object_tdi_idx,
+        string_tdi: str_tdi_idx,
+
         name_to_tdi: Default::default(),
         blacklisted_types: Default::default(),
         pointer_size: generate::metadata::PointerSize::Bytes8,

@@ -3,7 +3,9 @@ use itertools::Itertools;
 
 use crate::{
     data::type_resolver::{ResolvedType, ResolvedTypeData, TypeUsage},
-    generate::{metadata::CordlMetadata, type_extensions::TypeDefinitionExtensions},
+    generate::{
+        cs_type_tag::CsTypeTag, metadata::CordlMetadata, type_extensions::TypeDefinitionExtensions,
+    },
 };
 
 use super::{
@@ -36,7 +38,7 @@ impl<'a, 'b> RustNameResolver<'a, 'b> {
 
                 RustNameComponents {
                     name: "Il2CppArray".into(),
-                    namespace: Some("".into()),
+                    namespace: None,
                     generics: Some(vec![generic_formatted.clone()]),
                     ..Default::default()
                 }
@@ -86,47 +88,17 @@ impl<'a, 'b> RustNameResolver<'a, 'b> {
                 }
             }
             ResolvedTypeData::Type(resolved_tag) => {
-                if *resolved_tag == declaring_cpp_type.self_tag {
-                    return declaring_cpp_type.rs_name_components.clone();
-                }
-
-                let resolved_context_root_tag = self.collection.get_context_root_tag(*resolved_tag);
-                let self_context_root_tag = self
-                    .collection
-                    .get_context_root_tag(declaring_cpp_type.self_tag);
-
-                let incl_context = self
-                    .collection
-                    .get_context(*resolved_tag)
-                    .unwrap_or_else(|| panic!("Unable to find type {ty:#?}"));
-                let incl_ty = self
-                    .collection
-                    .get_cpp_type(*resolved_tag)
-                    .unwrap_or_else(|| {
-                        let td = &metadata.metadata.global_metadata.type_definitions
-                            [resolved_tag.get_tdi()];
-
-                        println!(
-                            "ty {resolved_tag:#?} vs aliased {:#?}",
-                            self.collection.alias_context.get(resolved_tag)
-                        );
-                        println!("{}", incl_context.fundamental_path.display());
-                        panic!(
-                            "Unable to find type {ty:#?} {}",
-                            td.full_name(metadata.metadata, true)
-                        );
-                    });
-
-                let is_own_context = resolved_context_root_tag == self_context_root_tag;
-
-                if !is_own_context {
-                    declaring_cpp_type
-                        .requirements
-                        .add_module(&incl_context.get_module_path(self.config));
-                }
-
-                incl_ty.rs_name_components.clone()
+                self.get_type_from_tag(*resolved_tag, declaring_cpp_type, metadata)
             }
+            ResolvedTypeData::Primitive(s) if *s == Il2CppTypeEnum::String => {
+                let tag = CsTypeTag::TypeDefinitionIndex(self.cordl_metadata.string_tdi);
+                self.get_type_from_tag(tag, declaring_cpp_type, metadata)
+            }
+            ResolvedTypeData::Primitive(s) if *s == Il2CppTypeEnum::Object => {
+                let tag = CsTypeTag::TypeDefinitionIndex(self.cordl_metadata.object_tdi);
+                self.get_type_from_tag(tag, declaring_cpp_type, metadata)
+            }
+
             ResolvedTypeData::Primitive(il2_cpp_type_enum) => {
                 let requirements = &mut declaring_cpp_type.requirements;
 
@@ -146,14 +118,6 @@ impl<'a, 'b> RustNameResolver<'a, 'b> {
                     Il2CppTypeEnum::Void => "()".to_string(),
                     Il2CppTypeEnum::Boolean => "bool".to_string(),
                     Il2CppTypeEnum::Char => "char".to_string(),
-                    Il2CppTypeEnum::Object => {
-                        requirements.needs_object_include();
-                        "Il2CppObject".to_string()
-                    }
-                    Il2CppTypeEnum::String => {
-                        requirements.needs_string_include();
-                        "::StringW".to_string()
-                    }
 
                     _ => panic!("Unsupported type {il2_cpp_type_enum:#?}"),
                 };
@@ -191,6 +155,54 @@ impl<'a, 'b> RustNameResolver<'a, 'b> {
                 }
             }
         }
+    }
+
+    fn get_type_from_tag(
+        &self,
+        resolved_tag: CsTypeTag,
+        declaring_cpp_type: &mut RustType,
+        metadata: &CordlMetadata<'b>,
+    ) -> RustNameComponents {
+        if resolved_tag == declaring_cpp_type.self_tag {
+            return declaring_cpp_type.rs_name_components.clone();
+        }
+
+        let resolved_context_root_tag = self.collection.get_context_root_tag(resolved_tag);
+        let self_context_root_tag = self
+            .collection
+            .get_context_root_tag(declaring_cpp_type.self_tag);
+
+        let incl_context = self
+            .collection
+            .get_context(resolved_tag)
+            .unwrap_or_else(|| panic!("Unable to find type {resolved_tag:#?}"));
+        let incl_ty = self
+            .collection
+            .get_cpp_type(resolved_tag)
+            .unwrap_or_else(|| {
+                let td =
+                    &metadata.metadata.global_metadata.type_definitions[resolved_tag.get_tdi()];
+
+                println!(
+                    "ty {resolved_tag:#?} vs aliased {:#?}",
+                    self.collection.alias_context.get(&resolved_tag)
+                );
+                println!("{}", incl_context.fundamental_path.display());
+                panic!(
+                    "Unable to find type {resolved_tag:#?} {}",
+                    td.full_name(metadata.metadata, true)
+                );
+            });
+
+        let is_own_context = resolved_context_root_tag == self_context_root_tag;
+
+        if !is_own_context {
+            declaring_cpp_type
+                .requirements
+                .add_module(&incl_context.get_module_path(self.config));
+        }
+
+        incl_ty.rs_name_components.clone()
     }
 
     fn wrapper_type_for_tdi(td: &Il2CppTypeDefinition) -> RustNameComponents {

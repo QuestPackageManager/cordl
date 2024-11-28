@@ -1,3 +1,5 @@
+use clap::builder::Str;
+
 use crate::data::name_components::NameComponents;
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Default, Hash, Clone)]
@@ -6,6 +8,10 @@ pub struct RustNameComponents {
     pub namespace: Option<String>,
     pub declaring_types: Option<Vec<String>>,
     pub generics: Option<Vec<String>>,
+
+    pub is_ref: bool,
+    pub is_ptr: bool,
+    pub is_mut: bool,
 }
 
 impl RustNameComponents {
@@ -18,13 +24,7 @@ impl RustNameComponents {
         let prefix = combined_declaring_types
             .as_ref()
             .or(self.namespace.as_ref())
-            .map(|s| {
-                if s.is_empty() {
-                    "::".to_string()
-                } else {
-                    format!("::{s}::")
-                }
-            })
+            .map(|s| format!("{s}::"))
             .unwrap_or_default();
 
         let mut completed = format!("{prefix}{}", self.name);
@@ -33,7 +33,29 @@ impl RustNameComponents {
             completed = format!("{completed}<{}>", generics.join(","));
         }
 
+        let mut prefix: String = String::new();
+        // &
+        if self.is_ref {
+            prefix = "&".to_string();
+        } else if self.is_ptr {
+            prefix = "*".to_string();
+        }
+        // mut
+        if self.is_mut {
+            prefix += "mut ";
+        }
+
+        // add & or * or mut
+        completed = prefix + &completed;
+
         completed
+    }
+
+    pub fn with_no_prefix(mut self) -> RustNameComponents {
+        self.is_ref = false;
+        self.is_ptr = false;
+        self.is_mut = false;
+        self
     }
 }
 
@@ -44,6 +66,7 @@ impl From<NameComponents> for RustNameComponents {
             namespace: value.namespace,
             declaring_types: value.declaring_types,
             generics: value.generics,
+            ..Default::default()
         }
     }
 }

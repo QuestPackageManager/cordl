@@ -16,7 +16,7 @@ impl RustGenerationConfig {
             string.replace(['<', '>', '`', '/'], "_").replace('.', "::")
         };
 
-        final_ns
+        format!("crate::{final_ns}")
     }
 
     #[inline]
@@ -52,7 +52,7 @@ impl RustGenerationConfig {
             | "typeid" | "typename" | "union" | "unsigned" | "using" | "virtual" | "void"
             | "volatile" | "wchar_t" | "while" | "xor" | "xor_eq" | "INT_MAX" | "INT_MIN"
             | "Assert" | "bzero" | "ID" | "VERSION" | "NULL" | "EOF" | "MOD_ID" | "errno" | "linux" | "module"
-            | "INFINITY" | "NAN" |
+            | "INFINITY" | "NAN" | "type" | "size" | "time" | "clock" | "rand" | "srand" | "exit" |
             // networking headers
             "EPERM"
             | "ENOENT" | "ESRCH" | "EINTR" | "EIO" | "ENXIO" | "E2BIG" | "ENOEXEC" | "EBADF"

@@ -87,9 +87,9 @@ impl Writable for RustFunction {
                 write!(writer, "&")?;
             }
             if self.is_mut {
-                write!(writer, "mut")?;
+                write!(writer, "mut ")?;
             }
-            write!(writer, "self")?;
+            write!(writer, "self,")?;
         }
 
         for (i, param) in self.params.iter().enumerate() {
@@ -99,12 +99,17 @@ impl Writable for RustFunction {
         write!(writer, ")")?;
 
         if let Some(ref return_type) = self.return_type {
-            write!(writer, " -> {}", return_type)?;
+            write!(writer, " -> {}", return_type.combine_all())?;
         }
-        if let Some(body) = &self.body {
-            writeln!(writer, "{{")?;
-            writeln!(writer, "{body}")?;
-            writeln!(writer, "}}")?;
+        match &self.body {
+            Some(body) => {
+                writeln!(writer, "{{")?;
+                writeln!(writer, "{body}")?;
+                writeln!(writer, "}}")?;
+            }
+            _ => {
+                writeln!(writer, ";")?;
+            }
         }
 
         Ok(())
@@ -113,18 +118,10 @@ impl Writable for RustFunction {
 
 impl Writable for RustParam {
     fn write(&self, writer: &mut Writer) -> Result<()> {
-        write!(writer, "{}:", self.name)?;
+        write!(writer, "{}: ", self.name)?;
 
-        // &
-        if self.is_ref {
-            write!(writer, "&")?;
-        }
-        // mut
-        if self.is_mut {
-            write!(writer, "mut")?;
-        }
         // ty
-        write!(writer, "{}", self.param_type)?;
+        write!(writer, " {}", self.param_type.combine_all())?;
 
         // => {name}: &mut {ty}
         Ok(())

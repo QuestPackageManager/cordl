@@ -157,12 +157,14 @@ impl RustContext {
         let relative_path =
             pathdiff::diff_paths(&self.fundamental_path, &config.source_path).unwrap();
 
+        let module_name = relative_path.file_stem().unwrap().to_string_lossy();
+
         let module_path = relative_path
-            .file_stem()
+            .parent()
             .unwrap()
-            .to_str()
-            .unwrap()
+            .to_string_lossy()
             .replace(path::MAIN_SEPARATOR, "::");
-        format!("crate::{module_path}")
+
+        format!("crate::{module_path}::{module_name}")
     }
 }
