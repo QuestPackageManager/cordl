@@ -7,6 +7,12 @@
 #![feature(exit_status_error)]
 #![feature(iterator_try_collect)]
 
+#[cfg(feature="il2cpp_v31")]
+extern crate brocolib_il2cpp_v31 as brocolib;
+
+#[cfg(feature="il2cpp_v29")]
+extern crate brocolib_il2cpp_v29 as brocolib;
+
 use brocolib::{global_metadata::TypeDefinitionIndex, runtime_metadata::TypeData};
 use byteorder::LittleEndian;
 use color_eyre::eyre::Context;
