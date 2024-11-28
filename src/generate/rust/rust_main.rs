@@ -12,6 +12,7 @@ use crate::generate::{
     cs_context_collection::TypeContextCollection,
     metadata::CordlMetadata,
     rust::{config::STATIC_CONFIG, rust_context_collection::RustContextCollection},
+    type_extensions::{TypeDefinitionExtensions, TypeDefinitionIndexExtensions},
 };
 
 pub fn run_rust(
@@ -303,6 +304,19 @@ pub fn run_rust(
                 c.get_types()
                     .iter()
                     .any(|(_, t)| t.name().contains("EventBoxGroup`1"))
+            })
+            .unwrap()
+            .1
+            .write(&STATIC_CONFIG)?;
+        info!("Explicitly laid out type");
+        types()
+            .find(|(_, c)| {
+                c.get_types().iter().any(|(_, t)| {
+                    t.self_tag
+                        .get_tdi()
+                        .get_type_definition(metadata.metadata)
+                        .is_explicit_layout()
+                })
             })
             .unwrap()
             .1
