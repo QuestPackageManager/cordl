@@ -52,7 +52,11 @@ impl RustGenerationConfig {
             | "typeid" | "typename" | "union" | "unsigned" | "using" | "virtual" | "void"
             | "volatile" | "wchar_t" | "while" | "xor" | "xor_eq" | "INT_MAX" | "INT_MIN"
             | "Assert" | "bzero" | "ID" | "VERSION" | "NULL" | "EOF" | "MOD_ID" | "errno" | "linux" | "module"
-            | "INFINITY" | "NAN" | "type" | "size" | "time" | "clock" | "rand" | "srand" | "exit" |
+            | "INFINITY" | "NAN" | "type" | "size" | "time" | "clock" | "rand" | "srand" | "exit" | "match" | 
+            "panic" | "assert" | "debug_assert" | "assert_eq" | "assert_ne" | "debug_assert_eq" | "debug_assert_ne" 
+            | "unreachable" | "unimplemented" | "todo" | "trait" | "impl" | "ref" | "mut" | "as" | "use" | "pub"
+            | "Ok" | "Err" | "ffi" | "c_void" | "c_char" | "c_uchar" | "c_schar" | "c_short" | "c_ushort"
+            | "c_int" | "c_uint" | "c_long" | "c_ulong" | "c_longlong" | "c_ulonglong" | "c_float" | "c_double" |
             // networking headers
             "EPERM"
             | "ENOENT" | "ESRCH" | "EINTR" | "EIO" | "ENXIO" | "E2BIG" | "ENOEXEC" | "EBADF"
