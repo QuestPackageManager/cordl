@@ -611,7 +611,7 @@ impl CppType {
                 continue;
             }
 
-            let prop_ty = prop.prop_ty.get_type(name_resolver.cordl_metadata);
+            let _prop_ty = prop.prop_ty.get_type(name_resolver.cordl_metadata);
 
             let prop_resolved_ty =
                 name_resolver.resolve_name(self, &prop.prop_ty, TypeUsage::Property, false);

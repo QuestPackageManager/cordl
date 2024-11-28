@@ -5,9 +5,9 @@ use itertools::Itertools;
 
 use crate::data::type_resolver::ResolvedType;
 
-use super::writer::Writable;
 
-use std::{hash::Hash, sync::Arc};
+
+use std::{hash::Hash};
 
 #[derive(Debug, Eq, Hash, PartialEq, Clone, Default, PartialOrd, Ord)]
 pub struct CsGenericTemplate {
