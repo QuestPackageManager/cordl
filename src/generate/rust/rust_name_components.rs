@@ -57,6 +57,24 @@ impl RustNameComponents {
         self.is_mut = false;
         self
     }
+    pub fn with_ref(mut self) -> RustNameComponents {
+        self.is_ref = true;
+        self.is_ptr = false;
+        self
+    }
+    pub fn with_ptr(mut self) -> RustNameComponents {
+        self.is_ref = false;
+        self.is_ptr = true;
+        self
+    }
+    pub fn with_mut(mut self) -> RustNameComponents {
+        self.is_mut = true;
+        self
+    }
+    pub fn without_mut(mut self) -> RustNameComponents {
+        self.is_mut = false;
+        self
+    }
 }
 
 impl From<NameComponents> for RustNameComponents {
