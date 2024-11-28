@@ -14,6 +14,11 @@ impl Writable for RustItem {
             RustItem::Struct(s) => s.write(writer),
             RustItem::Enum(e) => e.write(writer),
             RustItem::Function(func) => func.write(writer),
+            RustItem::TypeAlias(_, _) => todo!(),
+            RustItem::NamedType(s) => {
+                write!(writer, "{s}")?;
+                Ok(())
+            },
         }
     }
 }
@@ -37,7 +42,11 @@ impl Writable for RustField {
         let visibility = self.visibility.to_string();
         let name = &self.name;
         let field_type = &self.field_type;
-        writeln!(writer, "{visibility} {name}: {field_type},")?;
+        
+        write!(writer, "{visibility} {name}: ")?;
+        field_type.write(writer)?;
+        writeln!(writer, ",")?;
+
         Ok(())
     }
 }
@@ -68,7 +77,8 @@ impl Writable for RustVariant {
         for (i, field) in self.fields.iter().enumerate() {
             let name = &field.name;
             let ty = &field.field_type;
-            write!(writer, "{name}: {ty}")?;
+            write!(writer, "{name}: ")?;
+            ty.write(writer)?;
             write!(writer, ", ")?;
         }
         write!(writer, ")")?;
@@ -99,7 +109,7 @@ impl Writable for RustFunction {
         write!(writer, ")")?;
 
         if let Some(ref return_type) = self.return_type {
-            write!(writer, " -> {}", return_type.combine_all())?;
+            write!(writer, " -> {}", return_type)?;
         }
         match &self.body {
             Some(body) => {
@@ -121,7 +131,7 @@ impl Writable for RustParam {
         write!(writer, "{}: ", self.name)?;
 
         // ty
-        write!(writer, " {}", self.param_type.combine_all())?;
+        write!(writer, " {}", self.param_type)?;
 
         // => {name}: &mut {ty}
         Ok(())

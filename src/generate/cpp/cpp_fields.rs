@@ -12,6 +12,7 @@ use crate::generate::writer::Writable;
 use itertools::Itertools;
 use log::warn;
 
+use std::mem::ManuallyDrop;
 use std::sync::Arc;
 
 use brocolib::runtime_metadata::Il2CppTypeEnum;
@@ -345,7 +346,7 @@ pub(crate) fn handle_instance_fields(
 
         resulting_fields
             .into_iter()
-            .map(|member| CppMember::FieldDecl(member))
+            .map(CppMember::FieldDecl)
             .for_each(|member| cpp_type.declarations.push(member.into()));
     };
 }
@@ -480,7 +481,6 @@ pub(crate) fn prop_decl_from_fieldinfo(
     let f_cpp_name = &cpp_field.cpp_name;
     let f_offset = cs_field.offset.unwrap_or(u32::MAX);
     let f_size = cs_field.size;
-    let _field_ty_cpp_name = &cs_field.field_ty;
 
     let (getter_name, setter_name) = method_names_from_fieldinfo(f_cpp_name);
 
@@ -725,7 +725,6 @@ pub(crate) fn handle_referencetype_fields(
                 false => Some(t),
             });
 
-        let _declaring_cpp_full_name = cpp_type.cpp_name_components.remove_pointer().combine_all();
 
         let cpp_field_decl = make_cpp_field_decl(cpp_type, field_info, name_resolver, config);
 
@@ -750,7 +749,7 @@ pub(crate) fn handle_referencetype_fields(
 
     let backing_fields = fields
         .iter()
-        .map(|f| make_cpp_field_decl(cpp_type, &f, name_resolver, config))
+        .map(|f| make_cpp_field_decl(cpp_type, f, name_resolver, config))
         .map(|mut f| {
             f.cpp_name = fixup_backing_field(&f.cpp_name);
             f
@@ -760,21 +759,6 @@ pub(crate) fn handle_referencetype_fields(
     handle_instance_fields(cpp_type, &backing_fields, metadata, tdi);
 }
 
-pub(crate) fn field_collision_check(instance_fields: &[CsField]) -> bool {
-    let mut next_offset = 0;
-    return instance_fields
-        .iter()
-        .sorted_by(|a, b| a.offset.cmp(&b.offset))
-        .any(|field| {
-            let offset = field.offset.unwrap_or(u32::MAX);
-            if offset < next_offset {
-                true
-            } else {
-                next_offset = offset + field.size as u32;
-                false
-            }
-        });
-}
 
 // inspired by what il2cpp does for explicitly laid out types
 pub(crate) fn pack_fields_into_single_union(fields: &[CppFieldDecl]) -> CppNestedUnion {
@@ -782,7 +766,7 @@ pub(crate) fn pack_fields_into_single_union(fields: &[CppFieldDecl]) -> CppNeste
     let min_offset = fields.iter().map(|f| f.offset.unwrap()).min().unwrap_or(0);
 
     let packed_structs = fields
-        .into_iter()
+        .iter()
         .cloned()
         .map(|field| {
             let structs = field_into_offset_structs(min_offset, field);

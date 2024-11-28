@@ -2,7 +2,6 @@ use std::default;
 
 use super::rust_name_components::RustNameComponents;
 
-
 #[derive(Clone, Debug, Default)]
 pub enum Visibility {
     Public,
@@ -16,10 +15,20 @@ pub enum RustItem {
     Struct(RustStruct),
     Enum(RustEnum),
     Function(RustFunction),
+    TypeAlias(String, String),
+    NamedType(String),
 }
 
 #[derive(Clone, Debug)]
 pub struct RustStruct {
+    pub name: String,
+    pub fields: Vec<RustField>,
+    pub visibility: Visibility,
+    pub packing: Option<u32>,
+}
+
+#[derive(Clone, Debug)]
+pub struct RustUnion {
     pub name: String,
     pub fields: Vec<RustField>,
     pub visibility: Visibility,
@@ -28,8 +37,9 @@ pub struct RustStruct {
 #[derive(Clone, Debug)]
 pub struct RustField {
     pub name: String,
-    pub field_type: String,
+    pub field_type: RustItem,
     pub visibility: Visibility,
+    pub offset: u32,
 }
 
 #[derive(Clone, Debug)]
@@ -49,7 +59,7 @@ pub struct RustVariant {
 pub struct RustFunction {
     pub name: String,
     pub params: Vec<RustParam>,
-    pub return_type: Option<RustNameComponents>,
+    pub return_type: Option<String>,
     pub body: Option<String>,
 
     pub is_self: bool,
@@ -61,7 +71,7 @@ pub struct RustFunction {
 #[derive(Clone, Debug)]
 pub struct RustParam {
     pub name: String,
-    pub param_type: RustNameComponents,
+    pub param_type: String,
 
     pub is_mut: bool,
 }

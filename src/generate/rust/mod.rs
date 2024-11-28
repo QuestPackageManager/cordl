@@ -8,4 +8,6 @@ mod rust_context_collection;
 mod rust_name_resolver;
 mod rust_name_components;
 
+mod rust_fields;
+
 pub mod rust_main;

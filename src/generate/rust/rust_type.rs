@@ -20,7 +20,7 @@ use crate::{
 
 use super::{
     config::RustGenerationConfig,
-    rust_members::{RustField, RustFunction, RustParam, RustTrait, Visibility},
+    rust_members::{RustField, RustFunction, RustItem, RustParam, RustTrait, Visibility},
     rust_name_components::RustNameComponents,
     rust_name_resolver::RustNameResolver,
 };
@@ -156,8 +156,9 @@ impl RustType {
         let parent = name_resolver.resolve_name(self, parent, TypeUsage::TypeName, true);
         let parent_field = RustField {
             name: PARENT_FIELD.to_string(),
-            field_type: parent.combine_all(),
+            field_type: RustItem::NamedType(parent.combine_all()),
             visibility: Visibility::Private,
+            offset: 0
         };
 
         self.fields.insert(0, parent_field);
@@ -178,8 +179,9 @@ impl RustType {
 
             let rust_field = RustField {
                 name: config.name_rs(&f.name),
-                field_type: field_type.combine_all(),
+                field_type: RustItem::NamedType(field_type.combine_all()),
                 visibility: Visibility::Public,
+                offset: f.offset.unwrap_or_default()
             };
             self.fields.push(rust_field);
         }
@@ -208,7 +210,7 @@ impl RustType {
                 is_self: m.instance,
                 params,
 
-                return_type: Some(m_ret_ty),
+                return_type: Some(m_ret_ty.combine_all()),
                 visibility: Visibility::Public,
             };
             self.methods.push(rust_func);
@@ -227,7 +229,7 @@ impl RustType {
         let name_rs = config.name_rs(&p.name);
         RustParam {
             name: name_rs,
-            param_type: p_ty,
+            param_type: p_ty.combine_all(),
             // is_ref: p_il2cpp_ty.is_byref(),
             // is_ptr: !p_il2cpp_ty.valuetype,
             is_mut: true,
