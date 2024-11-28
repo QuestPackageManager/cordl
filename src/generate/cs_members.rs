@@ -5,9 +5,7 @@ use itertools::Itertools;
 
 use crate::data::type_resolver::ResolvedType;
 
-
-
-use std::{hash::Hash};
+use std::hash::Hash;
 
 #[derive(Debug, Eq, Hash, PartialEq, Clone, Default, PartialOrd, Ord)]
 pub struct CsGenericTemplate {

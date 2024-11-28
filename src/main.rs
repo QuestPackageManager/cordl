@@ -126,7 +126,6 @@ fn main() -> color_eyre::Result<()> {
     let unity_object_tdi_idx = get_tdi("UnityEngine.Object");
     let object_tdi_idx = get_tdi("System.Object");
     let str_tdi_idx = get_tdi("System.String");
-        
 
     let mut metadata = CordlMetadata {
         metadata: &il2cpp_metadata,
@@ -135,7 +134,7 @@ fn main() -> color_eyre::Result<()> {
         method_calculations: Default::default(),
         parent_to_child_map: Default::default(),
         child_to_parent_map: Default::default(),
-        
+
         unity_object_tdi: unity_object_tdi_idx,
         object_tdi: object_tdi_idx,
         string_tdi: str_tdi_idx,

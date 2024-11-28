@@ -18,7 +18,7 @@ impl Writable for RustItem {
             RustItem::NamedType(s) => {
                 write!(writer, "{s}")?;
                 Ok(())
-            },
+            }
         }
     }
 }
@@ -42,7 +42,7 @@ impl Writable for RustField {
         let visibility = self.visibility.to_string();
         let name = &self.name;
         let field_type = &self.field_type;
-        
+
         write!(writer, "{visibility} {name}: ")?;
         field_type.write(writer)?;
         writeln!(writer, ",")?;

@@ -4,36 +4,26 @@ pub struct NameComponents {
     pub declaring_types: Option<Vec<String>>,
     pub name: String,
     pub generics: Option<Vec<String>>,
-    pub is_pointer: bool,
 }
 
 impl NameComponents {
     // TODO: Add setting for adding :: prefix
     // however, this cannot be allowed in all cases
     pub fn combine_all(&self) -> String {
-        let combined_declaring_types = self.declaring_types.as_ref().map(|d| d.join("::"));
+        let namespace = self.namespace.as_deref().unwrap_or("");
+        let combined_declaring_types = self.declaring_types.as_ref().map(|d| d.join("/"));
 
-        // will be empty if no namespace or declaring types
-        let prefix = combined_declaring_types
-            .as_ref()
-            .or(self.namespace.as_ref())
-            .map(|s| {
-                if s.is_empty() {
-                    "::".to_string()
-                } else {
-                    format!("::{s}::")
-                }
-            })
-            .unwrap_or_default();
-
-        let mut completed = format!("{prefix}{}", self.name);
+        let mut completed = match combined_declaring_types {
+            Some(combined_declaring_types) => {
+                format!("{namespace}.{combined_declaring_types}/{}", self.name)
+            }
+            None => {
+                format!("{namespace}.{}", self.name)
+            }
+        };
 
         if let Some(generics) = &self.generics {
             completed = format!("{completed}<{}>", generics.join(","));
-        }
-
-        if self.is_pointer {
-            completed = format!("{completed}*")
         }
 
         completed
@@ -52,19 +42,6 @@ impl NameComponents {
         Self {
             generics: None,
             ..self
-        }
-    }
-
-    pub fn as_pointer(&self) -> Self {
-        Self {
-            is_pointer: true,
-            ..self.clone()
-        }
-    }
-    pub fn remove_pointer(&self) -> Self {
-        Self {
-            is_pointer: false,
-            ..self.clone()
         }
     }
 

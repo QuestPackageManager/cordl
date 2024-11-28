@@ -1,7 +1,7 @@
 use itertools::Itertools;
 use std::io::Write;
 
-use crate::generate::writer::{Writable, Writer, SortLevel, Sortable};
+use crate::generate::writer::{SortLevel, Sortable, Writable, Writer};
 
 use super::cpp_members::{
     CppCommentedString, CppConstructorDecl, CppConstructorImpl, CppFieldDecl, CppFieldImpl,

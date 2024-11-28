@@ -296,7 +296,6 @@ impl TypeDefinitionExtensions for Il2CppTypeDefinition {
 
         let _ty =
             &metadata.runtime_metadata.metadata_registration.types[self.byval_type_index as usize];
-        let is_pointer = self.is_reference_type(metadata);
 
         match self.declaring_type_index != u32::MAX {
             true => {
@@ -319,7 +318,6 @@ impl TypeDefinitionExtensions for Il2CppTypeDefinition {
                     name: name.to_string(),
                     declaring_types: Some(declaring_types),
                     generics,
-                    is_pointer,
                 }
             }
             false => NameComponents {
@@ -327,7 +325,6 @@ impl TypeDefinitionExtensions for Il2CppTypeDefinition {
                 name: name.to_string(),
                 declaring_types: None,
                 generics,
-                is_pointer,
             },
         }
     }

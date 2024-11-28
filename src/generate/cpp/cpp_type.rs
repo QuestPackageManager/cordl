@@ -39,6 +39,7 @@ use super::{
         CppLine, CppMember, CppMethodData, CppMethodDecl, CppMethodImpl, CppNestedStruct,
         CppNonMember, CppParam, CppPropertyDecl, CppTemplate, CppUsingAlias,
     },
+    cpp_name_components::CppNameComponents,
     cpp_name_resolver::{CppNameResolver, VALUE_WRAPPER_TYPE},
 };
 
@@ -183,7 +184,7 @@ pub struct CppType {
 
     pub cpp_template: Option<CppTemplate>,
     pub cs_name_components: NameComponents,
-    pub cpp_name_components: NameComponents,
+    pub cpp_name_components: CppNameComponents,
     pub(crate) prefix_comments: Vec<String>,
     pub packing: Option<u32>,
     pub size_info: Option<SizeInfo>,
@@ -377,7 +378,7 @@ impl CppType {
     ) -> CppType {
         let cs_name_components = &cs_type.cs_name_components;
 
-        let cpp_name_components = NameComponents {
+        let cpp_name_components = CppNameComponents {
             declaring_types: cs_name_components
                 .declaring_types
                 .as_ref()
@@ -393,7 +394,7 @@ impl CppType {
                 .namespace
                 .as_ref()
                 .map(|s| config.namespace_cpp(s)),
-            is_pointer: cs_name_components.is_pointer,
+            is_pointer: cs_type.is_reference_type,
         };
 
         let generic_instantiations_args_types = cs_type.generic_instantiations_args_types.clone();
@@ -703,10 +704,7 @@ impl CppType {
             let cpp_constructor_impl = CppMethodImpl {
                 body: vec![Arc::new(CppLine::make(format!("return {allocate_call};")))],
 
-                declaring_cpp_full_name: self
-                    .cpp_name_components
-                    .remove_pointer()
-                    .combine_all(),
+                declaring_cpp_full_name: self.cpp_name_components.remove_pointer().combine_all(),
                 parameters: m_params.to_vec(),
                 template: declaring_template,
                 ..decl.clone().into()

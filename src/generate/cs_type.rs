@@ -223,7 +223,7 @@ impl CsType {
             declaring_ty.map(|t| CsTypeTag::from_type_data(t.data, metadata.metadata));
 
         let cs_name_components = t.get_name_components(metadata.metadata);
-        let is_pointer = cs_name_components.is_pointer;
+        let is_pointer = t.is_reference_type(metadata.metadata);
 
         // TODO: Come up with a way to avoid this extra call to layout the entire type
         // We really just want to call it once for a given size and then move on

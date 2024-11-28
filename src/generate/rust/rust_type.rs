@@ -105,8 +105,8 @@ impl RustType {
                 .as_ref()
                 .map(|s| config.namespace_rs(s)),
             is_ref: false,
-            is_ptr: cs_name_components.is_pointer,
-            is_mut: cs_name_components.is_pointer, // value types don't need to be mutable
+            is_ptr: cs_type.is_reference_type,
+            is_mut: cs_type.is_reference_type, // value types don't need to be mutable
         };
 
         RustType {
@@ -158,7 +158,7 @@ impl RustType {
             name: PARENT_FIELD.to_string(),
             field_type: RustItem::NamedType(parent.combine_all()),
             visibility: Visibility::Private,
-            offset: 0
+            offset: 0,
         };
 
         self.fields.insert(0, parent_field);
@@ -181,7 +181,7 @@ impl RustType {
                 name: config.name_rs(&f.name),
                 field_type: RustItem::NamedType(field_type.combine_all()),
                 visibility: Visibility::Public,
-                offset: f.offset.unwrap_or_default()
+                offset: f.offset.unwrap_or_default(),
             };
             self.fields.push(rust_field);
         }
@@ -255,9 +255,6 @@ impl RustType {
     }
 
     pub(crate) fn write(&self, writer: &mut Writer, config: &RustGenerationConfig) -> Result<()> {
-        if self.is_reference_type {
-            self.write_reference_type(writer, config)?;
-        }
         if self.is_value_type {
             if self.is_enum_type {
                 self.write_enum_type(writer, config)?;
@@ -265,8 +262,11 @@ impl RustType {
                 self.write_value_type(writer, config)?;
             }
         }
+
         if self.is_interface {
             self.write_interface(writer, config)?;
+        } else if self.is_reference_type {
+            self.write_reference_type(writer, config)?;
         }
 
         Ok(())
@@ -285,7 +285,7 @@ impl RustType {
         writeln!(writer, "}}")?;
         writeln!(writer, "quest_hook::libil2cpp::unsafe_impl_reference_type!(in quest_hook::libil2cpp for {} => {});",
          self.rs_name(),
-         self.cs_name_components.remove_pointer().combine_all()
+         self.cs_name_components.combine_all()
         )?;
 
         // example of using the il2cpp_subtype macro
@@ -333,7 +333,7 @@ impl RustType {
 
         writeln!(writer, "quest_hook::libil2cpp::unsafe_impl_value_type!(in quest_hook::libil2cpp for {} => {});",
          self.rs_name(),
-         self.cs_name_components.remove_pointer().combine_all()
+         self.cs_name_components.combine_all()
         )?;
 
         self.write_impl(writer, config)?;
@@ -352,7 +352,7 @@ impl RustType {
 
         writeln!(writer, "quest_hook::libil2cpp::unsafe_impl_value_type!(in quest_hook::libil2cpp for {} => {});",
          self.rs_name(),
-         self.cs_name_components.remove_pointer().combine_all()
+         self.cs_name_components.combine_all()
         )?;
 
         self.write_impl(writer, config)?;
@@ -380,7 +380,7 @@ impl RustType {
         writeln!(writer, "}}")?;
         writeln!(writer, "quest_hook::libil2cpp::unsafe_impl_reference_type!(in quest_hook::libil2cpp for {} => {});",
          self.rs_name(),
-         self.cs_name_components.remove_pointer().combine_all()
+         self.cs_name_components.combine_all()
         )?;
 
         Ok(())

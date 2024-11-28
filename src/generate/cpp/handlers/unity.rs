@@ -8,6 +8,7 @@ use crate::{
         cpp::{
             cpp_context_collection::CppContextCollection,
             cpp_members::{CppInclude, CppMember},
+            cpp_name_components::CppNameComponents,
             cpp_type::CppType,
         },
         cs_type_tag::CsTypeTag,
@@ -38,11 +39,11 @@ pub fn register_unity(
 }
 
 pub fn unity_object_resolve_handler(
-    original: NameComponents,
+    original: CppNameComponents,
     cpp_type: &CppType,
     metadata: &CordlMetadata,
     typ_usage: TypeUsage,
-) -> NameComponents {
+) -> CppNameComponents {
     if !matches!(
         typ_usage,
         TypeUsage::Field | TypeUsage::Property | TypeUsage::GenericArg | TypeUsage::ReturnType
@@ -59,7 +60,7 @@ pub fn unity_object_resolve_handler(
         return original;
     }
 
-    NameComponents {
+    CppNameComponents {
         namespace: Some("".to_string()),
         declaring_types: None,
         name: "UnityW".to_string(),

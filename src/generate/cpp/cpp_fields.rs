@@ -640,25 +640,25 @@ pub(crate) fn prop_methods_from_fieldinfo(
     };
 
     // construct getter and setter bodies
-    let getter_body: Vec<Arc<dyn Writable>> =
-        if let Some(instance_null_check) = instance_null_check {
-            vec![
-                Arc::new(CppLine::make(instance_null_check.into())),
-                Arc::new(CppLine::make(getter_call)),
-            ]
-        } else {
-            vec![Arc::new(CppLine::make(getter_call))]
-        };
+    let getter_body: Vec<Arc<dyn Writable>> = if let Some(instance_null_check) = instance_null_check
+    {
+        vec![
+            Arc::new(CppLine::make(instance_null_check.into())),
+            Arc::new(CppLine::make(getter_call)),
+        ]
+    } else {
+        vec![Arc::new(CppLine::make(getter_call))]
+    };
 
-    let setter_body: Vec<Arc<dyn Writable>> =
-        if let Some(instance_null_check) = instance_null_check {
-            vec![
-                Arc::new(CppLine::make(instance_null_check.into())),
-                Arc::new(CppLine::make(setter_call)),
-            ]
-        } else {
-            vec![Arc::new(CppLine::make(setter_call))]
-        };
+    let setter_body: Vec<Arc<dyn Writable>> = if let Some(instance_null_check) = instance_null_check
+    {
+        vec![
+            Arc::new(CppLine::make(instance_null_check.into())),
+            Arc::new(CppLine::make(setter_call)),
+        ]
+    } else {
+        vec![Arc::new(CppLine::make(setter_call))]
+    };
 
     let declaring_cpp_name = cpp_type.cpp_name_components.remove_pointer().combine_all();
     let template = cpp_type.cpp_template.clone();
@@ -725,7 +725,6 @@ pub(crate) fn handle_referencetype_fields(
                 false => Some(t),
             });
 
-
         let cpp_field_decl = make_cpp_field_decl(cpp_type, field_info, name_resolver, config);
 
         let prop = prop_decl_from_fieldinfo(metadata, field_info, &cpp_field_decl);
@@ -758,7 +757,6 @@ pub(crate) fn handle_referencetype_fields(
 
     handle_instance_fields(cpp_type, &backing_fields, metadata, tdi);
 }
-
 
 // inspired by what il2cpp does for explicitly laid out types
 pub(crate) fn pack_fields_into_single_union(fields: &[CppFieldDecl]) -> CppNestedUnion {

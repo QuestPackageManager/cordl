@@ -12,6 +12,7 @@ use crate::{
 use super::{
     cpp_context_collection::CppContextCollection,
     cpp_members::{CppForwardDeclare, CppInclude},
+    cpp_name_components::CppNameComponents,
     cpp_type::CppType,
     handlers::unity,
 };
@@ -33,7 +34,7 @@ impl<'a, 'b> CppNameResolver<'a, 'b> {
         ty: &ResolvedType,
         type_usage: TypeUsage,
         hard_include: bool,
-    ) -> NameComponents {
+    ) -> CppNameComponents {
         let metadata = self.cordl_metadata;
         match &ty.data {
             ResolvedTypeData::Array(array_type) => {
@@ -41,7 +42,7 @@ impl<'a, 'b> CppNameResolver<'a, 'b> {
                     self.resolve_name(declaring_cpp_type, array_type, type_usage, hard_include);
                 let generic_formatted = generic.combine_all();
 
-                NameComponents {
+                CppNameComponents {
                     name: "ArrayW".into(),
                     namespace: Some("".into()),
                     generics: Some(vec![
@@ -64,7 +65,7 @@ impl<'a, 'b> CppNameResolver<'a, 'b> {
                     .collect_vec();
 
                 // add generics to type def
-                NameComponents {
+                CppNameComponents {
                     generics: Some(generic_types_formatted),
                     ..type_def_name_components
                 }
@@ -89,7 +90,7 @@ impl<'a, 'b> CppNameResolver<'a, 'b> {
             ResolvedTypeData::Ptr(resolved_type) => {
                 let generic_formatted =
                     self.resolve_name(declaring_cpp_type, resolved_type, type_usage, hard_include);
-                NameComponents {
+                CppNameComponents {
                     namespace: Some("cordl_internals".into()),
                     generics: Some(vec![generic_formatted.combine_all()]),
                     name: "Ptr".into(),
@@ -206,7 +207,7 @@ impl<'a, 'b> CppNameResolver<'a, 'b> {
 
                     _ => panic!("Unsupported type {il2_cpp_type_enum:#?}"),
                 };
-                NameComponents::from(s)
+                CppNameComponents::from(s)
             }
             ResolvedTypeData::Blacklisted(cs_type_tag) => {
                 let td = &metadata.metadata.global_metadata.type_definitions[cs_type_tag.get_tdi()];
@@ -218,7 +219,7 @@ impl<'a, 'b> CppNameResolver<'a, 'b> {
                     self.resolve_name(declaring_cpp_type, resolved_type, type_usage, hard_include);
                 let generic_formatted = generic.combine_all();
 
-                NameComponents {
+                CppNameComponents {
                     name: "ByRef".into(),
                     namespace: Some("".into()),
                     generics: Some(vec![generic_formatted.clone()]),
@@ -231,7 +232,7 @@ impl<'a, 'b> CppNameResolver<'a, 'b> {
                     self.resolve_name(declaring_cpp_type, resolved_type, type_usage, hard_include);
                 let generic_formatted = generic.combine_all();
 
-                NameComponents {
+                CppNameComponents {
                     name: "ByRefConst".into(),
                     namespace: Some("".into()),
                     generics: Some(vec![generic_formatted.clone()]),
@@ -242,7 +243,7 @@ impl<'a, 'b> CppNameResolver<'a, 'b> {
         }
     }
 
-    fn resolve_redirect(&self, incl_ty: &CppType, type_usage: TypeUsage) -> NameComponents {
+    fn resolve_redirect(&self, incl_ty: &CppType, type_usage: TypeUsage) -> CppNameComponents {
         let mut name_components = incl_ty.cpp_name_components.clone();
         name_components = unity::unity_object_resolve_handler(
             name_components,
@@ -253,7 +254,7 @@ impl<'a, 'b> CppNameResolver<'a, 'b> {
         name_components
     }
 
-    fn wrapper_type_for_tdi(td: &Il2CppTypeDefinition) -> NameComponents {
+    fn wrapper_type_for_tdi(td: &Il2CppTypeDefinition) -> CppNameComponents {
         if td.is_enum_type() {
             return ENUM_WRAPPER_TYPE.to_string().into();
         }
@@ -270,8 +271,8 @@ impl<'a, 'b> CppNameResolver<'a, 'b> {
     }
 }
 
-fn il2cpp_object_name_component() -> NameComponents {
-    NameComponents {
+fn il2cpp_object_name_component() -> CppNameComponents {
+    CppNameComponents {
         name: IL2CPP_OBJECT_TYPE.to_string(),
         is_pointer: true,
         generics: None,

@@ -74,7 +74,6 @@ pub struct CppContext {
 ///
 /// - `write_il2cpp_arg_macros`: Writes IL2CPP argument macros for the given C++ type.
 impl CppContext {
-
     /// Returns the include path for the C++ type definitions.
     pub fn get_include_path(&self) -> &PathBuf {
         &self.typedef_path
