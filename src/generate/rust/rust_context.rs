@@ -5,6 +5,7 @@ use std::{
 };
 
 use color_eyre::eyre::ContextCompat;
+use itertools::Itertools;
 use log::trace;
 use std::io::Write;
 
@@ -136,13 +137,18 @@ impl RustContext {
             .typedef_types
             .values()
             .flat_map(|t| t.requirements.get_modules().iter())
+            .sorted()
             .collect();
 
         for m in modules {
             writeln!(typedef_writer, "use {m};")?;
         }
 
-        for t in self.typedef_types.values() {
+        for t in self
+            .typedef_types
+            .values()
+            .sorted_by(|a, b| a.name().cmp(b.name()))
+        {
             t.write(&mut typedef_writer, config)?;
         }
 
