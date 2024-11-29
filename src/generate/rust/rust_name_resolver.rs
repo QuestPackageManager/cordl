@@ -131,7 +131,7 @@ impl<'a, 'b> RustNameResolver<'a, 'b> {
             ResolvedTypeData::ByRef(resolved_type) => {
                 let generic =
                     self.resolve_name(declaring_cpp_type, resolved_type, type_usage, hard_include);
-                let generic_formatted = generic.with_ref().without_mut().combine_all();
+                let generic_formatted = generic.with_ref().with_mut().combine_all();
 
                 declaring_cpp_type.requirements.needs_byref_include();
 
@@ -144,7 +144,7 @@ impl<'a, 'b> RustNameResolver<'a, 'b> {
             ResolvedTypeData::ByRefConst(resolved_type) => {
                 let generic =
                     self.resolve_name(declaring_cpp_type, resolved_type, type_usage, hard_include);
-                let generic_formatted = generic.with_ref().with_mut().combine_all();
+                let generic_formatted = generic.with_ref().without_mut().combine_all();
 
                 declaring_cpp_type.requirements.needs_byref_const_include();
 
