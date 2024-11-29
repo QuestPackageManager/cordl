@@ -61,7 +61,7 @@ pub struct RustFunction {
     pub is_self: bool,
     pub is_ref: bool,
     pub is_mut: bool,
-    pub visibility: Visibility,
+    pub visibility: Option<Visibility>,
 }
 
 #[derive(Clone, Debug)]

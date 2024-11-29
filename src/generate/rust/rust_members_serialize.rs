@@ -89,7 +89,12 @@ impl Writable for RustVariant {
 
 impl Writable for RustFunction {
     fn write(&self, writer: &mut Writer) -> Result<()> {
-        let visibility = self.visibility.to_string();
+        let visibility = self
+            .visibility
+            .as_ref()
+            .map(|s| s.to_string())
+            .unwrap_or_default();
+
         let name = &self.name;
         write!(writer, "{visibility} fn {name}(",)?;
         if self.is_self {

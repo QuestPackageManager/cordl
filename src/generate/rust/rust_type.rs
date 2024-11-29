@@ -210,7 +210,7 @@ impl RustType {
                 params,
 
                 return_type: Some(m_ret_ty.combine_all()),
-                visibility: Visibility::Public,
+                visibility: Some(Visibility::Public),
             };
             self.methods.push(rust_func);
         }
@@ -373,7 +373,9 @@ impl RustType {
 
     fn write_interface(&self, writer: &mut Writer, _config: &RustGenerationConfig) -> Result<()> {
         writeln!(writer, "pub trait {name} {{", name = self.rs_name())?;
-        for m in &self.methods {
+        for mut m in self.methods.clone() {
+            // traits don't like visibility modifiers
+            m.visibility = None;
             m.write(writer)?;
         }
         writeln!(writer, "}}")?;
