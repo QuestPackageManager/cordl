@@ -2,12 +2,10 @@ use std::{
     collections::{HashMap, HashSet},
     fs::File,
     io::Write,
-    path::{Path, PathBuf},
 };
 
 use rayon::prelude::*;
 
-use color_eyre::eyre::bail;
 use itertools::Itertools;
 use log::{info, trace};
 use pathdiff::diff_paths;

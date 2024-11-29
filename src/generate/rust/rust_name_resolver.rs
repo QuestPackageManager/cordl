@@ -3,9 +3,7 @@ use itertools::Itertools;
 
 use crate::{
     data::type_resolver::{ResolvedType, ResolvedTypeData, TypeUsage},
-    generate::{
-        cs_type_tag::CsTypeTag, metadata::CordlMetadata, type_extensions::TypeDefinitionExtensions,
-    },
+    generate::{cs_type_tag::CsTypeTag, metadata::CordlMetadata},
 };
 
 use super::{
@@ -100,7 +98,7 @@ impl<'a, 'b> RustNameResolver<'a, 'b> {
             }
 
             ResolvedTypeData::Primitive(il2_cpp_type_enum) => {
-                let requirements = &mut declaring_cpp_type.requirements;
+                let _requirements = &mut declaring_cpp_type.requirements;
 
                 let s: String = match il2_cpp_type_enum {
                     Il2CppTypeEnum::I1 => "i8".to_string(),
@@ -205,7 +203,7 @@ impl<'a, 'b> RustNameResolver<'a, 'b> {
         incl_ty.rs_name_components.clone()
     }
 
-    fn wrapper_type_for_tdi(td: &Il2CppTypeDefinition) -> RustNameComponents {
+    fn wrapper_type_for_tdi(_td: &Il2CppTypeDefinition) -> RustNameComponents {
         "Blacklisted".to_string().into()
     }
 }

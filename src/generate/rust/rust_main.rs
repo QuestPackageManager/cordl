@@ -1,12 +1,8 @@
-use std::process::Command;
-
 use brocolib::{global_metadata::TypeDefinitionIndex, runtime_metadata::TypeData};
-use color_eyre::{eyre::Result, Section};
-use filesize::PathExt;
+
 use itertools::Itertools;
-use log::{error, info, warn};
-use rayon::iter::{ParallelBridge, ParallelIterator};
-use walkdir::DirEntry;
+use log::info;
+use rayon::iter::ParallelIterator;
 
 use crate::generate::{
     cs_context_collection::TypeContextCollection,

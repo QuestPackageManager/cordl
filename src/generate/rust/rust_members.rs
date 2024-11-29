@@ -1,7 +1,3 @@
-use std::default;
-
-use super::rust_name_components::RustNameComponents;
-
 #[derive(Clone, Debug, Default)]
 pub enum Visibility {
     Public,

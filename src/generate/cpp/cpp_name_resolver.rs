@@ -2,10 +2,7 @@ use brocolib::{global_metadata::Il2CppTypeDefinition, runtime_metadata::Il2CppTy
 use itertools::Itertools;
 
 use crate::{
-    data::{
-        name_components::NameComponents,
-        type_resolver::{ResolvedType, ResolvedTypeData, TypeUsage},
-    },
+    data::type_resolver::{ResolvedType, ResolvedTypeData, TypeUsage},
     generate::{metadata::CordlMetadata, type_extensions::TypeDefinitionExtensions},
 };
 

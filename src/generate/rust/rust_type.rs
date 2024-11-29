@@ -1,4 +1,4 @@
-use std::{collections::HashSet, sync::Arc};
+use std::collections::HashSet;
 
 use color_eyre::eyre::Result;
 use itertools::Itertools;
@@ -13,7 +13,6 @@ use crate::{
         cs_type::CsType,
         cs_type_tag::CsTypeTag,
         offsets::SizeInfo,
-        type_extensions::{TypeDefinitionIndexExtensions, TypeExtentions},
         writer::{Writable, Writer},
     },
 };
@@ -360,7 +359,7 @@ impl RustType {
         Ok(())
     }
 
-    fn write_impl(&self, writer: &mut Writer, config: &RustGenerationConfig) -> Result<()> {
+    fn write_impl(&self, writer: &mut Writer, _config: &RustGenerationConfig) -> Result<()> {
         writeln!(writer, "impl {name} {{", name = self.rs_name())?;
 
         for m in &self.methods {
@@ -372,7 +371,7 @@ impl RustType {
         Ok(())
     }
 
-    fn write_interface(&self, writer: &mut Writer, config: &RustGenerationConfig) -> Result<()> {
+    fn write_interface(&self, writer: &mut Writer, _config: &RustGenerationConfig) -> Result<()> {
         writeln!(writer, "pub trait {name} {{", name = self.rs_name())?;
         for m in &self.methods {
             m.write(writer)?;

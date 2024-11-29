@@ -3,7 +3,7 @@ use log::info;
 use std::{path::PathBuf, sync::Arc};
 
 use crate::{
-    data::{name_components::NameComponents, type_resolver::TypeUsage},
+    data::type_resolver::TypeUsage,
     generate::{
         cpp::{
             cpp_context_collection::CppContextCollection,

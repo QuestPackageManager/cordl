@@ -1,7 +1,7 @@
 use std::{
     collections::{HashMap, HashSet},
     fs::{create_dir_all, File},
-    path::{self, Path, PathBuf},
+    path::{self, PathBuf},
 };
 
 use color_eyre::eyre::ContextCompat;
@@ -63,7 +63,7 @@ impl RustContext {
         };
 
         for (tag, ty) in &context.typedef_types {
-            let mut rs_ty = RustType::make_rust_type(*tag, ty, config);
+            let rs_ty = RustType::make_rust_type(*tag, ty, config);
 
             // TODO: Implement blacklist
             // let tdi = tag.get_tdi();
@@ -109,7 +109,7 @@ impl RustContext {
         &self,
         config: &super::config::RustGenerationConfig,
     ) -> Result<(), color_eyre::eyre::Error> {
-        let base_path = &config.source_path;
+        let _base_path = &config.source_path;
 
         if !self
             .fundamental_path

@@ -74,7 +74,7 @@ impl Writable for RustVariant {
         }
 
         write!(writer, " (")?;
-        for (i, field) in self.fields.iter().enumerate() {
+        for (_i, field) in self.fields.iter().enumerate() {
             let name = &field.name;
             let ty = &field.field_type;
             write!(writer, "{name}: ")?;
@@ -102,7 +102,7 @@ impl Writable for RustFunction {
             write!(writer, "self,")?;
         }
 
-        for (i, param) in self.params.iter().enumerate() {
+        for (_i, param) in self.params.iter().enumerate() {
             param.write(writer)?;
             write!(writer, ", ")?;
         }

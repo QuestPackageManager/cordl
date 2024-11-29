@@ -1,12 +1,6 @@
 use itertools::Itertools;
 
-use crate::generate::cs_members::CsField;
-
-use super::{
-    config::RustGenerationConfig,
-    rust_members::{RustField, RustItem, RustStruct, RustUnion, Visibility},
-    rust_name_resolver::RustNameResolver,
-};
+use super::rust_members::{RustField, RustItem, RustStruct, RustUnion, Visibility};
 
 // inspired by what il2cpp does for explicitly laid out types
 pub(crate) fn pack_fields_into_single_union(fields: &[RustField]) -> RustUnion {

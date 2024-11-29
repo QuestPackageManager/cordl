@@ -12,7 +12,6 @@ use crate::generate::writer::Writable;
 use itertools::Itertools;
 use log::warn;
 
-use std::mem::ManuallyDrop;
 use std::sync::Arc;
 
 use brocolib::runtime_metadata::Il2CppTypeEnum;
