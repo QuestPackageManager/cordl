@@ -121,12 +121,20 @@ pub(crate) fn handle_valuetype_fields(
     if t.is_explicit_layout() {
         // TODO: Figure out layouts for explicit layout types
 
-        let size = fields.iter().flat_map(|f| f.offset).max().unwrap_or(0);
+        let last_field = fields.iter().filter(|t| t.offset.is_some()).max_by(|a, b| {
+            let offset = a.offset.cmp(&b.offset);
+            let size = a.size.cmp(&b.size);
 
-        if size != 0 {
+            offset.then(size)
+        });
+
+        if let Some(last_field) = last_field {
+            // make the type as big as it needs to be to match ABI
+            let size = last_field.offset.unwrap() as usize + last_field.size;
+
             let size_field = RustField {
                 name: "padding".to_owned(),
-                field_type: RustItem::NamedType(format!("vec![0x{size:x}; u8]")),
+                field_type: RustItem::NamedType(format!("[0x{size:x}; u8]")),
                 visibility: Visibility::Private,
                 offset: 0,
             };
@@ -278,7 +286,7 @@ pub fn handle_static_fields(
                 param_type: field_ty_cpp_name,
             }],
             visibility: Some(Visibility::Public),
-            body: Some(format!("{}", setter_call)),
+            body: Some(setter_call.to_string()),
         };
 
         // only push accessors if declaring ref type, or if static field
@@ -415,7 +423,7 @@ pub(crate) fn field_into_offset_structs(
 
     let packed_padding_field = RustField {
         name: packed_padding_cpp_name,
-        field_type: RustItem::NamedType(format!("vec![0x{padding:x}; u8]")),
+        field_type: RustItem::NamedType(format!("[0x{padding:x}; u8]")),
         visibility: Visibility::Private,
         offset: actual_offset,
         // brief_comment: Some(format!("Padding field 0x{padding:x}")),
@@ -431,7 +439,7 @@ pub(crate) fn field_into_offset_structs(
 
     let alignment_padding_field = RustField {
         name: alignment_padding_cpp_name,
-        field_type: RustItem::NamedType(format!("vec![0x{padding:x}; u8]")),
+        field_type: RustItem::NamedType(format!("[0x{padding:x}; u8]")),
         visibility: Visibility::Private,
         offset: actual_offset,
         // brief_comment: Some(format!("Padding field 0x{padding:x} for alignment")),
