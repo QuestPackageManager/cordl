@@ -55,6 +55,7 @@ impl RustNameComponents {
         self.is_mut = false;
         self
     }
+    
     pub fn with_ref(mut self) -> RustNameComponents {
         self.is_ref = true;
         self.is_ptr = false;
@@ -72,6 +73,15 @@ impl RustNameComponents {
     pub fn without_mut(mut self) -> RustNameComponents {
         self.is_mut = false;
         self
+    }
+    
+    pub fn remove_generics(mut self) -> RustNameComponents {
+       self.generics = None;
+       self 
+    }
+    pub fn remove_namespace(mut self) -> RustNameComponents {
+       self.namespace = None;
+       self 
     }
 }
 

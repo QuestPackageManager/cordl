@@ -12,13 +12,19 @@ use crate::{
         cs_members::{CsField, CsMethod, CsParam},
         cs_type::CsType,
         cs_type_tag::CsTypeTag,
+        metadata::CordlMetadata,
         offsets::SizeInfo,
+        type_extensions::{TypeDefinitionExtensions, TypeDefinitionIndexExtensions},
         writer::{Writable, Writer},
     },
 };
 
 use super::{
-    config::RustGenerationConfig, rust_fields, rust_members::{RustField, RustFunction, RustItem, RustParam, RustTrait, Visibility}, rust_name_components::RustNameComponents, rust_name_resolver::RustNameResolver
+    config::RustGenerationConfig,
+    rust_fields,
+    rust_members::{RustField, RustFunction, RustItem, RustParam, RustTrait, Visibility},
+    rust_name_components::RustNameComponents,
+    rust_name_resolver::RustNameResolver,
 };
 
 use std::io::Write;
@@ -167,7 +173,6 @@ impl RustType {
         name_resolver: &RustNameResolver,
         config: &RustGenerationConfig,
     ) {
-
         if self.is_value_type || self.is_enum_type {
             rust_fields::handle_valuetype_fields(self, fields, name_resolver, config);
         } else {
@@ -278,13 +283,43 @@ impl RustType {
         Ok(())
     }
 
+    pub fn nested_fixup(
+        &mut self,
+        cs_type: &CsType,
+        metadata: &CordlMetadata,
+        config: &RustGenerationConfig,
+    ) {
+        // Nested type unnesting fix
+        let Some(declaring_tag) = cs_type.declaring_ty.as_ref() else {
+            return;
+        };
+
+        let declaring_td = declaring_tag
+            .get_tdi()
+            .get_type_definition(metadata.metadata);
+
+        let declaring_name = declaring_td.get_name_components(metadata.metadata).name;
+        let declaring_namespace = declaring_td.namespace(metadata.metadata);
+
+        let combined_name = format!("{}_{}", declaring_name, self.name());
+
+        self.rs_name_components.namespace = Some(config.namespace_rs(declaring_namespace));
+        self.rs_name_components.name = config.sanitize_to_rs_name(&combined_name);
+        self.rs_name_components.declaring_types = None; // remove declaring types
+    }
+
     fn write_reference_type(
         &self,
         writer: &mut Writer,
         config: &RustGenerationConfig,
     ) -> Result<()> {
+        let name = match &self.generics {
+            Some(generics) => format!("{}<{}>", self.rs_name(), generics.join(", ")),
+            None => self.rs_name().clone(),
+        };
+
         writeln!(writer, "#[repr(c)]")?;
-        writeln!(writer, "pub struct {name} {{", name = self.rs_name())?;
+        writeln!(writer, "pub struct {name} {{")?;
         for f in &self.fields {
             f.write(writer)?;
         }
@@ -348,9 +383,14 @@ impl RustType {
     }
 
     fn write_value_type(&self, writer: &mut Writer, config: &RustGenerationConfig) -> Result<()> {
+        let name = match &self.generics {
+            Some(generics) => format!("{}<{}>", self.rs_name(), generics.join(", ")),
+            None => self.rs_name().clone(),
+        };
+
         writeln!(writer, "#[repr(c)]")?;
         writeln!(writer, "#[derive(Debug, Clone)]")?;
-        writeln!(writer, "pub struct {name} {{", name = self.rs_name())?;
+        writeln!(writer, "pub struct {name} {{")?;
         for f in &self.fields {
             f.write(writer)?;
         }
@@ -367,7 +407,20 @@ impl RustType {
     }
 
     fn write_impl(&self, writer: &mut Writer, _config: &RustGenerationConfig) -> Result<()> {
-        writeln!(writer, "impl {name} {{", name = self.rs_name())?;
+        let name = self.rs_name();
+
+        match &self.generics {
+            Some(generics) => {
+                let generics_combined = generics.join(", ");
+                writeln!(
+                    writer,
+                    "impl<{generics_combined}> {name}<{generics_combined}> {{"
+                )?;
+            }
+            None => {
+                writeln!(writer, "impl {name} {{")?;
+            }
+        };
 
         for m in &self.methods {
             m.write(writer)?;
@@ -379,7 +432,12 @@ impl RustType {
     }
 
     fn write_interface(&self, writer: &mut Writer, _config: &RustGenerationConfig) -> Result<()> {
-        writeln!(writer, "pub trait {name} {{", name = self.rs_name())?;
+        let name = match &self.generics {
+            Some(generics) => format!("{}<{}>", self.rs_name(), generics.join(", ")),
+            None => self.rs_name().clone(),
+        };
+
+        writeln!(writer, "pub trait {name} {{")?;
         for mut m in self.methods.clone() {
             // traits don't like visibility modifiers
             m.visibility = None;
@@ -393,7 +451,7 @@ impl RustType {
 
         Ok(())
     }
-    
+
     pub(crate) fn classof_name(&self) -> String {
         format!("{}::class()", self.rs_name())
     }

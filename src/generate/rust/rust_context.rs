@@ -64,7 +64,8 @@ impl RustContext {
         };
 
         for (tag, ty) in &context.typedef_types {
-            let rs_ty = RustType::make_rust_type(*tag, ty, config);
+            let mut rs_ty = RustType::make_rust_type(*tag, ty, config);
+            rs_ty.nested_fixup(ty, metadata, config);
 
             // TODO: Implement blacklist
             // let tdi = tag.get_tdi();
