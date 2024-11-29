@@ -7,27 +7,32 @@ pub enum Visibility {
 }
 
 #[derive(Clone, Debug)]
+pub struct RustNamedItem {
+    pub name: String,
+    pub visibility: Visibility,
+    pub item: RustItem,
+}
+
+
+/// Represents a Rust item, such as a struct, union, enum, or named type.
+/// For usage in fields of structs, unions, and enums.
+#[derive(Clone, Debug)]
 pub enum RustItem {
     Struct(RustStruct),
+    Union(RustUnion),
     Enum(RustEnum),
-    Function(RustFunction),
-    TypeAlias(String, String),
     NamedType(String),
 }
 
 #[derive(Clone, Debug)]
 pub struct RustStruct {
-    pub name: String,
     pub fields: Vec<RustField>,
-    pub visibility: Visibility,
     pub packing: Option<u32>,
 }
 
 #[derive(Clone, Debug)]
 pub struct RustUnion {
-    pub name: String,
     pub fields: Vec<RustField>,
-    pub visibility: Visibility,
 }
 
 #[derive(Clone, Debug)]
@@ -40,9 +45,7 @@ pub struct RustField {
 
 #[derive(Clone, Debug)]
 pub struct RustEnum {
-    pub name: String,
     pub variants: Vec<RustVariant>,
-    pub visibility: Visibility,
 }
 
 #[derive(Clone, Debug)]
@@ -68,8 +71,6 @@ pub struct RustFunction {
 pub struct RustParam {
     pub name: String,
     pub param_type: String,
-
-    pub is_mut: bool,
 }
 
 #[derive(Clone, Debug)]

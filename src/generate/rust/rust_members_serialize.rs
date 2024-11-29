@@ -4,17 +4,31 @@ use crate::generate::writer::{Writable, Writer};
 use std::io::Write;
 
 use super::rust_members::{
-    RustEnum, RustField, RustFunction, RustImpl, RustItem, RustParam, RustStruct, RustTrait,
-    RustVariant,
+    RustEnum, RustField, RustFunction, RustImpl, RustItem, RustNamedItem, RustParam, RustStruct,
+    RustTrait, RustUnion, RustVariant,
 };
+
+impl Writable for RustNamedItem {
+    fn write(&self, writer: &mut Writer) -> color_eyre::Result<()> {
+        writeln!(writer, "{}", self.visibility.to_string())?;
+        match &self.item {
+            RustItem::Struct(s) => s.write_named(writer, &self.name),
+            RustItem::Union(u) => u.write_named(writer, &self.name),
+            RustItem::Enum(e) => e.write_named(writer, &self.name),
+            RustItem::NamedType(_) => {
+                write!(writer, "{name}", name = self.name)?;
+                Ok(())
+            }
+        }
+    }
+}
 
 impl Writable for RustItem {
     fn write(&self, writer: &mut Writer) -> Result<()> {
         match self {
+            RustItem::Union(u) => u.write(writer),
             RustItem::Struct(s) => s.write(writer),
             RustItem::Enum(e) => e.write(writer),
-            RustItem::Function(func) => func.write(writer),
-            RustItem::TypeAlias(_, _) => todo!(),
             RustItem::NamedType(s) => {
                 write!(writer, "{s}")?;
                 Ok(())
@@ -23,17 +37,37 @@ impl Writable for RustItem {
     }
 }
 
-impl Writable for RustStruct {
-    fn write(&self, writer: &mut Writer) -> Result<()> {
-        let visibility = self.visibility.to_string();
-        let name = &self.name;
-
-        writeln!(writer, "{visibility} struct {name} {{")?;
+impl RustStruct {
+    pub fn write_named(&self, writer: &mut Writer, name: &str) -> Result<()> {
+        writeln!(writer, "struct {name} {{")?;
         for field in &self.fields {
             field.write(writer)?;
         }
         writeln!(writer, "}}")?;
         Ok(())
+    }
+}
+
+impl Writable for RustStruct {
+    fn write(&self, writer: &mut Writer) -> Result<()> {
+        self.write_named(writer, "")
+    }
+}
+
+impl RustUnion {
+    pub fn write_named(&self, writer: &mut Writer, name: &str) -> Result<()> {
+        writeln!(writer, "union {name} {{")?;
+        for field in &self.fields {
+            field.write(writer)?;
+        }
+        writeln!(writer, "}}")?;
+        Ok(())
+    }
+}
+
+impl Writable for RustUnion {
+    fn write(&self, writer: &mut Writer) -> Result<()> {
+        self.write_named(writer, "")
     }
 }
 
@@ -51,18 +85,21 @@ impl Writable for RustField {
     }
 }
 
-impl Writable for RustEnum {
-    fn write(&self, writer: &mut Writer) -> Result<()> {
-        let visibility = self.visibility.to_string();
-        let name = &self.name;
-
-        writeln!(writer, "{visibility} enum {name} {{")?;
+impl RustEnum {
+    pub fn write_named(&self, writer: &mut Writer, name: &str) -> Result<()> {
+        writeln!(writer, "enum {name} {{")?;
         for variant in &self.variants {
             variant.write(writer)?;
             writeln!(writer, ",")?;
         }
         writeln!(writer, "}}")?;
         Ok(())
+    }
+}
+
+impl Writable for RustEnum {
+    fn write(&self, writer: &mut Writer) -> Result<()> {
+        self.write_named(writer, "")
     }
 }
 

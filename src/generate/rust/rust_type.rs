@@ -18,10 +18,7 @@ use crate::{
 };
 
 use super::{
-    config::RustGenerationConfig,
-    rust_members::{RustField, RustFunction, RustItem, RustParam, RustTrait, Visibility},
-    rust_name_components::RustNameComponents,
-    rust_name_resolver::RustNameResolver,
+    config::RustGenerationConfig, rust_fields, rust_members::{RustField, RustFunction, RustItem, RustParam, RustTrait, Visibility}, rust_name_components::RustNameComponents, rust_name_resolver::RustNameResolver
 };
 
 use std::io::Write;
@@ -170,20 +167,30 @@ impl RustType {
         name_resolver: &RustNameResolver,
         config: &RustGenerationConfig,
     ) {
-        for f in fields {
-            if !f.instance || f.is_const {
-                continue;
-            }
-            let field_type = name_resolver.resolve_name(self, &f.field_ty, TypeUsage::Field, true);
 
-            let rust_field = RustField {
-                name: config.name_rs(&f.name),
-                field_type: RustItem::NamedType(field_type.combine_all()),
-                visibility: Visibility::Public,
-                offset: f.offset.unwrap_or_default(),
-            };
-            self.fields.push(rust_field);
+        if self.is_value_type || self.is_enum_type {
+            rust_fields::handle_valuetype_fields(self, fields, name_resolver, config);
+        } else {
+            rust_fields::handle_referencetype_fields(self, fields, name_resolver, config);
         }
+
+        rust_fields::handle_static_fields(self, fields, name_resolver, config);
+        rust_fields::handle_const_fields(self, fields, name_resolver, config);
+
+        // for f in fields {
+        //     if !f.instance || f.is_const {
+        //         continue;
+        //     }
+        //     let field_type = name_resolver.resolve_name(self, &f.field_ty, TypeUsage::Field, true);
+
+        //     let rust_field = RustField {
+        //         name: config.name_rs(&f.name),
+        //         field_type: RustItem::NamedType(field_type.combine_all()),
+        //         visibility: Visibility::Public,
+        //         offset: f.offset.unwrap_or_default(),
+        //     };
+        //     self.fields.push(rust_field);
+        // }
     }
     fn make_methods(
         &mut self,
@@ -231,7 +238,7 @@ impl RustType {
             param_type: p_ty.combine_all(),
             // is_ref: p_il2cpp_ty.is_byref(),
             // is_ptr: !p_il2cpp_ty.valuetype,
-            is_mut: true,
+            // is_mut: true,
         }
     }
 
@@ -385,5 +392,9 @@ impl RustType {
         )?;
 
         Ok(())
+    }
+    
+    pub(crate) fn classof_name(&self) -> String {
+        format!("{}::class()", self.rs_name())
     }
 }
