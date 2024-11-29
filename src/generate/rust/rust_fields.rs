@@ -13,6 +13,85 @@ use crate::{
     },
 };
 
+/*
+/// @brief Explicitly laid out type with union based offsets
+union {
+
+
+#pragma pack(push, tp, 1)
+struct  {
+/// @brief Padding field 0x0
+ uint8_t  ___U0_padding[0x0];
+/// @brief Field U0, offset: 0x0, size: 0x4, def value: None
+ uint32_t  ___U0;
+};
+#pragma pack(pop, tp)
+struct  {
+/// @brief Padding field 0x0 for alignment
+ uint8_t  ___U0_padding_forAlignment[0x0];
+/// @brief Field U0, offset: 0x0, size: 0x4, def value: None
+ uint32_t  ___U0_forAlignment;
+};
+
+#pragma pack(push, tp, 1)
+struct  {
+/// @brief Padding field 0x4
+ uint8_t  ___U1_padding[0x4];
+/// @brief Field U1, offset: 0x4, size: 0x4, def value: None
+ uint32_t  ___U1;
+};
+#pragma pack(pop, tp)
+struct  {
+/// @brief Padding field 0x4 for alignment
+ uint8_t  ___U1_padding_forAlignment[0x4];
+/// @brief Field U1, offset: 0x4, size: 0x4, def value: None
+ uint32_t  ___U1_forAlignment;
+};
+#pragma pack(push, tp, 1)
+struct  {
+/// @brief Padding field 0x8
+ uint8_t  ___U2_padding[0x8];
+/// @brief Field U2, offset: 0x8, size: 0x4, def value: None
+ uint32_t  ___U2;
+};
+#pragma pack(pop, tp)
+struct  {
+/// @brief Padding field 0x8 for alignment
+ uint8_t  ___U2_padding_forAlignment[0x8];
+/// @brief Field U2, offset: 0x8, size: 0x4, def value: None
+ uint32_t  ___U2_forAlignment;
+};
+#pragma pack(push, tp, 1)
+struct  {
+/// @brief Padding field 0x0
+ uint8_t  ___ulo64LE_padding[0x0];
+/// @brief Field ulo64LE, offset: 0x0, size: 0x8, def value: None
+ uint64_t  ___ulo64LE;
+};
+#pragma pack(pop, tp)
+struct  {
+/// @brief Padding field 0x0 for alignment
+ uint8_t  ___ulo64LE_padding_forAlignment[0x0];
+/// @brief Field ulo64LE, offset: 0x0, size: 0x8, def value: None
+ uint64_t  ___ulo64LE_forAlignment;
+};
+#pragma pack(push, tp, 1)
+struct  {
+/// @brief Padding field 0x8
+ uint8_t  ___uhigh64LE_padding[0x8];
+/// @brief Field uhigh64LE, offset: 0x8, size: 0x8, def value: None
+ uint64_t  ___uhigh64LE;
+};
+#pragma pack(pop, tp)
+struct  {
+/// @brief Padding field 0x8 for alignment
+ uint8_t  ___uhigh64LE_padding_forAlignment[0x8];
+/// @brief Field uhigh64LE, offset: 0x8, size: 0x8, def value: None
+ uint64_t  ___uhigh64LE_forAlignment;
+};
+};
+*/
+
 use super::{
     config::RustGenerationConfig,
     rust_members::{
@@ -40,20 +119,35 @@ pub(crate) fn handle_valuetype_fields(
 
     // instance fields for explicit layout value types are special
     if t.is_explicit_layout() {
-        let backing_fields = fields
-            .iter()
-            .map(|f| make_rust_field(cpp_type, &f, name_resolver, config))
-            // .map(|mut f| {
-            //     f.name = fixup_backing_field(&f.cpp_name);
-            //     f
-            // })
-            .collect_vec();
+        // TODO: Figure out layouts for explicit layout types
 
-        handle_instance_fields(cpp_type, &backing_fields, metadata, tdi);
+        let size = fields.iter().flat_map(|f| f.offset).max().unwrap_or(0);
+
+        if size != 0 {
+            let size_field = RustField {
+                name: "padding".to_owned(),
+                field_type: RustItem::NamedType(format!("vec![0x{size:x}; u8]")),
+                visibility: Visibility::Private,
+                offset: 0,
+            };
+
+            cpp_type.fields.push(size_field);
+        }
+
+        // let backing_fields = fields
+        //     .iter()
+        //     .map(|f| make_rust_field(cpp_type, &f, name_resolver, config))
+        //     // .map(|mut f| {
+        //     //     f.name = fixup_backing_field(&f.cpp_name);
+        //     //     f
+        //     // })
+        //     .collect_vec();
+
+        // handle_instance_fields(cpp_type, &backing_fields, metadata, tdi);
     } else {
         let backing_fields = fields
             .iter()
-            .map(|f| make_rust_field(cpp_type, &f, name_resolver, config))
+            .map(|f| make_rust_field(cpp_type, f, name_resolver, config))
             .collect_vec();
 
         handle_instance_fields(cpp_type, &backing_fields, metadata, tdi);
@@ -68,14 +162,12 @@ fn make_rust_field(
 ) -> RustField {
     let field_type = name_resolver.resolve_name(cpp_type, &f.field_ty, TypeUsage::Field, true);
 
-    let rust_field = RustField {
+    RustField {
         name: config.name_rs(&f.name),
         field_type: RustItem::NamedType(field_type.combine_all()),
         visibility: Visibility::Public,
         offset: f.offset.unwrap_or_default(),
-    };
-
-    rust_field
+    }
 }
 
 pub(crate) fn handle_referencetype_fields(
@@ -134,8 +226,6 @@ pub fn handle_static_fields(
     for field_info in fields.iter().filter(|f| !f.instance && !f.is_const) {
         let _f_type = &field_info.field_ty;
         let f_name = &field_info.name;
-        let f_offset = field_info.offset.unwrap_or(u32::MAX);
-        let f_size = field_info.size;
 
         let f_cpp_decl = make_rust_field(cpp_type, field_info, name_resolver, config);
 
@@ -172,7 +262,7 @@ pub fn handle_static_fields(
             return_type: Some(get_return_type),
             params: vec![],
             visibility: Some(Visibility::Public),
-            body: Some(format!("{}", getter_call)),
+            body: Some(getter_call.to_string()),
         };
 
         let setter_decl = RustFunction {
