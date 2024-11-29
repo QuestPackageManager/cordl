@@ -449,18 +449,14 @@ impl CppType {
             .get_tdi()
             .get_type_definition(metadata.metadata);
 
-        let combined_name = self
-            .cpp_name_components
-            .clone()
-            .remove_generics()
-            .remove_pointer()
-            .combine_all();
+        let declaring_name = declaring_td.get_name_components(metadata.metadata).name;
+        let declaring_namespace = declaring_td.namespace(metadata.metadata);
 
-        self.cpp_name_components.namespace =
-            Some(config.namespace_cpp(declaring_td.namespace(metadata.metadata)));
-        self.cpp_name_components.declaring_types = None; // remove declaring types
+        let combined_name = format!("{}_{}", declaring_name, self.name());
 
+        self.cpp_name_components.namespace = Some(config.namespace_cpp(declaring_namespace));
         self.cpp_name_components.name = config.sanitize_to_cpp_name(&combined_name);
+        self.cpp_name_components.declaring_types = None; // remove declaring types
     }
 
     pub fn fill(
