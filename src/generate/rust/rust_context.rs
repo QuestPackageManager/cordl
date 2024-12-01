@@ -6,7 +6,7 @@ use std::{
 
 use color_eyre::eyre::ContextCompat;
 use itertools::Itertools;
-use log::trace;
+use log::{trace, warn};
 use std::io::Write;
 
 use crate::generate::{
@@ -150,6 +150,11 @@ impl RustContext {
             .values()
             .sorted_by(|a, b| a.name().cmp(b.name()))
         {
+            if t.is_compiler_generated {
+                warn!("Skipping compiler generated type: {}", t.name());
+                continue;
+            }
+
             t.write(&mut typedef_writer, config)?;
         }
 

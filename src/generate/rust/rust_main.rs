@@ -84,21 +84,7 @@ pub fn run_rust(
         types()
             .find(|(_, c)| {
                 c.get_types().iter().any(|(_, t)| {
-                    println!("{}", t.cs_name_components.combine_all());
-
-                    if t.cs_name_components.namespace == Some("UnityEngine".to_string()) {
-                        println!("Found");
-                    }
-
-                    if t.cs_name_components.name == "Color" {
-                        println!("Found");
-                    }
-
-                    if t.cs_name_components.combine_all() == "UnityEngine.Color" {
-                        println!("Found");
-                    }
-
-                    t.is_value_type && t.name() == "Color" && t.namespace() == "UnityEngine"
+                    t.is_value_type && t.name() == "Color" && t.namespace() == Some("UnityEngine")
                 })
             })
             .unwrap()
@@ -134,15 +120,9 @@ pub fn run_rust(
         info!("Array type");
         types()
             .find(|(_, c)| {
-                c.get_types().iter().any(|(_, t)| {
-                    println!("{}", t.cs_name_components.combine_all());
-
-                    if t.cs_name_components.combine_all() == "System.Array" {
-                        println!("Found");
-                    }
-
-                    t.name() == "Array" && t.namespace() == "System"
-                })
+                c.get_types()
+                    .iter()
+                    .any(|(_, t)| t.name() == "Array" && t.namespace() == Some("System"))
             })
             .unwrap()
             .1
@@ -159,7 +139,7 @@ pub fn run_rust(
             .find(|(_, c)| {
                 c.get_types()
                     .iter()
-                    .any(|(_, t)| t.name() == "Object" && t.namespace() == "UnityEngine")
+                    .any(|(_, t)| t.name() == "Object" && t.namespace() == Some("UnityEngine"))
             })
             .unwrap()
             .1
@@ -179,7 +159,7 @@ pub fn run_rust(
             .find(|(_, c)| {
                 c.get_types()
                     .iter()
-                    .any(|(_, t)| t.namespace() == "HMUI" && t.name() == "ViewController")
+                    .any(|(_, t)| t.namespace() == Some("HMUI") && t.name() == "ViewController")
             })
             .unwrap()
             .1
@@ -189,7 +169,7 @@ pub fn run_rust(
             .find(|(_, c)| {
                 c.get_types()
                     .iter()
-                    .any(|(_, t)| t.namespace() == "UnityEngine" && t.name() == "Component")
+                    .any(|(_, t)| t.namespace() == Some("UnityEngine") && t.name() == "Component")
             })
             .unwrap()
             .1
@@ -199,7 +179,7 @@ pub fn run_rust(
             .find(|(_, c)| {
                 c.get_types()
                     .iter()
-                    .any(|(_, t)| t.namespace() == "UnityEngine" && t.name() == "GameObject")
+                    .any(|(_, t)| t.namespace() == Some("UnityEngine") && t.name() == "GameObject")
             })
             .unwrap()
             .1
@@ -209,7 +189,7 @@ pub fn run_rust(
             .find(|(_, c)| {
                 c.get_types()
                     .iter()
-                    .any(|(_, t)| t.namespace().is_empty() && t.name() == "MainFlowCoordinator")
+                    .any(|(_, t)| t.namespace().is_none() && t.name() == "MainFlowCoordinator")
             })
             .unwrap()
             .1
@@ -219,7 +199,7 @@ pub fn run_rust(
             .find(|(_, c)| {
                 c.get_types()
                     .iter()
-                    .any(|(_, t)| t.namespace().is_empty() && t.name() == "OVRPlugin")
+                    .any(|(_, t)| t.namespace().is_none() && t.name() == "OVRPlugin")
             })
             .unwrap()
             .1
@@ -229,7 +209,7 @@ pub fn run_rust(
             .find(|(_, c)| {
                 c.get_types()
                     .iter()
-                    .any(|(_, t)| t.namespace() == "HMUI" && t.name() == "IValueChanger`1")
+                    .any(|(_, t)| t.namespace() == Some("HMUI") && t.name() == "IValueChanger`1")
             })
             .unwrap()
             .1
@@ -239,7 +219,7 @@ pub fn run_rust(
             .find(|(_, c)| {
                 c.get_types()
                     .iter()
-                    .any(|(_, t)| t.namespace() == "System" && t.name() == "ValueType")
+                    .any(|(_, t)| t.namespace() == Some("System") && t.name() == "ValueType")
             })
             .unwrap()
             .1
@@ -249,7 +229,7 @@ pub fn run_rust(
             .find(|(_, c)| {
                 c.get_types()
                     .iter()
-                    .any(|(_, t)| t.namespace() == "System" && t.name() == "ValueTuple`2")
+                    .any(|(_, t)| t.namespace() == Some("System") && t.name() == "ValueTuple`2")
             })
             .unwrap()
             .1
@@ -259,7 +239,7 @@ pub fn run_rust(
             .find(|(_, c)| {
                 c.get_types()
                     .iter()
-                    .any(|(_, t)| t.namespace() == "System" && t.name() == "Decimal")
+                    .any(|(_, t)| t.namespace() == Some("System") && t.name() == "Decimal")
             })
             .unwrap()
             .1
@@ -269,7 +249,7 @@ pub fn run_rust(
             .find(|(_, c)| {
                 c.get_types()
                     .iter()
-                    .any(|(_, t)| t.namespace() == "System" && t.name() == "Enum")
+                    .any(|(_, t)| t.namespace() == Some("System") && t.name() == "Enum")
             })
             .unwrap()
             .1
@@ -277,9 +257,9 @@ pub fn run_rust(
         info!("System.Multicast");
         types()
             .find(|(_, c)| {
-                c.get_types()
-                    .iter()
-                    .any(|(_, t)| t.namespace() == "System" && t.name() == "MulticastDelegate")
+                c.get_types().iter().any(|(_, t)| {
+                    t.namespace() == Some("System") && t.name() == "MulticastDelegate"
+                })
             })
             .unwrap()
             .1
@@ -289,7 +269,7 @@ pub fn run_rust(
             .find(|(_, c)| {
                 c.get_types()
                     .iter()
-                    .any(|(_, t)| t.namespace() == "System" && t.name() == "Delegate")
+                    .any(|(_, t)| t.namespace() == Some("System") && t.name() == "Delegate")
             })
             .unwrap()
             .1
@@ -308,15 +288,19 @@ pub fn run_rust(
         types()
             .find(|(_, c)| {
                 c.get_types().iter().any(|(_, t)| {
-                    t.self_tag
-                        .get_tdi()
-                        .get_type_definition(metadata.metadata)
-                        .is_explicit_layout()
+                    !t.is_compiler_generated
+                        && t.self_tag
+                            .get_tdi()
+                            .get_type_definition(metadata.metadata)
+                            .is_explicit_layout()
                 })
             })
             .unwrap()
             .1
             .write(&STATIC_CONFIG)?;
+
+        rs_context_collection.write_namespace_headers()?;
+
         // for (_, context) in cpp_context_collection.get() {
         //     context.write().unwrap();
         // }

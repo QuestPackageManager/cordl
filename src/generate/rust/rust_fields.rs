@@ -1,6 +1,7 @@
 use brocolib::{global_metadata::TypeDefinitionIndex, runtime_metadata::Il2CppTypeEnum};
 use itertools::Itertools;
 use log::warn;
+use quote::ToTokens;
 use rayon::vec;
 
 use crate::{
@@ -120,28 +121,6 @@ pub(crate) fn handle_valuetype_fields(
     // instance fields for explicit layout value types are special
     if t.is_explicit_layout() {
         // TODO: Figure out layouts for explicit layout types
-
-        let last_field = fields.iter().filter(|t| t.offset.is_some()).max_by(|a, b| {
-            let offset = a.offset.cmp(&b.offset);
-            let size = a.size.cmp(&b.size);
-
-            offset.then(size)
-        });
-
-        if let Some(last_field) = last_field {
-            // make the type as big as it needs to be to match ABI
-            let size = last_field.offset.unwrap() as usize + last_field.size;
-
-            let size_field = RustField {
-                name: "padding".to_owned(),
-                field_type: RustItem::NamedType(format!("[0x{size:x}; u8]")),
-                visibility: Visibility::Private,
-                offset: 0,
-            };
-
-            cpp_type.fields.push(size_field);
-        }
-
         // let backing_fields = fields
         //     .iter()
         //     .map(|f| make_rust_field(cpp_type, &f, name_resolver, config))
@@ -152,30 +131,13 @@ pub(crate) fn handle_valuetype_fields(
         //     .collect_vec();
 
         // handle_instance_fields(cpp_type, &backing_fields, metadata, tdi);
-    } else {
-        let backing_fields = fields
-            .iter()
-            .map(|f| make_rust_field(cpp_type, f, name_resolver, config))
-            .collect_vec();
-
-        handle_instance_fields(cpp_type, &backing_fields, metadata, tdi);
     }
-}
+    let backing_fields = fields
+        .iter()
+        .map(|f| make_rust_field(cpp_type, f, name_resolver, config))
+        .collect_vec();
 
-fn make_rust_field(
-    cpp_type: &mut RustType,
-    f: &CsField,
-    name_resolver: &RustNameResolver<'_, '_>,
-    config: &RustGenerationConfig,
-) -> RustField {
-    let field_type = name_resolver.resolve_name(cpp_type, &f.field_ty, TypeUsage::Field, true);
-
-    RustField {
-        name: config.name_rs(&f.name),
-        field_type: RustItem::NamedType(field_type.combine_all()),
-        visibility: Visibility::Public,
-        offset: f.offset.unwrap_or_default(),
-    }
+    handle_instance_fields(cpp_type, &backing_fields, fields, metadata, tdi);
 }
 
 pub(crate) fn handle_referencetype_fields(
@@ -210,7 +172,7 @@ pub(crate) fn handle_referencetype_fields(
         // })
         .collect_vec();
 
-    handle_instance_fields(cpp_type, &backing_fields, metadata, tdi);
+    handle_instance_fields(cpp_type, &backing_fields, fields, metadata, tdi);
 }
 
 pub fn handle_static_fields(
@@ -232,10 +194,7 @@ pub fn handle_static_fields(
     // we want only static fields
     // we ignore constants
     for field_info in fields.iter().filter(|f| !f.instance && !f.is_const) {
-        let _f_type = &field_info.field_ty;
         let f_name = &field_info.name;
-
-        let f_cpp_decl = make_rust_field(cpp_type, field_info, name_resolver, config);
 
         let field_ty_cpp_name = name_resolver
             .resolve_name(cpp_type, &field_info.field_ty, TypeUsage::Field, true)
@@ -244,7 +203,7 @@ pub fn handle_static_fields(
         // non const field
         // instance field access on ref types is special
         // ref type instance fields are specially named because the field getters are supposed to be used
-        let f_cpp_name = f_cpp_decl.name.clone();
+        let f_cpp_name = config.name_rs(f_name);
 
         let klass_resolver = cpp_type.classof_name();
 
@@ -345,6 +304,7 @@ pub(crate) fn handle_const_fields(
 fn handle_instance_fields(
     cpp_type: &mut RustType,
     fields: &[RustField],
+    cs_fields: &[CsField],
     metadata: &CordlMetadata,
     tdi: TypeDefinitionIndex,
 ) {
@@ -360,13 +320,37 @@ fn handle_instance_fields(
     // explicit layout types are packed into single unions
     if t.is_explicit_layout() {
         // oh no! the fields are unionizing! don't tell elon musk!
-        let u = pack_fields_into_single_union(fields);
-        cpp_type.fields.push(RustField {
-            name: "explicit_layout".to_string(),
-            field_type: RustItem::Union(u),
-            visibility: Visibility::Private,
-            offset: 0,
-        });
+        let last_field = cs_fields
+            .iter()
+            .filter(|t| t.offset.is_some())
+            .max_by(|a, b| {
+                let offset = a.offset.cmp(&b.offset);
+                let size = a.size.cmp(&b.size);
+
+                offset.then(size)
+            });
+
+        if let Some(last_field) = last_field {
+            // make the type as big as it needs to be to match ABI
+            let size = last_field.offset.unwrap() as usize + last_field.size;
+
+            let size_field = RustField {
+                name: "padding".to_owned(),
+                field_type: (format!("[u8; 0x{size:x}]")).to_token_stream(),
+                visibility: Visibility::Private,
+                offset: 0,
+            };
+
+            cpp_type.fields.push(size_field);
+        }
+
+        // let u = pack_fields_into_single_union(fields);
+        // cpp_type.fields.push(RustField {
+        //     name: "explicit_layout".to_string(),
+        //     field_type: RustItem::Union(u),
+        //     visibility: Visibility::Private,
+        //     offset: 0,
+        // });
     } else {
         fields
             .iter()
@@ -390,18 +374,19 @@ pub(crate) fn pack_fields_into_single_union(fields: &[RustField]) -> RustUnion {
         })
         .collect_vec();
 
-    let fields = packed_structs
-        .into_iter()
-        .enumerate()
-        .map(|(i, struc)| RustField {
-            name: format!("struct{}", i),
-            field_type: RustItem::Struct(struc),
-            visibility: Visibility::Private,
-            offset: 0,
-        })
-        .collect_vec();
+    todo!()
+    // let fields = packed_structs
+    //     .into_iter()
+    //     .enumerate()
+    //     .map(|(i, struc)| RustField {
+    //         name: format!("struct{}", i),
+    //         field_type: RustItem::Struct(struc),
+    //         visibility: Visibility::Private,
+    //         offset: 0,
+    //     })
+    //     .collect_vec();
 
-    RustUnion { fields }
+    // RustUnion { fields }
 }
 
 pub(crate) fn field_into_offset_structs(
@@ -423,7 +408,7 @@ pub(crate) fn field_into_offset_structs(
 
     let packed_padding_field = RustField {
         name: packed_padding_cpp_name,
-        field_type: RustItem::NamedType(format!("[0x{padding:x}; u8]")),
+        field_type: format!("[u8; 0x{padding:x}]").to_token_stream(),
         visibility: Visibility::Private,
         offset: actual_offset,
         // brief_comment: Some(format!("Padding field 0x{padding:x}")),
@@ -439,7 +424,7 @@ pub(crate) fn field_into_offset_structs(
 
     let alignment_padding_field = RustField {
         name: alignment_padding_cpp_name,
-        field_type: RustItem::NamedType(format!("[0x{padding:x}; u8]")),
+        field_type: format!("[u8; 0x{padding:x}]").to_token_stream(),
         visibility: Visibility::Private,
         offset: actual_offset,
         // brief_comment: Some(format!("Padding field 0x{padding:x} for alignment")),
@@ -477,4 +462,22 @@ pub(crate) fn field_into_offset_structs(
     };
 
     (packed_struct, alignment_struct)
+}
+
+fn make_rust_field(
+    cpp_type: &mut RustType,
+    f: &CsField,
+    name_resolver: &RustNameResolver<'_, '_>,
+    config: &RustGenerationConfig,
+) -> RustField {
+    let field_type = name_resolver.resolve_name(cpp_type, &f.field_ty, TypeUsage::Field, true);
+
+    assert!(f.instance && !f.is_const, "Static field not allowed!");
+
+    RustField {
+        name: config.name_rs(&f.name),
+        field_type: field_type.to_combined_ident(),
+        visibility: Visibility::Public,
+        offset: f.offset.unwrap_or_default(),
+    }
 }

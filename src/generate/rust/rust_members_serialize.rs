@@ -75,10 +75,9 @@ impl Writable for RustField {
     fn write(&self, writer: &mut Writer) -> Result<()> {
         let visibility = self.visibility.to_string();
         let name = &self.name;
-        let field_type = &self.field_type;
+        let field_type = self.field_type.to_string();
 
-        write!(writer, "{visibility} {name}: ")?;
-        field_type.write(writer)?;
+        write!(writer, "{visibility} {name}: {field_type}")?;
         writeln!(writer, ",")?;
 
         Ok(())
@@ -113,9 +112,8 @@ impl Writable for RustVariant {
         write!(writer, " (")?;
         for (_i, field) in self.fields.iter().enumerate() {
             let name = &field.name;
-            let ty = &field.field_type;
-            write!(writer, "{name}: ")?;
-            ty.write(writer)?;
+            let ty = field.field_type.to_string();
+            write!(writer, "{name}: {ty}")?;
             write!(writer, ", ")?;
         }
         write!(writer, ")")?;

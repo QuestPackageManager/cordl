@@ -4,7 +4,6 @@ use crate::data::name_components::NameComponents;
 pub struct RustNameComponents {
     pub name: String,
     pub namespace: Option<String>,
-    pub declaring_types: Option<Vec<String>>,
     pub generics: Option<Vec<String>>,
 
     pub is_ref: bool,
@@ -16,12 +15,10 @@ impl RustNameComponents {
     // TODO: Add setting for adding :: prefix
     // however, this cannot be allowed in all cases
     pub fn combine_all(&self) -> String {
-        let combined_declaring_types = self.declaring_types.as_ref().map(|d| d.join("::"));
-
         // will be empty if no namespace or declaring types
-        let prefix = combined_declaring_types
+        let prefix = self
+            .namespace
             .as_ref()
-            .or(self.namespace.as_ref())
             .map(|s| format!("{s}::"))
             .unwrap_or_default();
 
@@ -55,7 +52,7 @@ impl RustNameComponents {
         self.is_mut = false;
         self
     }
-    
+
     pub fn with_ref(mut self) -> RustNameComponents {
         self.is_ref = true;
         self.is_ptr = false;
@@ -74,14 +71,14 @@ impl RustNameComponents {
         self.is_mut = false;
         self
     }
-    
+
     pub fn remove_generics(mut self) -> RustNameComponents {
-       self.generics = None;
-       self 
+        self.generics = None;
+        self
     }
     pub fn remove_namespace(mut self) -> RustNameComponents {
-       self.namespace = None;
-       self 
+        self.namespace = None;
+        self
     }
 }
 
@@ -90,7 +87,6 @@ impl From<NameComponents> for RustNameComponents {
         Self {
             name: value.name,
             namespace: value.namespace,
-            declaring_types: value.declaring_types,
             generics: value.generics,
             ..Default::default()
         }

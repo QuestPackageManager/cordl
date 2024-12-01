@@ -169,7 +169,8 @@ impl TypeExtentions for Il2CppType {
 pub trait TypeDefinitionExtensions {
     fn is_value_type(&self) -> bool;
     fn is_enum_type(&self) -> bool;
-    fn is_compiler_generated(&self) -> bool;
+    fn is_special_name(&self) -> bool;
+    fn is_compiler_generated(&self, metadata: &Metadata) -> bool;
     fn is_interface(&self) -> bool;
     fn is_explicit_layout(&self) -> bool;
     fn is_assignable_to(&self, other_td: &Il2CppTypeDefinition, metadata: &Metadata) -> bool;
@@ -191,7 +192,13 @@ impl TypeDefinitionExtensions for Il2CppTypeDefinition {
         self.bitfield & 2 != 0
     }
 
-    fn is_compiler_generated(&self) -> bool {
+    fn is_compiler_generated(&self, metadata: &Metadata) -> bool {
+        self.is_special_name()
+            || (self.name(metadata).starts_with('<') && self.name(metadata).contains(">d__"))
+            || self.name(metadata).contains("<>c")
+            || self.name(metadata) == "<PrivateImplementationDetails>"
+    }
+    fn is_special_name(&self) -> bool {
         self.flags & TYPE_ATTRIBUTE_SPECIAL_NAME != 0
     }
 

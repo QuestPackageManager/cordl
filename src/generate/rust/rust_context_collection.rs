@@ -1,7 +1,8 @@
 use std::{
     collections::{HashMap, HashSet},
+    ffi::OsStr,
     fs::File,
-    io::Write,
+    io::{BufWriter, Write},
 };
 
 use rayon::prelude::*;
@@ -10,6 +11,7 @@ use itertools::Itertools;
 use log::{info, trace};
 use pathdiff::diff_paths;
 use rayon::iter::ParallelIterator;
+use walkdir::WalkDir;
 
 use crate::generate::{
     cs_context_collection::TypeContextCollection, cs_type::CsType, cs_type_tag::CsTypeTag,
@@ -224,73 +226,39 @@ impl RustContextCollection {
 
     pub fn write_namespace_headers(&self) -> color_eyre::Result<()> {
         self.all_contexts
-            .iter()
-            .into_group_map_by(|(_, c)| c.fundamental_path.parent())
-            .into_iter()
-            .try_for_each(|(dir, contexts)| -> color_eyre::Result<()> {
-                let namespace = if dir.unwrap() == STATIC_CONFIG.source_path {
-                    "GlobalNamespace"
-                } else {
-                    dir.unwrap().file_name().unwrap().to_str().unwrap()
-                };
-
-                let str = contexts
-                    .iter()
-                    // ignore empty contexts
-                    .filter(|(_, c)| !c.typedef_types.is_empty())
-                    // ignore weird named types
-                    .filter(|(_, c)| {
-                        !c.fundamental_path
-                            .file_name()
-                            .unwrap()
-                            .to_str()
-                            .unwrap()
-                            .starts_with('_')
+            .values()
+            .flat_map(|c| c.fundamental_path.parent())
+            .unique()
+            .filter(|d| d.exists())
+            .try_for_each(|dir| -> color_eyre::Result<()> {
+                let modules = WalkDir::new(dir)
+                    .max_depth(1)
+                    .into_iter()
+                    .map(|c| {
+                        c.map(|entry| {
+                            entry
+                                .into_path()
+                                .file_stem()
+                                .unwrap()
+                                .to_string_lossy()
+                                .to_string()
+                        })
                     })
-                    // add includes
-                    .map(|(_, c)| {
-                        let stripped_path =
-                            diff_paths(&c.fundamental_path, &STATIC_CONFIG.source_path).unwrap();
+                    .collect::<walkdir::Result<Vec<String>>>()?;
 
-                        let stripped_path_friendly = if cfg!(windows) {
-                            stripped_path.to_string_lossy().replace('\\', "/")
-                        } else {
-                            stripped_path.to_string_lossy().to_string()
-                        };
-                        // replace \\ to / on Windows
-                        format!("#include \"{stripped_path_friendly}\"")
-                    })
-                    .sorted()
-                    .unique()
-                    .join("\n");
+                if modules.is_empty() {
+                    return Ok(());
+                }
 
-                let path = dir.unwrap().join(namespace).with_extension("hpp");
+                let mod_path = dir.join("mod.rs");
+                let mod_file = File::create(mod_path)?;
+                let mut buf_writer = BufWriter::new(mod_file);
 
-                info!(
-                    "Creating namespace glob include {path:?} for {} files",
-                    contexts.len()
-                );
+                for name in modules {
+                    writeln!(buf_writer, "pub mod {};", name)?;
+                }
 
-                let mut file = File::create(path)?;
-
-                writeln!(
-                    file,
-                    "#ifdef __cpp_modules
-                    module;
-                    #endif
-                "
-                )?;
-                writeln!(file, "#pragma once")?;
-                file.write_all(str.as_bytes())?;
-
-                writeln!(file)?;
-                writeln!(
-                    file,
-                    "#ifdef __cpp_modules
-                    export module {namespace};
-                    #endif
-                "
-                )?;
+                buf_writer.flush()?;
 
                 Ok(())
             })?;

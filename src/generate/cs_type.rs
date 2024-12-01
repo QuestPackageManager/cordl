@@ -252,7 +252,7 @@ impl CsType {
 
             is_value_type: t.is_value_type(),
             is_enum_type: t.is_enum_type(),
-            is_compiler_generated: t.is_compiler_generated(),
+            is_compiler_generated: t.is_compiler_generated(metadata.metadata),
             is_reference_type: is_pointer,
             requirements: Default::default(),
 

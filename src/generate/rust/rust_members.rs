@@ -1,3 +1,7 @@
+use proc_macro2::TokenStream;
+
+use super::rust_name_components::RustNameComponents;
+
 #[derive(Clone, Debug, Default)]
 pub enum Visibility {
     Public,
@@ -12,7 +16,6 @@ pub struct RustNamedItem {
     pub visibility: Visibility,
     pub item: RustItem,
 }
-
 
 /// Represents a Rust item, such as a struct, union, enum, or named type.
 /// For usage in fields of structs, unions, and enums.
@@ -38,7 +41,7 @@ pub struct RustUnion {
 #[derive(Clone, Debug)]
 pub struct RustField {
     pub name: String,
-    pub field_type: RustItem,
+    pub field_type: TokenStream,
     pub visibility: Visibility,
     pub offset: u32,
 }
