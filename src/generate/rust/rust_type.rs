@@ -77,6 +77,7 @@ pub struct RustType {
     pub constants: Vec<ConstRustField>,
     pub methods: Vec<RustFunction>,
     pub traits: Vec<RustTrait>,
+    pub nested_types: Vec<syn::ItemType>,
 
     pub is_value_type: bool,
     pub is_enum_type: bool,
@@ -123,6 +124,7 @@ impl RustType {
             methods: Default::default(),
             traits: Default::default(),
             constants: Default::default(),
+            nested_types: Default::default(),
 
             is_value_type: cs_type.is_value_type,
             is_enum_type: cs_type.is_enum_type,
@@ -154,6 +156,7 @@ impl RustType {
         config: &RustGenerationConfig,
     ) {
         self.make_parent(cs_type.parent.as_ref(), name_resolver);
+        self.make_nested_types(&cs_type.nested_types, name_resolver);
 
         self.make_fields(&cs_type.fields, name_resolver, config);
         self.make_instance_methods(&cs_type.methods, name_resolver, config);
@@ -198,6 +201,38 @@ impl RustType {
 
         self.fields.insert(0, parent_field);
         self.parent = Some(parent);
+    }
+
+    fn make_nested_types(
+        &mut self,
+        nested_types: &HashSet<CsTypeTag>,
+        name_resolver: &RustNameResolver<'_, '_>,
+    ) {
+        let nested_types = nested_types
+            .iter()
+            .filter_map(|tag| name_resolver.collection.get_cpp_type(*tag))
+            .map(|rust_type| -> syn::ItemType {
+                let name = format_ident!(
+                    "{}",
+                    name_resolver
+                        .config
+                        .name_rs(&rust_type.cs_name_components.name)
+                );
+
+                let target = rust_type.rs_name_components.to_type_path_token();
+
+                let visibility = match rust_type.is_interface {
+                    false => Visibility::Public,
+                    true => Visibility::Private,
+                }
+                .to_token_stream();
+
+                parse_quote! {
+                    #visibility type #name = #target;
+                }
+            });
+
+        self.nested_types = nested_types.collect();
     }
 
     fn make_fields(
@@ -357,7 +392,6 @@ impl RustType {
                 .collect_vec();
 
             let param_names = params.iter().map(|p| &p.name);
-
 
             let body: Vec<syn::Stmt> = if m.return_type.data
                 == ResolvedTypeData::Primitive(Il2CppTypeEnum::Void)
@@ -621,6 +655,16 @@ impl RustType {
     fn write_impl(&self, writer: &mut Writer, _config: &RustGenerationConfig) -> Result<()> {
         let name_ident = self.rs_name_components.clone().to_name_ident();
 
+        let const_fields = self.constants.iter().map(|f| -> syn::ImplItemConst {
+            let name = &f.name;
+            let val = &f.value;
+            let f_ty = &f.field_type;
+
+            parse_quote! {
+                pub const #name: #f_ty = #val;
+            }
+        });
+
         let methods = self
             .methods
             .iter()
@@ -634,8 +678,12 @@ impl RustType {
             .map(|f| f.to_token_stream())
             .map(|f| -> syn::ImplItemFn { parse_quote!(#f) });
 
+        let nested_types = &self.nested_types;
+
         let tokens: syn::ItemImpl = parse_quote! {
             impl #name_ident {
+                #(#const_fields)*
+                #(#nested_types)*
                 #(#methods)*
             }
         };
@@ -687,7 +735,7 @@ impl RustType {
 
 impl Writer {
     pub(crate) fn write_pretty_tokens(&mut self, tokens: TokenStream) -> Result<()> {
-        let syntax_tree = syn::parse2(tokens).unwrap();
+        let syntax_tree = syn::parse2(tokens.clone()).with_context(|| format!("{tokens}"))?;
         let formatted = prettyplease::unparse(&syntax_tree);
 
         self.stream.write_all(formatted.as_bytes())?;

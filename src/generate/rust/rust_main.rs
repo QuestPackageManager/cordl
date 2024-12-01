@@ -27,7 +27,7 @@ pub fn run_rust(
     }
     std::fs::create_dir_all(&STATIC_CONFIG.source_path)?;
 
-    const write_all: bool = false;
+    const write_all: bool = true;
     if write_all {
         info!("Writing all");
         rs_context_collection.write_all(&STATIC_CONFIG)?;

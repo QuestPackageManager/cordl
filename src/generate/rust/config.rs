@@ -58,7 +58,7 @@ impl RustGenerationConfig {
             | "Ok" | "Err" | "ffi" | "c_void" | "c_char" | "c_uchar" | "c_schar" | "c_short" | "c_ushort"
             | "c_int" | "c_uint" | "c_long" | "c_ulong" | "c_longlong" | "c_ulonglong" | "c_float" | "c_double" 
             | "where" | "Self" | "async" | "await" | "move" | "dyn" | "super" | "crate" | "mod" | "let" | "fn" | "in"
-            | "priv" | "box" | "loop" | "final" | "macro" | "override" |
+            | "priv" | "box" | "loop" | "final" | "macro" | "override" | "self" |
             // networking headers
             "EPERM"
             | "ENOENT" | "ESRCH" | "EINTR" | "EIO" | "ENXIO" | "E2BIG" | "ENOEXEC" | "EBADF"
