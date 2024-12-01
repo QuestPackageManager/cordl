@@ -10,7 +10,7 @@ default = ["il2cpp_v31", "json", "rust", "cpp"]
 il2cpp_v31 = ["brocolib_il2cpp_v31"]
 il2cpp_v29 = ["brocolib_il2cpp_v29"]
 json = ["dep:serde_json", "dep:serde"]
-rust = []
+rust = ["dep:quote", "dep:prettyplease", "dep:syn", "dep:proc-macro2"]
 cpp = []
 
 
@@ -48,6 +48,12 @@ filesize = "0.2.0"
 serde = { version = "1.0", features = ["derive"], optional = true }
 serde_json = {version = "1.0", optional = true }
 bitflags = "2.6.0"
+
+# Rust syntax generation
+quote = {version = "1", optional = true}
+prettyplease = {version = "0.2", optional = true}
+syn = { version = "2", optional = true }
+proc-macro2 = { version = "1", optional = true }
 
 [profiles.release]
 opt-level = 3

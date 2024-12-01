@@ -1,3 +1,8 @@
+use brocolib::global_metadata::Token;
+use proc_macro2::TokenStream;
+use quote::{format_ident, quote, ToTokens};
+use syn::parse_quote;
+
 use crate::data::name_components::NameComponents;
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Default, Hash, Clone)]
@@ -79,6 +84,111 @@ impl RustNameComponents {
     pub fn remove_namespace(mut self) -> RustNameComponents {
         self.namespace = None;
         self
+    }
+
+    pub fn to_name_ident(&self) -> TokenStream {
+        match self.generics {
+            Some(ref generics) => {
+                let generics = generics
+                    .iter()
+                    .map(|g| -> syn::GenericArgument { syn::parse_str(g).unwrap() });
+
+                let name = format_ident!(r#"{}"#, self.name);
+
+                parse_quote! {
+                    #name <#(#generics),*>
+                }
+            }
+            None => format_ident!(r#"{}"#, self.name).to_token_stream(),
+        }
+    }
+
+    pub fn to_type_path_token(&self) -> syn::TypePath {
+        let mut completed = self.to_name_ident().to_token_stream();
+
+        // add namespace
+        if let Some(namespace) = self.namespace.as_ref() {
+            let namespace_ident: syn::Path =
+                syn::parse_str(namespace).expect("Failed to parse namespace");
+            completed = quote! {
+                #namespace_ident::#completed
+            }
+        }
+
+        parse_quote! {
+             #completed
+        }
+    }
+
+    pub fn to_type_token(&self) -> syn::Type {
+        let completed = self.to_type_path_token();
+
+        // add & or * or mut
+        let mut prefix = if self.is_ref {
+            quote! { & }
+        } else if self.is_ptr {
+            quote! { * }
+        } else {
+            quote! {}
+        };
+
+        if self.is_mut {
+            prefix = parse_quote! { #prefix mut  };
+        }
+
+        parse_quote! {
+            #prefix #completed
+        }
+    }
+}
+
+impl NameComponents {
+    pub fn to_combined_ident(&self) -> TokenStream {
+        todo!();
+        let mut completed = match self.name.split_once('`') {
+            Some((a, b)) => {
+                let ident_a = format_ident!(r#"{}"#, a);
+                let ident_b: syn::Lit = syn::parse_str(b).expect("Failed to parse number");
+
+                quote! {
+                    #ident_a ^ #ident_b
+                }
+            }
+            None => format_ident!(r#"{}"#, self.name).to_token_stream(),
+        };
+
+        // add declaring types
+        if let Some(declaring_types) = self.declaring_types.as_ref() {
+            let declaring_types = declaring_types.iter().map(|g| format_ident!(r#"{}"#, g));
+
+            completed = quote! {
+                #(#declaring_types)/ * / #completed
+            }
+        }
+
+        // add namespace
+        // if let Some(namespace_str) = self.namespace.as_ref() {
+        //     let namespace: syn::punctuated::Punctuated<Ident, Token![.]> =
+        //         syn::parse_str(&namespace_str).expect("Failed to parse namespace");
+
+        //     completed = quote! {
+        //         #namespace.#completed
+        //     }
+        // }
+
+        // add generics
+        if let Some(generics_strings) = &self.generics {
+            let generics: Vec<syn::GenericArgument> = generics_strings
+                .iter()
+                .map(|g| syn::parse_str(g).expect("Failed to parse generic"))
+                .collect();
+
+            completed = quote! {
+                #completed <#(#generics),*>
+            }
+        }
+
+        completed
     }
 }
 

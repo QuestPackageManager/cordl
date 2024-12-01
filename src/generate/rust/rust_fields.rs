@@ -1,8 +1,9 @@
 use brocolib::{global_metadata::TypeDefinitionIndex, runtime_metadata::Il2CppTypeEnum};
 use itertools::Itertools;
 use log::warn;
-use quote::ToTokens;
+use quote::{format_ident, quote, ToTokens};
 use rayon::vec;
+use syn::parse_quote;
 
 use crate::{
     data::type_resolver::{ResolvedTypeData, TypeUsage},
@@ -191,14 +192,17 @@ pub fn handle_static_fields(
         return;
     }
 
+    return;
+    todo!();
+
     // we want only static fields
     // we ignore constants
     for field_info in fields.iter().filter(|f| !f.instance && !f.is_const) {
         let f_name = &field_info.name;
 
-        let field_ty_cpp_name = name_resolver
-            .resolve_name(cpp_type, &field_info.field_ty, TypeUsage::Field, true)
-            .combine_all();
+        let field_ty_cpp_name =
+            name_resolver.resolve_name(cpp_type, &field_info.field_ty, TypeUsage::Field, true);
+        let field_ty_ast = field_ty_cpp_name.to_type_token();
 
         // non const field
         // instance field access on ref types is special
@@ -207,18 +211,17 @@ pub fn handle_static_fields(
 
         let klass_resolver = cpp_type.classof_name();
 
-        let getter_call = format!(
-            "return getStaticField<{field_ty_cpp_name}, \"{f_name}\", {klass_resolver}>();"
-        );
+        let getter_call =
+            quote!("return getStaticField<{field_ty_ast}, \"{f_name}\", {klass_resolver}>();");
 
-        let setter_var_name = "value";
+        let setter_var_name = format_ident!("value");
         let setter_call =
-                format!("setStaticField<{field_ty_cpp_name}, \"{f_name}\", {klass_resolver}>(std::forward<{field_ty_cpp_name}>({setter_var_name}));");
+                quote!("setStaticField<{field_ty_ast}, \"{f_name}\", {klass_resolver}>(std::forward<{field_ty_ast}>({setter_var_name}));");
 
-        let getter_name = format!("getStaticF_{}", f_cpp_name);
-        let setter_name = format!("setStaticF_{}", f_cpp_name);
+        let getter_name = format_ident!("getStaticF_{}", f_cpp_name);
+        let setter_name = format_ident!("setStaticF_{}", f_cpp_name);
 
-        let get_return_type = field_ty_cpp_name.clone();
+        let get_return_type = field_ty_cpp_name;
 
         let getter_decl = RustFunction {
             name: getter_name.clone(),
@@ -226,10 +229,13 @@ pub fn handle_static_fields(
             is_mut: false,
             is_self: false,
 
-            return_type: Some(get_return_type),
+            return_type: Some(get_return_type.to_type_token()),
             params: vec![],
-            visibility: Some(Visibility::Public),
-            body: Some(getter_call.to_string()),
+            visibility: (Visibility::Public),
+            body: Some(parse_quote! {
+                            #getter_call
+            ,
+                        }),
         };
 
         let setter_decl = RustFunction {
@@ -241,11 +247,13 @@ pub fn handle_static_fields(
 
             return_type: None,
             params: vec![RustParam {
-                name: setter_var_name.to_string(),
-                param_type: field_ty_cpp_name,
+                name: setter_var_name,
+                param_type: field_ty_cpp_name.to_type_token(),
             }],
-            visibility: Some(Visibility::Public),
-            body: Some(setter_call.to_string()),
+            visibility: (Visibility::Public),
+            body: Some(parse_quote!(
+                #setter_call
+            )),
         };
 
         // only push accessors if declaring ref type, or if static field
@@ -336,7 +344,7 @@ fn handle_instance_fields(
 
             let size_field = RustField {
                 name: "padding".to_owned(),
-                field_type: (format!("[u8; 0x{size:x}]")).to_token_stream(),
+                field_type: parse_quote!([u8; #size]),
                 visibility: Visibility::Private,
                 offset: 0,
             };
@@ -408,7 +416,7 @@ pub(crate) fn field_into_offset_structs(
 
     let packed_padding_field = RustField {
         name: packed_padding_cpp_name,
-        field_type: format!("[u8; 0x{padding:x}]").to_token_stream(),
+        field_type: parse_quote!([u8; {padding:x}]),
         visibility: Visibility::Private,
         offset: actual_offset,
         // brief_comment: Some(format!("Padding field 0x{padding:x}")),
@@ -424,7 +432,7 @@ pub(crate) fn field_into_offset_structs(
 
     let alignment_padding_field = RustField {
         name: alignment_padding_cpp_name,
-        field_type: format!("[u8; 0x{padding:x}]").to_token_stream(),
+        field_type: parse_quote!([u8; #padding]),
         visibility: Visibility::Private,
         offset: actual_offset,
         // brief_comment: Some(format!("Padding field 0x{padding:x} for alignment")),
@@ -476,7 +484,7 @@ fn make_rust_field(
 
     RustField {
         name: config.name_rs(&f.name),
-        field_type: field_type.to_combined_ident(),
+        field_type: field_type.to_type_token(),
         visibility: Visibility::Public,
         offset: f.offset.unwrap_or_default(),
     }

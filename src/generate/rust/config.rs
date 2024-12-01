@@ -91,7 +91,7 @@ impl RustGenerationConfig {
     /// for converting C++ names into just a single C++ word
     pub fn sanitize_to_rs_name(&self, string: &str) -> String {
         // Coincidentally the same as path_name
-        string.replace(['<', '`', '>', '/', '.', ':', '|', ',', '(', ')', '*'], "_")
+        string.replace(['<', '`', '>', '/', '.', ':', '|', ',', '(', ')', '*', '='], "_")
     }
     pub fn namespace_path(&self, string: &str) -> String {
         string.replace(['<', '>', '`', '/'], "_").replace('.', "/")

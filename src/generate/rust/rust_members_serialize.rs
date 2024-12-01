@@ -1,4 +1,5 @@
 use color_eyre::eyre::Result;
+use quote::ToTokens;
 
 use crate::generate::writer::{Writable, Writer};
 use std::io::Write;
@@ -75,7 +76,7 @@ impl Writable for RustField {
     fn write(&self, writer: &mut Writer) -> Result<()> {
         let visibility = self.visibility.to_string();
         let name = &self.name;
-        let field_type = self.field_type.to_string();
+        let field_type = self.field_type.to_token_stream().to_string();
 
         write!(writer, "{visibility} {name}: {field_type}")?;
         writeln!(writer, ",")?;
@@ -112,7 +113,7 @@ impl Writable for RustVariant {
         write!(writer, " (")?;
         for (_i, field) in self.fields.iter().enumerate() {
             let name = &field.name;
-            let ty = field.field_type.to_string();
+            let ty = field.field_type.to_token_stream().to_string();
             write!(writer, "{name}: {ty}")?;
             write!(writer, ", ")?;
         }
@@ -124,11 +125,7 @@ impl Writable for RustVariant {
 
 impl Writable for RustFunction {
     fn write(&self, writer: &mut Writer) -> Result<()> {
-        let visibility = self
-            .visibility
-            .as_ref()
-            .map(|s| s.to_string())
-            .unwrap_or_default();
+        let visibility = self.visibility.to_string();
 
         let name = &self.name;
         write!(writer, "{visibility} fn {name}(",)?;
@@ -149,12 +146,12 @@ impl Writable for RustFunction {
         write!(writer, ")")?;
 
         if let Some(ref return_type) = self.return_type {
-            write!(writer, " -> {}", return_type)?;
+            write!(writer, " -> {}", return_type.to_token_stream())?;
         }
         match &self.body {
             Some(body) => {
                 writeln!(writer, "{{")?;
-                writeln!(writer, "{body}")?;
+                writeln!(writer, "{}", body.to_token_stream().to_string())?;
                 writeln!(writer, "}}")?;
             }
             _ => {
@@ -171,7 +168,7 @@ impl Writable for RustParam {
         write!(writer, "{}: ", self.name)?;
 
         // ty
-        write!(writer, " {}", self.param_type)?;
+        write!(writer, " {}", self.param_type.to_token_stream())?;
 
         // => {name}: &mut {ty}
         Ok(())

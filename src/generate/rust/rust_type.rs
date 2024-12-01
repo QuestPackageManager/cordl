@@ -72,7 +72,7 @@ impl RustTypeRequirements {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct RustType {
     pub fields: Vec<RustField>,
     pub methods: Vec<RustFunction>,
@@ -165,7 +165,7 @@ impl RustType {
         let parent = name_resolver.resolve_name(self, parent, TypeUsage::TypeName, true);
         let parent_field = RustField {
             name: PARENT_FIELD.to_string(),
-            field_type: parent.to_combined_ident(),
+            field_type: parent.to_type_token(),
             visibility: Visibility::Private,
             offset: 0,
         };
@@ -225,8 +225,9 @@ impl RustType {
                 .map(|p| self.make_parameter(p, name_resolver, config))
                 .collect_vec();
 
+            let m_name_rs = config.name_rs(&m.name);
             let rust_func = RustFunction {
-                name: config.name_rs(&m.name),
+                name: format_ident!("{m_name_rs}"),
                 body: None,
 
                 is_mut: true,
@@ -234,8 +235,8 @@ impl RustType {
                 is_self: m.instance,
                 params,
 
-                return_type: Some(m_ret_ty.combine_all()),
-                visibility: Some(Visibility::Public),
+                return_type: Some(m_ret_ty.to_type_token()),
+                visibility: (Visibility::Public),
             };
             self.methods.push(rust_func);
         }
@@ -252,8 +253,8 @@ impl RustType {
 
         let name_rs = config.name_rs(&p.name);
         RustParam {
-            name: name_rs,
-            param_type: p_ty.combine_all(),
+            name: format_ident!("{name_rs}"),
+            param_type: p_ty.to_type_token(),
             // is_ref: p_il2cpp_ty.is_byref(),
             // is_ptr: !p_il2cpp_ty.valuetype,
             // is_mut: true,
@@ -322,12 +323,7 @@ impl RustType {
         writer: &mut Writer,
         config: &RustGenerationConfig,
     ) -> Result<()> {
-        let name_ident = self
-            .rs_name_components
-            .clone()
-            .with_no_prefix()
-            .remove_namespace()
-            .to_combined_ident();
+        let name_ident = self.rs_name_components.to_name_ident();
 
         let fields = self.fields.iter().map(|f| {
             let f_name = format_ident!(r#"{}"#, f.name);
@@ -343,39 +339,20 @@ impl RustType {
             }
         });
 
-        let cs_name_ident = self.cs_name_components.to_combined_ident();
+        let cs_name_str = self.cs_name_components.combine_all();
 
-        // let mut tokens = if let Some(generics) = &self.generics {
-        //     let generics_ident = generics
-        //         .iter()
-        //         .map(|g| format_ident!("{}", g))
-        //         .collect_vec();
+        let quest_hook_path: syn::Path = parse_quote!(quest_hook::libil2cpp);
+        let macro_invoke: syn::ItemMacro = parse_quote! {
+            #quest_hook_path::unsafe_impl_reference_type!(in #quest_hook_path for #name_ident => #cs_name_str);
+        };
 
-        //     quote! {
-        //         #[repr(c)]
-        //         #[derive(Debug)]
-        //         pub struct #name_ident<#(#generics_ident),*> {
-        //             #(#fields),*
-        //         }
-        //         quest_hook::libil2cpp::unsafe_impl_reference_type!(in quest_hook::libil2cpp for #name_ident<#(#generics_ident),*> => #cs_name_ident);
-        //     }
-        // } else {
-        //     quote! {
-        //         #[repr(c)]
-        //         #[derive(Debug)]
-        //         pub struct #name_ident {
-        //             #(#fields),*
-        //         }
-        //         quest_hook::libil2cpp::unsafe_impl_reference_type!(in quest_hook::libil2cpp for #name_ident => #cs_name_ident);
-        //     }
-        // };
         let mut tokens = quote! {
             #[repr(c)]
             #[derive(Debug)]
             pub struct #name_ident {
                 #(#fields),*
             }
-            quest_hook::libil2cpp::unsafe_impl_reference_type!(in quest_hook::libil2cpp for #name_ident => #cs_name_ident);
+            #macro_invoke
         };
 
         // example of using the il2cpp_subtype macro
@@ -399,27 +376,12 @@ impl RustType {
         // }
         // il2cpp_subtype!(List<T>, Il2CppObject, object);
         if let Some(parent) = &self.parent {
-            let parent_name = parent.to_combined_ident();
+            let parent_name = parent.clone().to_type_path_token();
             let parent_field_ident = format_ident!(r#"{}"#, PARENT_FIELD);
 
             tokens.extend(quote! {
-                    quest_hook::libil2cpp::il2cpp_subtype!(#name_ident => #parent_name, {#parent_field_ident});
+                    quest_hook::libil2cpp::il2cpp_subtype!(#name_ident => #parent_name, #parent_field_ident);
                 });
-
-            // if let Some(generics) = &self.generics {
-            //     let generics_ident = generics
-            //         .iter()
-            //         .map(|g| format_ident!("{}", g))
-            //         .collect_vec();
-
-            //     tokens.extend(quote! {
-            //     quest_hook::libil2cpp::il2cpp_subtype!(#name_ident<#(#generics_ident),*> => #parent_name_ident, {#parent_field_ident});
-            // });
-            // } else {
-            //     tokens.extend(quote! {
-            //         quest_hook::libil2cpp::il2cpp_subtype!(#name_ident => #parent_name_ident, {#parent_field_ident});
-            //     });
-            // }
         }
 
         // Parse the string into a `syn::File` AST
@@ -479,27 +441,28 @@ impl RustType {
     }
 
     fn write_impl(&self, writer: &mut Writer, _config: &RustGenerationConfig) -> Result<()> {
-        let name = self.rs_name();
+        let name_ident = self.rs_name_components.clone().to_name_ident();
 
-        match &self.generics {
-            Some(generics) => {
-                let generics_combined = generics.join(", ");
-                writeln!(
-                    writer,
-                    "impl<{generics_combined}> {name}<{generics_combined}> {{"
-                )?;
-            }
-            None => {
-                writeln!(writer, "impl {name} {{")?;
+        let methods = self
+            .methods
+            .iter()
+            .cloned()
+            .map(|mut f| {
+                f.body = Some(parse_quote! {
+                    todo!()
+                });
+                f
+            })
+            .map(|f| f.to_token_stream())
+            .map(|f| -> syn::ImplItemFn { parse_quote!(#f) });
+
+        let tokens: syn::ItemImpl = parse_quote! {
+            impl #name_ident {
+                #(#methods)*
             }
         };
 
-        for m in &self.methods {
-            m.write(writer)?;
-        }
-
-        writeln!(writer, "}}")?;
-
+        writeln!(writer, "{}", tokens.to_token_stream())?;
         Ok(())
     }
 
@@ -512,7 +475,7 @@ impl RustType {
         writeln!(writer, "pub trait {name} {{")?;
         for mut m in self.methods.clone() {
             // traits don't like visibility modifiers
-            m.visibility = None;
+            m.visibility = Visibility::Private;
             m.write(writer)?;
         }
         writeln!(writer, "}}")?;
@@ -526,115 +489,5 @@ impl RustType {
 
     pub(crate) fn classof_name(&self) -> String {
         format!("{}::class()", self.rs_name())
-    }
-}
-
-impl NameComponents {
-    pub fn to_combined_ident(&self) -> TokenStream {
-        let mut completed = match self.name.split_once('`') {
-            Some((a, b)) => {
-                let ident_a = format_ident!(r#"{}"#, a);
-                let ident_b: syn::Lit = syn::parse_str(b).expect("Failed to parse number");
-
-                quote! {
-                    #ident_a ^ #ident_b
-                }
-            }
-            None => format_ident!(r#"{}"#, self.name).to_token_stream(),
-        };
-
-        // add declaring types
-        if let Some(declaring_types) = self.declaring_types.as_ref() {
-            let declaring_types = declaring_types.iter().map(|g| format_ident!(r#"{}"#, g));
-
-            completed = quote! {
-                #(#declaring_types)/ * / #completed
-            }
-        }
-
-        // add namespace
-        if let Some(namespace_str) = self.namespace.as_ref() {
-            let namespace: syn::punctuated::Punctuated<Ident, Token![.]> =
-                syn::parse_str(&namespace_str).expect("Failed to parse namespace");
-                
-            completed = quote! {
-                #namespace.#completed
-            }
-        }
-
-        // add generics
-        if let Some(generics_strings) = &self.generics {
-            let generics: Vec<syn::GenericArgument> = generics_strings
-                .iter()
-                .map(|g| syn::parse_str(g).expect("Failed to parse generic"))
-                .collect();
-
-            completed = quote! {
-                #completed <#(#generics),*>
-            }
-        }
-
-        completed
-    }
-}
-
-impl RustNameComponents {
-    pub fn to_name_ident(&self) -> TokenStream {
-        match self.generics {
-            Some(ref generics) => {
-                let generics = generics.iter().map(|g| format_ident!(r#"{}"#, g));
-
-                let name = format_ident!(r#"{}"#, self.name);
-
-                quote! {
-                    #name <#(#generics),*>
-                }
-                .to_token_stream()
-            }
-            None => format_ident!(r#"{}"#, self.combine_all()).to_token_stream(),
-        }
-    }
-
-    pub fn to_combined_ident(&self) -> TokenStream {
-        let mut completed = format_ident!(r#"{}"#, self.name).to_token_stream();
-
-        // add namespace
-        if let Some(namespace) = self.namespace.as_ref() {
-            let namespace_ident: syn::Path =
-                syn::parse_str(namespace).expect("Failed to parse namespace");
-            completed = quote! {
-                #namespace_ident::#completed
-            }
-        }
-
-        // add generics
-        if let Some(generics) = &self.generics {
-            let generics: Vec<syn::GenericArgument> = generics
-                .iter()
-                .map(|g| syn::parse_str(g).expect("Unable to parse generic argument"))
-                .collect();
-
-            completed = quote! {
-            #completed<#(#generics),*>
-            }
-        }
-
-        // add & or * or mut
-
-        let mut prefix = if self.is_ref {
-            quote! { & }
-        } else if self.is_ptr {
-            quote! { * }
-        } else {
-            quote! {}
-        };
-
-        if self.is_mut {
-            prefix = quote! { #prefix mut  };
-        }
-
-        quote! {
-            #prefix #completed
-        }
     }
 }

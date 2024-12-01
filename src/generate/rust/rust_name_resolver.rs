@@ -113,7 +113,7 @@ impl<'a, 'b> RustNameResolver<'a, 'b> {
                     Il2CppTypeEnum::R4 => "f32".to_string(),
                     Il2CppTypeEnum::R8 => "f64".to_string(),
 
-                    Il2CppTypeEnum::Void => "()".to_string(),
+                    Il2CppTypeEnum::Void => "Void".to_string(),
                     Il2CppTypeEnum::Boolean => "bool".to_string(),
                     Il2CppTypeEnum::Char => "char".to_string(),
 

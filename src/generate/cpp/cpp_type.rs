@@ -37,7 +37,7 @@ use super::{
     cpp_members::{
         CppConstructorDecl, CppConstructorImpl, CppFieldDecl, CppForwardDeclare, CppInclude,
         CppLine, CppMember, CppMethodData, CppMethodDecl, CppMethodImpl, CppNestedStruct,
-        CppNonMember, CppParam, CppPropertyDecl, CppTemplate, CppUsingAlias,
+        CppNonMember, CppParam, CppPropertyDecl, CppTemplate, CppUsingAlias, WritableDebug,
     },
     cpp_name_components::CppNameComponents,
     cpp_name_resolver::{CppNameResolver, VALUE_WRAPPER_TYPE},
@@ -810,7 +810,7 @@ impl CppType {
                 false => "static_cast<void*>(this)".to_string(),
             };
 
-            let body: Vec<Arc<dyn Writable>> = vec![Arc::new(CppLine::make(format!(
+            let body: Vec<Arc<dyn WritableDebug>> = vec![Arc::new(CppLine::make(format!(
                 "return static_cast<{interface_cpp_pointer}>({convert_line});"
             )))];
             let declaring_cpp_full_name = self.cpp_name_components.remove_pointer().combine_all();
@@ -1109,13 +1109,13 @@ impl CppType {
                 .iter()
                 .chain(method_body_lines.iter())
                 .cloned()
-                .map(|l| -> Arc<dyn Writable> { Arc::new(CppLine::make(l)) })
+                .map(|l| -> Arc<dyn WritableDebug> { Arc::new(CppLine::make(l)) })
                 .collect_vec(),
             false => method_info_lines
                 .iter()
                 .chain(method_body_lines.iter())
                 .cloned()
-                .map(|l| -> Arc<dyn Writable> { Arc::new(CppLine::make(l)) })
+                .map(|l| -> Arc<dyn WritableDebug> { Arc::new(CppLine::make(l)) })
                 .collect_vec(),
         };
 
@@ -1569,7 +1569,7 @@ impl CppType {
         // so then Parent()
         let base_ctor = self.parent.as_ref().map(|s| (s.clone(), "".to_string()));
 
-        let body: Vec<Arc<dyn Writable>> = instance_fields
+        let body: Vec<Arc<dyn WritableDebug>> = instance_fields
             .iter()
             .map(|p| {
                 let name = &p.name;
@@ -1577,7 +1577,7 @@ impl CppType {
             })
             .map(Arc::new)
             // Why is this needed? _sigh_
-            .map(|arc| -> Arc<dyn Writable> { arc })
+            .map(|arc| -> Arc<dyn WritableDebug> { arc })
             .collect_vec();
 
         let params_no_def = instance_fields

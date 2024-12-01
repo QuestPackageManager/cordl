@@ -7,11 +7,7 @@ use crate::generate::{
 };
 
 use std::{
-    collections::HashMap,
-    hash::Hash,
-    path::{Path, PathBuf},
-    rc::Rc,
-    sync::Arc,
+    collections::HashMap, fmt::Debug, hash::Hash, path::{Path, PathBuf}, rc::Rc, sync::Arc
 };
 
 use super::{
@@ -98,6 +94,9 @@ impl CppLine {
         CppLine { line: v }
     }
 }
+
+pub trait WritableDebug: Writable + Debug {}
+impl<T: Writable + Debug> WritableDebug for T {}
 
 #[derive(Debug, Eq, Hash, PartialEq, Clone)]
 pub struct CppForwardDeclareGroup {
@@ -283,9 +282,9 @@ pub struct CppMethodDecl {
     pub is_implicit_operator: bool,
     pub is_explicit_operator: bool,
     pub is_inline: bool,
-
+    
     pub brief: Option<String>,
-    pub body: Option<Vec<Arc<dyn Writable>>>,
+    pub body: Option<Vec<Arc<dyn WritableDebug>>>,
 }
 
 impl PartialEq for CppMethodDecl {
@@ -389,7 +388,7 @@ pub struct CppMethodImpl {
     pub prefix_modifiers: Vec<String>,
 
     pub brief: Option<String>,
-    pub body: Vec<Arc<dyn Writable>>,
+    pub body: Vec<Arc<dyn WritableDebug>>,
 }
 
 impl PartialEq for CppMethodImpl {
@@ -470,7 +469,7 @@ pub struct CppConstructorDecl {
     pub initialized_values: HashMap<String, String>,
 
     pub brief: Option<String>,
-    pub body: Option<Vec<Arc<dyn Writable>>>,
+    pub body: Option<Vec<Arc<dyn WritableDebug>>>,
 }
 
 impl PartialEq for CppConstructorDecl {
@@ -521,7 +520,7 @@ pub struct CppConstructorImpl {
 
     pub template: Option<CppTemplate>,
 
-    pub body: Vec<Arc<dyn Writable>>,
+    pub body: Vec<Arc<dyn WritableDebug>>,
 }
 
 impl PartialEq for CppConstructorImpl {

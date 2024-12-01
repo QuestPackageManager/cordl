@@ -21,7 +21,7 @@ use brocolib::global_metadata::TypeDefinitionIndex;
 use super::config::CppGenerationConfig;
 use super::cpp_members::{
     CppFieldDecl, CppFieldImpl, CppInclude, CppNestedStruct, CppNestedUnion, CppNonMember,
-    CppStaticAssert, CppTemplate,
+    CppStaticAssert, CppTemplate, WritableDebug,
 };
 use super::cpp_members::{
     CppLine, CppMember, CppMethodDecl, CppMethodImpl, CppParam, CppPropertyDecl,
@@ -639,7 +639,7 @@ pub(crate) fn prop_methods_from_fieldinfo(
     };
 
     // construct getter and setter bodies
-    let getter_body: Vec<Arc<dyn Writable>> = if let Some(instance_null_check) = instance_null_check
+    let getter_body: Vec<Arc<dyn WritableDebug>> = if let Some(instance_null_check) = instance_null_check
     {
         vec![
             Arc::new(CppLine::make(instance_null_check.into())),
@@ -649,7 +649,7 @@ pub(crate) fn prop_methods_from_fieldinfo(
         vec![Arc::new(CppLine::make(getter_call))]
     };
 
-    let setter_body: Vec<Arc<dyn Writable>> = if let Some(instance_null_check) = instance_null_check
+    let setter_body: Vec<Arc<dyn WritableDebug>> = if let Some(instance_null_check) = instance_null_check
     {
         vec![
             Arc::new(CppLine::make(instance_null_check.into())),
