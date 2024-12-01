@@ -8,7 +8,8 @@ use syn::parse_quote;
 use crate::{
     data::type_resolver::{ResolvedTypeData, TypeUsage},
     generate::{
-        cs_members::CsField,
+        cpp,
+        cs_members::{CsField, CsValue},
         cs_type_tag::CsTypeTag,
         metadata::CordlMetadata,
         type_extensions::{TypeDefinitionExtensions, TypeDefinitionIndexExtensions},
@@ -97,7 +98,7 @@ struct  {
 use super::{
     config::RustGenerationConfig,
     rust_members::{
-        RustField, RustFunction, RustItem, RustParam, RustStruct, RustUnion, Visibility,
+        ConstRustField, RustField, RustFunction, RustParam, RustStruct, RustUnion, Visibility,
     },
     rust_name_resolver::RustNameResolver,
     rust_type::RustType,
@@ -275,37 +276,67 @@ pub(crate) fn handle_const_fields(
         return;
     }
 
-    return;
-    todo!();
-
     for field_info in fields.iter().filter(|f| f.is_const) {
-        let cpp_field_template = make_rust_field(cpp_type, field_info, name_resolver, config);
+
+
         let f_resolved_type = &field_info.field_ty;
-        let f_type = field_info.field_ty.get_type(metadata);
-        let f_name = &field_info.name;
-        let f_offset = field_info.offset.unwrap_or(u32::MAX);
-        let f_size = field_info.size;
+        let f_type = name_resolver
+            .resolve_name(cpp_type, f_resolved_type, TypeUsage::Field, true)
+            .to_type_token();
+        let f_name = format_ident!("{}", config.sanitize_to_rs_name(&field_info.name));
 
         let def_value = field_info.value.as_ref();
 
         let def_value = def_value.expect("Constant with no default value?");
 
-        match f_resolved_type.data {
-            ResolvedTypeData::Primitive(_) => {
-                // primitive type
-                let field_decl = RustField {
-                    ..cpp_field_template
-                };
+        let rs_def_value: syn::Expr = match def_value {
+            CsValue::String(s) => parse_quote! { #s },
+            CsValue::Bool(b) => parse_quote! { #b },
+            CsValue::U8(u) => parse_quote! { #u },
+            CsValue::U16(u) => parse_quote! { #u },
+            CsValue::U32(u) => parse_quote! { #u },
+            CsValue::U64(u) => parse_quote! { #u },
+            CsValue::I8(i) => parse_quote! { #i },
+            CsValue::I16(i) => parse_quote! { #i },
+            CsValue::I32(i) => parse_quote! { #i },
+            CsValue::I64(i) => parse_quote! { #i },
+            CsValue::F32(f) => match f {
+                f if f.is_finite() => parse_quote! { #f },
+                f if f.is_infinite() => {
+                    if f.is_sign_positive() {
+                        parse_quote! { std::f32::INFINITY }
+                    } else {
+                        parse_quote! { std::f32::NEG_INFINITY }
+                    }
+                }
+                f if f.is_nan() => parse_quote! { std::f64::NAN },
+                _ => panic!("Unexpected f32 value: {}", f),
+            },
+            CsValue::F64(f) => match f {
+                f if f.is_finite() => parse_quote! { #f },
+                f if f.is_infinite() => {
+                    if f.is_sign_positive() {
+                        parse_quote! { std::f64::INFINITY }
+                    } else {
+                        parse_quote! { std::f64::NEG_INFINITY }
+                    }
+                }
+                f if f.is_nan() => parse_quote! { std::f64::NAN },
+                _ => panic!("Unexpected f64 value: {}", f),
+            },
+            CsValue::Null => parse_quote! { Default::default() },
+            CsValue::Object(_) => todo!(),
+            CsValue::ValueType(_) => todo!(),
+        };
 
-                cpp_type.fields.push(field_decl);
-            }
-            _ => {
-                // other type
-                let field_decl = RustField {
-                    ..cpp_field_template.clone()
-                };
-            }
-        }
+        let cpp_field_template = ConstRustField {
+            name: f_name,
+            field_type: f_type,
+            visibility: Visibility::Public,
+            value: rs_def_value,
+        };
+
+        cpp_type.constants.push(cpp_field_template);
     }
 }
 
