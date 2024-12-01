@@ -1,5 +1,5 @@
 use std::cmp::Ordering;
-use std::io::Write;
+use std::io::{BufWriter, Write};
 use std::{
     collections::{HashMap, HashSet},
     fs::{create_dir_all, remove_file, File},
@@ -195,17 +195,17 @@ impl CppContext {
 
         trace!("Writing {:?}", self.typedef_path.as_path());
         let mut typedef_writer = Writer {
-            stream: File::create(self.typedef_path.as_path())?,
+            stream: BufWriter::new(File::create(self.typedef_path.as_path())?),
             indent: 0,
             newline: true,
         };
         let mut typeimpl_writer = Writer {
-            stream: File::create(self.type_impl_path.as_path())?,
+            stream: BufWriter::new(File::create(self.type_impl_path.as_path())?),
             indent: 0,
             newline: true,
         };
         let mut fundamental_writer = Writer {
-            stream: File::create(self.fundamental_path.as_path())?,
+            stream: BufWriter::new(File::create(self.fundamental_path.as_path())?),
             indent: 0,
             newline: true,
         };

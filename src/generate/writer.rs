@@ -1,7 +1,7 @@
-use std::{fs::File, io::Write};
+use std::{fs::File, io::{BufWriter, Write}};
 
 pub struct Writer {
-    pub stream: File,
+    pub stream: BufWriter<File>,
     pub indent: u16,
     pub newline: bool,
 }

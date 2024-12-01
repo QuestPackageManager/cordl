@@ -1,6 +1,7 @@
 use std::{
     collections::{HashMap, HashSet},
     fs::{create_dir_all, File},
+    io::BufWriter,
     path::{self, PathBuf},
 };
 
@@ -129,7 +130,7 @@ impl RustContext {
 
         trace!("Writing {:?}", self.fundamental_path.as_path());
         let mut typedef_writer = Writer {
-            stream: File::create(self.fundamental_path.as_path())?,
+            stream: BufWriter::new(File::create(self.fundamental_path.as_path())?),
             indent: 0,
             newline: true,
         };
