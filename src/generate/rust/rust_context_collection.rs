@@ -224,44 +224,48 @@ impl RustContextCollection {
             })
     }
 
-    pub fn write_namespace_headers(&self) -> color_eyre::Result<()> {
+    pub fn write_namespace_headers(&self, config: &RustGenerationConfig) -> color_eyre::Result<()> {
+        fn make_mod_dir(dir: &std::path::Path, name: &str) -> Result<(), color_eyre::eyre::Error> {
+            let modules = WalkDir::new(dir)
+                .max_depth(1)
+                .min_depth(1)
+                .into_iter()
+                .map(|c| {
+                    c.map(|entry| {
+                        entry
+                            .into_path()
+                            .file_stem()
+                            .unwrap()
+                            .to_string_lossy()
+                            .to_string()
+                    })
+                })
+                .collect::<walkdir::Result<Vec<String>>>()?;
+
+            if modules.is_empty() {
+                return Ok(());
+            }
+
+            let mod_path = dir.join(name).with_extension("rs");
+            let mod_file = File::create(mod_path)?;
+            let mut buf_writer = BufWriter::new(mod_file);
+
+            for name in modules {
+                writeln!(buf_writer, "pub mod {};", name)?;
+            }
+
+            buf_writer.flush()?;
+
+            Ok(())
+        }
         self.all_contexts
             .values()
             .flat_map(|c| c.fundamental_path.parent())
             .unique()
             .filter(|d| d.exists())
-            .try_for_each(|dir| -> color_eyre::Result<()> {
-                let modules = WalkDir::new(dir)
-                    .max_depth(1)
-                    .into_iter()
-                    .map(|c| {
-                        c.map(|entry| {
-                            entry
-                                .into_path()
-                                .file_stem()
-                                .unwrap()
-                                .to_string_lossy()
-                                .to_string()
-                        })
-                    })
-                    .collect::<walkdir::Result<Vec<String>>>()?;
+            .try_for_each(|d| make_mod_dir(d, "mod.rs"))?;
 
-                if modules.is_empty() {
-                    return Ok(());
-                }
-
-                let mod_path = dir.join("mod.rs");
-                let mod_file = File::create(mod_path)?;
-                let mut buf_writer = BufWriter::new(mod_file);
-
-                for name in modules {
-                    writeln!(buf_writer, "pub mod {};", name)?;
-                }
-
-                buf_writer.flush()?;
-
-                Ok(())
-            })?;
+        make_mod_dir(&config.source_path, "lib.rs")?;
         Ok(())
     }
 }

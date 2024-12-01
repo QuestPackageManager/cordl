@@ -56,7 +56,9 @@ impl RustGenerationConfig {
             "panic" | "assert" | "debug_assert" | "assert_eq" | "assert_ne" | "debug_assert_eq" | "debug_assert_ne" 
             | "unreachable" | "unimplemented" | "todo" | "trait" | "impl" | "ref" | "mut" | "as" | "use" | "pub"
             | "Ok" | "Err" | "ffi" | "c_void" | "c_char" | "c_uchar" | "c_schar" | "c_short" | "c_ushort"
-            | "c_int" | "c_uint" | "c_long" | "c_ulong" | "c_longlong" | "c_ulonglong" | "c_float" | "c_double" |
+            | "c_int" | "c_uint" | "c_long" | "c_ulong" | "c_longlong" | "c_ulonglong" | "c_float" | "c_double" 
+            | "where" | "Self" | "async" | "await" | "move" | "dyn" | "super" | "crate" | "mod" | "let" | "fn" | "in"
+            | "priv" | "box" | "loop" | "final" | "macro" | "override" |
             // networking headers
             "EPERM"
             | "ENOENT" | "ESRCH" | "EINTR" | "EIO" | "ENXIO" | "E2BIG" | "ENOEXEC" | "EBADF"

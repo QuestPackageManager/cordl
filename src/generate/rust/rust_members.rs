@@ -48,7 +48,7 @@ pub struct RustFunction {
     pub name: syn::Ident,
     pub params: Vec<RustParam>,
     pub return_type: Option<syn::Type>,
-    pub body: Option<syn::Expr>,
+    pub body: Option<Vec<syn::Stmt>>,
 
     pub is_self: bool,
     pub is_ref: bool,
@@ -121,9 +121,10 @@ impl RustFunction {
         };
 
         if let Some(body) = &self.body {
+            
             tokens = quote! {
                 #tokens {
-                    #body
+                    #(#body)*
                 }
             };
         } else {

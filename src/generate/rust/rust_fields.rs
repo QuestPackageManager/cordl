@@ -283,7 +283,7 @@ pub(crate) fn handle_const_fields(
         let f_type = name_resolver
             .resolve_name(cpp_type, f_resolved_type, TypeUsage::Field, true)
             .to_type_token();
-        let f_name = format_ident!("{}", config.sanitize_to_rs_name(&field_info.name));
+        let f_name = format_ident!("{}", config.name_rs(&field_info.name));
 
         let def_value = field_info.value.as_ref();
 

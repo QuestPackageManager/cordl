@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 
+use brocolib::runtime_metadata::Il2CppTypeEnum;
 use color_eyre::eyre::{Context, ContextCompat, Result};
 use itertools::Itertools;
 use proc_macro2::TokenStream;
@@ -9,10 +10,10 @@ use syn::parse_quote;
 use crate::{
     data::{
         name_components::NameComponents,
-        type_resolver::{ResolvedType, TypeUsage},
+        type_resolver::{ResolvedType, ResolvedTypeData, TypeUsage},
     },
     generate::{
-        cs_members::{CsField, CsMethod, CsParam},
+        cs_members::{CsConstructor, CsField, CsMethod, CsParam},
         cs_type::CsType,
         cs_type_tag::CsTypeTag,
         metadata::CordlMetadata,
@@ -155,7 +156,12 @@ impl RustType {
         self.make_parent(cs_type.parent.as_ref(), name_resolver);
 
         self.make_fields(&cs_type.fields, name_resolver, config);
-        self.make_methods(&cs_type.methods, name_resolver, config);
+        self.make_instance_methods(&cs_type.methods, name_resolver, config);
+        self.make_static_methods(&cs_type.methods, name_resolver, config);
+
+        if self.is_reference_type {
+            self.make_ref_constructors(&cs_type.constructors, name_resolver, config);
+        }
 
         if let Some(backing_type) = cs_type.enum_backing_type {
             let backing_ty = RustNameResolver::primitive_to_rust_ty(&backing_type);
@@ -230,14 +236,66 @@ impl RustType {
         //     self.fields.push(rust_field);
         // }
     }
-    fn make_methods(
+    fn make_ref_constructors(
+        &mut self,
+        constructors: &[CsConstructor],
+        name_resolver: &RustNameResolver<'_, '_>,
+        config: &RustGenerationConfig,
+    ) {
+        for c in constructors {
+            let params = c
+                .parameters
+                .iter()
+                .map(|p| self.make_parameter(p, name_resolver, config))
+                .collect_vec();
+
+            let param_names = params.iter().map(|p| &p.name);
+
+            let body: Vec<syn::Stmt> = parse_quote! {
+                let object: &mut Self = Self::class().instantiate();
+
+                (object as &mut Il2CppObject).invoke_void(".ctor", (#(#param_names),*))?;
+
+                Ok(object)
+            };
+
+            let rust_func = RustFunction {
+                name: format_ident!("New"),
+                body: Some(body),
+
+                is_mut: true,
+                is_ref: true,
+                is_self: false,
+                params,
+
+                return_type: Some(parse_quote!(quest_hook::Result<&'static mut Self>)),
+                visibility: (Visibility::Public),
+            };
+            self.methods.push(rust_func);
+        }
+
+        //         pub fn new() -> &'static mut Self {
+        //     let object: &mut Self = Self::class().instantiate();
+
+        //     object.object.invoke_void(".ctor", ()).unwrap();
+
+        //     object
+        // }
+    }
+
+    fn make_instance_methods(
         &mut self,
         methods: &[CsMethod],
         name_resolver: &RustNameResolver,
         config: &RustGenerationConfig,
     ) {
-        for m in methods {
-            let m_ret_ty = name_resolver.resolve_name(self, &m.return_type, TypeUsage::Field, true);
+        for m in methods.iter().filter(|m| m.instance) {
+            let m_name = &m.name;
+            let m_name_rs = config.name_rs(m_name);
+
+            let m_ret_ty = name_resolver
+                .resolve_name(self, &m.return_type, TypeUsage::Field, true)
+                .to_type_token();
 
             let params = m
                 .parameters
@@ -245,17 +303,87 @@ impl RustType {
                 .map(|p| self.make_parameter(p, name_resolver, config))
                 .collect_vec();
 
-            let m_name_rs = config.name_rs(&m.name);
+            let param_names = params.iter().map(|p| &p.name);
+
+            let body: Vec<syn::Stmt> = if m.return_type.data
+                == ResolvedTypeData::Primitive(Il2CppTypeEnum::Void)
+            {
+                parse_quote! {
+                    (self as &mut Il2CppObject).invoke_void(#m_name, ( #(#param_names),* ) )?;
+                    Ok(())
+                }
+            } else {
+                parse_quote! {
+                    let ret: #m_ret_ty = (self as &mut Il2CppObject).invoke(#m_name, ( #(#param_names),* ) )?;
+
+                    Ok(ret)
+                }
+            };
+
             let rust_func = RustFunction {
                 name: format_ident!("{m_name_rs}"),
-                body: None,
+                body: Some(body),
 
                 is_mut: true,
                 is_ref: true,
                 is_self: m.instance,
                 params,
 
-                return_type: Some(m_ret_ty.to_type_token()),
+                return_type: Some(m_ret_ty),
+                visibility: (Visibility::Public),
+            };
+            self.methods.push(rust_func);
+        }
+    }
+
+    fn make_static_methods(
+        &mut self,
+        methods: &[CsMethod],
+        name_resolver: &RustNameResolver,
+        config: &RustGenerationConfig,
+    ) {
+        for m in methods.iter().filter(|m| !m.instance) {
+            let m_name = &m.name;
+            let m_name_rs = config.name_rs(m_name);
+
+            let m_ret_ty = name_resolver
+                .resolve_name(self, &m.return_type, TypeUsage::Field, true)
+                .to_type_token();
+
+            let params = m
+                .parameters
+                .iter()
+                .map(|p| self.make_parameter(p, name_resolver, config))
+                .collect_vec();
+
+            let param_names = params.iter().map(|p| &p.name);
+
+
+            let body: Vec<syn::Stmt> = if m.return_type.data
+                == ResolvedTypeData::Primitive(Il2CppTypeEnum::Void)
+            {
+                parse_quote! {
+                    Self::class().invoke_void(#m_name, ( #(#param_names),* ) )?;
+                    Ok(())
+                }
+            } else {
+                parse_quote! {
+                    let ret: #m_ret_ty = Self::class().invoke_void(#m_name, ( #(#param_names),* ) );
+
+                    Ok(ret)
+                }
+            };
+
+            let rust_func = RustFunction {
+                name: format_ident!("{m_name_rs}"),
+                body: Some(body),
+
+                is_mut: false,
+                is_ref: false,
+                is_self: false,
+                params,
+
+                return_type: Some(m_ret_ty),
                 visibility: (Visibility::Public),
             };
             self.methods.push(rust_func);
@@ -335,7 +463,7 @@ impl RustType {
         let combined_name = format!("{}_{}", declaring_name, self.name());
 
         self.rs_name_components.namespace = Some(config.namespace_rs(declaring_namespace));
-        self.rs_name_components.name = config.sanitize_to_rs_name(&combined_name);
+        self.rs_name_components.name = config.name_rs(&combined_name);
     }
 
     fn write_reference_type(
@@ -498,9 +626,9 @@ impl RustType {
             .iter()
             .cloned()
             .map(|mut f| {
-                f.body = Some(parse_quote! {
+                f.body = f.body.or(Some(parse_quote! {
                     todo!()
-                });
+                }));
                 f
             })
             .map(|f| f.to_token_stream())
@@ -523,9 +651,9 @@ impl RustType {
             .iter()
             .cloned()
             .map(|mut f| {
-                f.body = Some(parse_quote! {
+                f.body = f.body.or(Some(parse_quote! {
                     todo!()
-                });
+                }));
                 f.visibility = Visibility::Private;
                 f
             })
@@ -540,7 +668,7 @@ impl RustType {
         };
 
         let tokens = quote! {
-            pub trait #name_ident {
+            pub trait #name_ident: libil2cpp::typecheck::ty::Type {
                 #(#methods)*
             }
 
