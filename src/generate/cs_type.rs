@@ -83,6 +83,7 @@ pub struct CsType {
 
     pub requirements: CsTypeRequirements,
 
+    pub enum_backing_type: Option<Il2CppTypeEnum>,
     pub parent: Option<ResolvedType>,
     pub interfaces: Vec<ResolvedType>,
     pub generic_template: Option<CsGenericTemplate>, // Names of templates e.g T, TKey etc.
@@ -266,6 +267,7 @@ impl CsType {
             method_generic_instantiation_map: Default::default(),
 
             nested_types: Default::default(),
+            enum_backing_type: None,
         };
 
         if t.parent_index == u32::MAX {
@@ -293,6 +295,21 @@ impl CsType {
         self.make_fields(type_resolver);
         self.make_properties(type_resolver);
         self.make_methods(type_resolver);
+
+        let metadata = type_resolver.cordl_metadata;
+        let tdi = self.self_tag.get_tdi();
+        let t = Self::get_type_definition(metadata, tdi);
+
+
+        if t.element_type_index != u32::MAX && t.is_enum_type() {
+            let element_type = metadata
+                .metadata_registration
+                .types
+                .get(t.element_type_index as usize)
+                .unwrap();
+
+            self.enum_backing_type = Some(element_type.ty);
+        }
     }
 
     fn make_parameters(

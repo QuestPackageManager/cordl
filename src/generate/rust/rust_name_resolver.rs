@@ -100,25 +100,7 @@ impl<'a, 'b> RustNameResolver<'a, 'b> {
             ResolvedTypeData::Primitive(il2_cpp_type_enum) => {
                 let _requirements = &mut declaring_cpp_type.requirements;
 
-                let s: String = match il2_cpp_type_enum {
-                    Il2CppTypeEnum::I1 => "i8".to_string(),
-                    Il2CppTypeEnum::I2 => "i16".to_string(),
-                    Il2CppTypeEnum::I4 => "i32".to_string(),
-                    Il2CppTypeEnum::I8 => "i64".to_string(),
-                    Il2CppTypeEnum::U1 => "u8".to_string(),
-                    Il2CppTypeEnum::U2 => "u16".to_string(),
-                    Il2CppTypeEnum::U4 => "u32".to_string(),
-                    Il2CppTypeEnum::U8 => "u64".to_string(),
-
-                    Il2CppTypeEnum::R4 => "f32".to_string(),
-                    Il2CppTypeEnum::R8 => "f64".to_string(),
-
-                    Il2CppTypeEnum::Void => "Void".to_string(),
-                    Il2CppTypeEnum::Boolean => "bool".to_string(),
-                    Il2CppTypeEnum::Char => "char".to_string(),
-
-                    _ => panic!("Unsupported type {il2_cpp_type_enum:#?}"),
-                };
+                let s = Self::primitive_to_rust_ty(il2_cpp_type_enum).to_string();
                 RustNameComponents::from(s)
             }
             ResolvedTypeData::Blacklisted(cs_type_tag) => {
@@ -205,5 +187,27 @@ impl<'a, 'b> RustNameResolver<'a, 'b> {
 
     fn wrapper_type_for_tdi(_td: &Il2CppTypeDefinition) -> RustNameComponents {
         "Blacklisted".to_string().into()
+    }
+
+    pub fn primitive_to_rust_ty(il2_cpp_type_enum: &Il2CppTypeEnum) -> &str {
+        match il2_cpp_type_enum {
+            Il2CppTypeEnum::I1 => "i8",
+            Il2CppTypeEnum::I2 => "i16",
+            Il2CppTypeEnum::I4 => "i32",
+            Il2CppTypeEnum::I8 => "i64",
+            Il2CppTypeEnum::U1 => "u8",
+            Il2CppTypeEnum::U2 => "u16",
+            Il2CppTypeEnum::U4 => "u32",
+            Il2CppTypeEnum::U8 => "u64",
+
+            Il2CppTypeEnum::R4 => "f32",
+            Il2CppTypeEnum::R8 => "f64",
+
+            Il2CppTypeEnum::Void => "Void",
+            Il2CppTypeEnum::Boolean => "bool",
+            Il2CppTypeEnum::Char => "char",
+
+            _ => panic!("Unsupported type {il2_cpp_type_enum:#?}"),
+        }
     }
 }

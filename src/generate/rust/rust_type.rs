@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use color_eyre::eyre::{Context, Result};
+use color_eyre::eyre::{Context, ContextCompat, Result};
 use itertools::Itertools;
 use quote::{format_ident, quote, ToTokens};
 use syn::parse_quote;
@@ -82,6 +82,7 @@ pub struct RustType {
     pub self_tag: CsTypeTag,
 
     pub parent: Option<RustNameComponents>,
+    pub backing_type_enum: Option<RustNameComponents>,
 
     pub generics: Option<Vec<String>>,
     pub cs_name_components: NameComponents,
@@ -123,6 +124,7 @@ impl RustType {
             is_reference_type: cs_type.is_reference_type,
             is_interface: cs_type.is_interface,
             parent: Default::default(),
+            backing_type_enum: Default::default(),
 
             requirements: RustTypeRequirements::default(),
             self_tag: tag,
@@ -150,6 +152,20 @@ impl RustType {
 
         self.make_fields(&cs_type.fields, name_resolver, config);
         self.make_methods(&cs_type.methods, name_resolver, config);
+
+        if let Some(backing_type) = cs_type.enum_backing_type {
+            let backing_ty = RustNameResolver::primitive_to_rust_ty(&backing_type);
+            let resolved_ty = RustNameComponents {
+                name: backing_ty.to_owned(),
+                namespace: None,
+                generics: None,
+                is_ref: false,
+                is_ptr: false,
+                is_mut: false,
+            };
+
+            self.backing_type_enum = Some(resolved_ty);
+        }
     }
 
     fn make_parent(
@@ -394,19 +410,37 @@ impl RustType {
     }
 
     fn write_enum_type(&self, writer: &mut Writer, config: &RustGenerationConfig) -> Result<()> {
-        todo!();
-        writeln!(writer, "#[repr(c)]")?;
-        writeln!(writer, "#[derive(Debug, Clone)]")?;
-        writeln!(writer, "pub struct {name} {{", name = self.rs_name())?;
-        // for f in &self.fields {
-        //     f.write(writer)?;
-        // }
-        writeln!(writer, "}}")?;
+        let fields = self.fields.iter().map(|f| {
+            let f_name = format_ident!(r#"{}"#, f.name);
+            quote! {
+                #f_name
+            }
+        });
+        let backing_type = self
+            .backing_type_enum
+            .as_ref()
+            .wrap_err("No enum backing type found!")?
+            .to_type_token();
 
-        writeln!(writer, "quest_hook::libil2cpp::unsafe_impl_value_type!(in quest_hook::libil2cpp for {} => {});",
-         self.rs_name(),
-         self.cs_name_components.combine_all()
-        )?;
+        let name_ident = self.rs_name_components.to_name_ident();
+
+        let cs_name_str = self.cs_name_components.combine_all();
+
+        let quest_hook_path: syn::Path = parse_quote!(quest_hook::libil2cpp);
+        let macro_invoke: syn::ItemMacro = parse_quote! {
+            #quest_hook_path::unsafe_impl_reference_type!(in #quest_hook_path for #name_ident => #cs_name_str);
+        };
+
+        let tokens = quote! {
+            #[repr(#backing_type)]
+            #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+            pub enum #name_ident {
+                #(#fields),*
+            }
+            #macro_invoke
+        };
+
+        writeln!(writer, "{tokens}")?;
 
         self.write_impl(writer, config)?;
 
@@ -414,24 +448,75 @@ impl RustType {
     }
 
     fn write_value_type(&self, writer: &mut Writer, config: &RustGenerationConfig) -> Result<()> {
-        let name = match &self.generics {
-            Some(generics) => format!("{}<{}>", self.rs_name(), generics.join(", ")),
-            None => self.rs_name().clone(),
+        let name_ident = self.rs_name_components.to_name_ident();
+
+        let fields = self.fields.iter().map(|f| {
+            let f_name = format_ident!(r#"{}"#, f.name);
+            let f_ty = &f.field_type;
+            let f_visibility = match f.visibility {
+                Visibility::Public => quote! { pub },
+                Visibility::PublicCrate => quote! { pub(crate) },
+                Visibility::Private => quote! {},
+            };
+
+            quote! {
+                #f_visibility #f_name: #f_ty
+            }
+        });
+
+        let cs_name_str = self.cs_name_components.combine_all();
+
+        let quest_hook_path: syn::Path = parse_quote!(quest_hook::libil2cpp);
+        let macro_invoke: syn::ItemMacro = parse_quote! {
+            #quest_hook_path::unsafe_impl_value_type!(in #quest_hook_path for #name_ident => #cs_name_str);
         };
 
-        writeln!(writer, "#[repr(c)]")?;
-        writeln!(writer, "#[derive(Debug, Clone)]")?;
-        writeln!(writer, "pub struct {name} {{")?;
-        todo!();
-        // for f in &self.fields {
-        //     f.write(writer)?;
-        // }
-        writeln!(writer, "}}")?;
+        let mut tokens = quote! {
+            #[repr(c)]
+            #[derive(Debug, Clone)]
+            pub struct #name_ident {
+                #(#fields),*
+            }
+            #macro_invoke
+        };
 
-        writeln!(writer, "quest_hook::libil2cpp::unsafe_impl_value_type!(in quest_hook::libil2cpp for {} => {});",
-         self.rs_name(),
-         self.cs_name_components.combine_all()
-        )?;
+        // example of using the il2cpp_subtype macro
+        // il2cpp_subtype!(List, Il2CppObject, object);
+        // macro_rules! il2cpp_subtype {
+        //     ($type:ident, $target:ty, $field:ident) => {
+        //         impl<T: Type> std::ops::Deref for $type<T> {
+        //             type Target = $target;
+
+        //             fn deref(&self) -> &Self::Target {
+        //                 &self.$field
+        //             }
+        //         }
+
+        //         impl<T: Type> std::ops::DerefMut for $type<T> {
+        //             fn deref_mut(&mut self) -> &mut Self::Target {
+        //                 &mut self.$field
+        //             }
+        //         }
+        //     };
+        // }
+        // il2cpp_subtype!(List<T>, Il2CppObject, object);
+        if let Some(parent) = &self.parent {
+            let parent_name = parent.clone().to_type_path_token();
+            let parent_field_ident = format_ident!(r#"{}"#, PARENT_FIELD);
+
+            tokens.extend(quote! {
+                    quest_hook::libil2cpp::il2cpp_subtype!(#name_ident => #parent_name, #parent_field_ident);
+                });
+        }
+
+        // Parse the string into a `syn::File` AST
+        // let syntax_tree = parse_file(&tokens.to_string()).context("Failed to parse code")?;
+
+        // // Pretty-print the syntax tree
+        // let formatted_code = unparse(&syntax_tree);
+
+        // TODO: prettyplease
+        writeln!(writer, "{tokens}")?;
 
         self.write_impl(writer, config)?;
 
@@ -465,23 +550,37 @@ impl RustType {
     }
 
     fn write_interface(&self, writer: &mut Writer, _config: &RustGenerationConfig) -> Result<()> {
-        let name = match &self.generics {
-            Some(generics) => format!("{}<{}>", self.rs_name(), generics.join(", ")),
-            None => self.rs_name().clone(),
+        let name_ident = self.rs_name_components.to_name_ident();
+        let methods = self
+            .methods
+            .iter()
+            .cloned()
+            .map(|mut f| {
+                f.body = Some(parse_quote! {
+                    todo!()
+                });
+                f.visibility = Visibility::Private;
+                f
+            })
+            .map(|f| f.to_token_stream())
+            .map(|f| -> syn::ImplItemFn { parse_quote!(#f) });
+
+        let cs_name_str = self.cs_name_components.combine_all();
+
+        let quest_hook_path: syn::Path = parse_quote!(quest_hook::libil2cpp);
+        let macro_invoke: syn::ItemMacro = parse_quote! {
+            #quest_hook_path::unsafe_impl_reference_type!(in #quest_hook_path for #name_ident => #cs_name_str);
         };
 
-        writeln!(writer, "pub trait {name} {{")?;
-        todo!();
-        // for mut m in self.methods.clone() {
-        //     // traits don't like visibility modifiers
-        //     m.visibility = Visibility::Private;
-        //     m.write(writer)?;
-        // }
-        writeln!(writer, "}}")?;
-        writeln!(writer, "quest_hook::libil2cpp::unsafe_impl_reference_type!(in quest_hook::libil2cpp for {} => {});",
-         self.rs_name(),
-         self.cs_name_components.combine_all()
-        )?;
+        let tokens = quote! {
+            pub trait #name_ident {
+                #(#methods)*
+            }
+
+            #macro_invoke
+        };
+
+        writeln!(writer, "{tokens}")?;
 
         Ok(())
     }

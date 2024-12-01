@@ -95,7 +95,7 @@ impl RustNameComponents {
 
                 let name = format_ident!(r#"{}"#, self.name);
 
-                parse_quote! {
+                quote! {
                     #name <#(#generics),*>
                 }
             }
