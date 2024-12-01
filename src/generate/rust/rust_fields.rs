@@ -343,7 +343,7 @@ fn handle_instance_fields(
             let size = last_field.offset.unwrap() as usize + last_field.size;
 
             let size_field = RustField {
-                name: "padding".to_owned(),
+                name: format_ident!("padding"),
                 field_type: parse_quote!([u8; #size]),
                 visibility: Visibility::Private,
                 offset: 0,
@@ -415,7 +415,7 @@ pub(crate) fn field_into_offset_structs(
     let alignment_cpp_name = format!("{f_name}_forAlignment");
 
     let packed_padding_field = RustField {
-        name: packed_padding_cpp_name,
+        name: format_ident!("{}", packed_padding_cpp_name),
         field_type: parse_quote!([u8; {padding:x}]),
         visibility: Visibility::Private,
         offset: actual_offset,
@@ -431,7 +431,7 @@ pub(crate) fn field_into_offset_structs(
     };
 
     let alignment_padding_field = RustField {
-        name: alignment_padding_cpp_name,
+        name: format_ident!("{}", alignment_padding_cpp_name),
         field_type: parse_quote!([u8; #padding]),
         visibility: Visibility::Private,
         offset: actual_offset,
@@ -447,7 +447,7 @@ pub(crate) fn field_into_offset_structs(
     };
 
     let alignment_field = RustField {
-        name: alignment_cpp_name,
+        name: format_ident!("{}", alignment_cpp_name),
         visibility: Visibility::Private,
         ..field.clone()
     };
@@ -483,7 +483,7 @@ fn make_rust_field(
     assert!(f.instance && !f.is_const, "Static field not allowed!");
 
     RustField {
-        name: config.name_rs(&f.name),
+        name: format_ident!("{}", config.name_rs(&f.name)),
         field_type: field_type.to_type_token(),
         visibility: Visibility::Public,
         offset: f.offset.unwrap_or_default(),

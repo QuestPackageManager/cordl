@@ -42,7 +42,7 @@ pub struct RustUnion {
 
 #[derive(Clone)]
 pub struct RustField {
-    pub name: String,
+    pub name: syn::Ident,
     pub field_type: syn::Type,
     pub visibility: Visibility,
     pub offset: u32,

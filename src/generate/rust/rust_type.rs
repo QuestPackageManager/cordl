@@ -2,6 +2,7 @@ use std::collections::HashSet;
 
 use color_eyre::eyre::{Context, ContextCompat, Result};
 use itertools::Itertools;
+use proc_macro2::TokenStream;
 use quote::{format_ident, quote, ToTokens};
 use syn::parse_quote;
 
@@ -173,10 +174,14 @@ impl RustType {
         parent: Option<&ResolvedType>,
         name_resolver: &RustNameResolver<'_, '_>,
     ) {
+        if self.is_value_type || self.is_enum_type {
+            return;
+        }
+
         let Some(parent) = parent else { return };
         let parent = name_resolver.resolve_name(self, parent, TypeUsage::TypeName, true);
         let parent_field = RustField {
-            name: PARENT_FIELD.to_string(),
+            name: format_ident!("{}", PARENT_FIELD),
             field_type: parent.to_type_token(),
             visibility: Visibility::Private,
             offset: 0,
@@ -403,7 +408,7 @@ impl RustType {
         // let formatted_code = unparse(&syntax_tree);
 
         // TODO: prettyplease
-        writeln!(writer, "{tokens}")?;
+        writer.write_pretty_tokens(tokens)?;
 
         self.write_impl(writer, config)?;
         Ok(())
@@ -440,7 +445,7 @@ impl RustType {
             #macro_invoke
         };
 
-        writeln!(writer, "{tokens}")?;
+        writer.write_pretty_tokens(tokens)?;
 
         self.write_impl(writer, config)?;
 
@@ -516,7 +521,7 @@ impl RustType {
         // let formatted_code = unparse(&syntax_tree);
 
         // TODO: prettyplease
-        writeln!(writer, "{tokens}")?;
+        writer.write_pretty_tokens(tokens)?;
 
         self.write_impl(writer, config)?;
 
@@ -545,7 +550,7 @@ impl RustType {
             }
         };
 
-        writeln!(writer, "{}", tokens.to_token_stream())?;
+        writer.write_pretty_tokens(tokens.to_token_stream())?;
         Ok(())
     }
 
@@ -580,12 +585,22 @@ impl RustType {
             #macro_invoke
         };
 
-        writeln!(writer, "{tokens}")?;
+        writer.write_pretty_tokens(tokens)?;
 
         Ok(())
     }
 
     pub(crate) fn classof_name(&self) -> String {
         format!("{}::class()", self.rs_name())
+    }
+}
+
+impl Writer {
+    pub(crate) fn write_pretty_tokens(&mut self, tokens: TokenStream) -> Result<()> {
+        let syntax_tree = syn::parse2(tokens).unwrap();
+        let formatted = prettyplease::unparse(&syntax_tree);
+
+        self.stream.write_all(formatted.as_bytes())?;
+        Ok(())
     }
 }
