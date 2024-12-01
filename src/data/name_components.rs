@@ -10,18 +10,19 @@ impl NameComponents {
     // TODO: Add setting for adding :: prefix
     // however, this cannot be allowed in all cases
     pub fn combine_all(&self) -> String {
-        let namespace = self.namespace.as_deref().unwrap_or("");
-        let combined_declaring_types = self.declaring_types.as_ref().map(|d| d.join("/"));
+        let mut completed = self.name.clone();
 
-        let mut completed = match combined_declaring_types {
-            Some(combined_declaring_types) => {
-                format!("{namespace}.{combined_declaring_types}/{}", self.name)
-            }
-            None => {
-                format!("{namespace}.{}", self.name)
-            }
-        };
+        // add declaring types
+        if let Some(declaring_types) = self.declaring_types.as_ref() {
+            completed = format!("{}/{completed}", declaring_types.join("/"));
+        }
 
+        // add namespace
+        if let Some(namespace) = self.namespace.as_ref() {
+            completed = format!("{namespace}.{completed}");
+        }
+
+        // add generics
         if let Some(generics) = &self.generics {
             completed = format!("{completed}<{}>", generics.join(","));
         }

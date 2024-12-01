@@ -278,7 +278,13 @@ impl TypeDefinitionExtensions for Il2CppTypeDefinition {
     }
 
     fn get_name_components(&self, metadata: &Metadata) -> NameComponents {
-        let namespace = self.namespace(metadata);
+        let namespace_str = self.namespace(metadata);
+        let namespace = if namespace_str.is_empty() {
+            None
+        } else {
+            Some(namespace_str.to_string())
+        };
+
         let name = self.name(metadata);
 
         let generics = match self.generic_container_index.is_valid() {
@@ -321,7 +327,7 @@ impl TypeDefinitionExtensions for Il2CppTypeDefinition {
                 }
             }
             false => NameComponents {
-                namespace: Some(namespace.to_string()),
+                namespace,
                 name: name.to_string(),
                 declaring_types: None,
                 generics,

@@ -79,6 +79,8 @@ pub struct CsType {
     pub is_value_type: bool,
     pub is_enum_type: bool,
     pub is_reference_type: bool,
+    pub is_compiler_generated: bool,
+
     pub requirements: CsTypeRequirements,
 
     pub parent: Option<ResolvedType>,
@@ -250,6 +252,7 @@ impl CsType {
 
             is_value_type: t.is_value_type(),
             is_enum_type: t.is_enum_type(),
+            is_compiler_generated: t.is_compiler_generated(),
             is_reference_type: is_pointer,
             requirements: Default::default(),
 
@@ -501,8 +504,8 @@ impl CsType {
                     instance: !f_type.is_static() && !f_type.is_constant(),
                     readonly: f_type.is_constant(),
                     brief_comment: Some(format!("Field {f_name}, offset: 0x{:x}, size: 0x{f_size:x}, def value: {def_value:?}", f_offset.unwrap_or(u32::MAX))),
+                    is_const: f_type.is_constant() || def_value.is_some(),
                     value: def_value,
-                    is_const: false,
                 }
             })
             .collect_vec();
