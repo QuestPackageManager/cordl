@@ -85,7 +85,7 @@ fn make_field(field: &CsField, name_resolver: &JsonNameResolver) -> JsonField {
 
         ty_name,
         offset,
-        ty_tag: ty.into(),
+        ty_tag: ty,
     }
 }
 fn make_property(property: &CsProperty, name_resolver: &JsonNameResolver) -> JsonProperty {

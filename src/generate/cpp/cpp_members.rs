@@ -7,7 +7,12 @@ use crate::generate::{
 };
 
 use std::{
-    collections::HashMap, fmt::Debug, hash::Hash, path::{Path, PathBuf}, rc::Rc, sync::Arc
+    collections::HashMap,
+    fmt::Debug,
+    hash::Hash,
+    path::{Path, PathBuf},
+    rc::Rc,
+    sync::Arc,
 };
 
 use super::{
@@ -282,7 +287,7 @@ pub struct CppMethodDecl {
     pub is_implicit_operator: bool,
     pub is_explicit_operator: bool,
     pub is_inline: bool,
-    
+
     pub brief: Option<String>,
     pub body: Option<Vec<Arc<dyn WritableDebug>>>,
 }

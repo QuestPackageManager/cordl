@@ -1,13 +1,9 @@
 use std::collections::HashSet;
 
-use brocolib::global_metadata::Token;
-use clap::builder::Str;
 use color_eyre::eyre::{Context, Result};
 use itertools::Itertools;
-use prettyplease::unparse;
-use proc_macro2::{Span, TokenStream};
-use quote::{format_ident, quote, quote_spanned, ToTokens};
-use syn::{parse::Parse, parse_file, parse_quote, punctuated::Punctuated, token, Ident, Token};
+use quote::{format_ident, quote, ToTokens};
+use syn::parse_quote;
 
 use crate::{
     data::{
@@ -398,12 +394,13 @@ impl RustType {
     }
 
     fn write_enum_type(&self, writer: &mut Writer, config: &RustGenerationConfig) -> Result<()> {
+        todo!();
         writeln!(writer, "#[repr(c)]")?;
         writeln!(writer, "#[derive(Debug, Clone)]")?;
         writeln!(writer, "pub struct {name} {{", name = self.rs_name())?;
-        for f in &self.fields {
-            f.write(writer)?;
-        }
+        // for f in &self.fields {
+        //     f.write(writer)?;
+        // }
         writeln!(writer, "}}")?;
 
         writeln!(writer, "quest_hook::libil2cpp::unsafe_impl_value_type!(in quest_hook::libil2cpp for {} => {});",
@@ -425,9 +422,10 @@ impl RustType {
         writeln!(writer, "#[repr(c)]")?;
         writeln!(writer, "#[derive(Debug, Clone)]")?;
         writeln!(writer, "pub struct {name} {{")?;
-        for f in &self.fields {
-            f.write(writer)?;
-        }
+        todo!();
+        // for f in &self.fields {
+        //     f.write(writer)?;
+        // }
         writeln!(writer, "}}")?;
 
         writeln!(writer, "quest_hook::libil2cpp::unsafe_impl_value_type!(in quest_hook::libil2cpp for {} => {});",
@@ -473,11 +471,12 @@ impl RustType {
         };
 
         writeln!(writer, "pub trait {name} {{")?;
-        for mut m in self.methods.clone() {
-            // traits don't like visibility modifiers
-            m.visibility = Visibility::Private;
-            m.write(writer)?;
-        }
+        todo!();
+        // for mut m in self.methods.clone() {
+        //     // traits don't like visibility modifiers
+        //     m.visibility = Visibility::Private;
+        //     m.write(writer)?;
+        // }
         writeln!(writer, "}}")?;
         writeln!(writer, "quest_hook::libil2cpp::unsafe_impl_reference_type!(in quest_hook::libil2cpp for {} => {});",
          self.rs_name(),

@@ -6,7 +6,6 @@
 #![feature(lazy_cell)]
 #![feature(exit_status_error)]
 #![feature(iterator_try_collect)]
-#![feature(unnamed_fields)]
 
 #[cfg(feature = "il2cpp_v31")]
 extern crate brocolib_il2cpp_v31 as brocolib;

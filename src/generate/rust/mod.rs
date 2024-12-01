@@ -1,5 +1,4 @@
 mod rust_members;
-mod rust_members_serialize;
 mod rust_type;
 
 mod config;
