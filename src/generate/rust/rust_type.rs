@@ -25,7 +25,7 @@ use crate::{
 use super::{
     config::RustGenerationConfig,
     rust_fields,
-    rust_members::{RustField, RustFunction, RustItem, RustParam, RustTrait, Visibility},
+    rust_members::{ConstRustField, RustField, RustFunction, RustParam, RustTrait, Visibility},
     rust_name_components::RustNameComponents,
     rust_name_resolver::RustNameResolver,
 };
@@ -71,7 +71,9 @@ impl RustTypeRequirements {
 
 #[derive(Clone)]
 pub struct RustType {
+    // TODO: union
     pub fields: Vec<RustField>,
+    pub constants: Vec<ConstRustField>,
     pub methods: Vec<RustFunction>,
     pub traits: Vec<RustTrait>,
 
@@ -119,6 +121,7 @@ impl RustType {
             fields: Default::default(),
             methods: Default::default(),
             traits: Default::default(),
+            constants: Default::default(),
 
             is_value_type: cs_type.is_value_type,
             is_enum_type: cs_type.is_enum_type,
@@ -203,7 +206,7 @@ impl RustType {
             .cloned()
             .collect_vec();
 
-        if self.is_value_type || self.is_enum_type {
+        if self.is_value_type && !self.is_enum_type {
             rust_fields::handle_valuetype_fields(self, &instance_fields, name_resolver, config);
         } else {
             rust_fields::handle_referencetype_fields(self, &instance_fields, name_resolver, config);
@@ -401,13 +404,6 @@ impl RustType {
                 });
         }
 
-        // Parse the string into a `syn::File` AST
-        // let syntax_tree = parse_file(&tokens.to_string()).context("Failed to parse code")?;
-
-        // // Pretty-print the syntax tree
-        // let formatted_code = unparse(&syntax_tree);
-
-        // TODO: prettyplease
         writer.write_pretty_tokens(tokens)?;
 
         self.write_impl(writer, config)?;
@@ -415,10 +411,12 @@ impl RustType {
     }
 
     fn write_enum_type(&self, writer: &mut Writer, config: &RustGenerationConfig) -> Result<()> {
-        let fields = self.fields.iter().map(|f| {
-            let f_name = format_ident!(r#"{}"#, f.name);
-            quote! {
-                #f_name
+        let fields = self.constants.iter().map(|f| -> syn::Variant {
+            let name = &f.name;
+            let val = &f.value;
+
+            parse_quote! {
+                #name = #val
             }
         });
         let backing_type = self
@@ -485,42 +483,6 @@ impl RustType {
             #macro_invoke
         };
 
-        // example of using the il2cpp_subtype macro
-        // il2cpp_subtype!(List, Il2CppObject, object);
-        // macro_rules! il2cpp_subtype {
-        //     ($type:ident, $target:ty, $field:ident) => {
-        //         impl<T: Type> std::ops::Deref for $type<T> {
-        //             type Target = $target;
-
-        //             fn deref(&self) -> &Self::Target {
-        //                 &self.$field
-        //             }
-        //         }
-
-        //         impl<T: Type> std::ops::DerefMut for $type<T> {
-        //             fn deref_mut(&mut self) -> &mut Self::Target {
-        //                 &mut self.$field
-        //             }
-        //         }
-        //     };
-        // }
-        // il2cpp_subtype!(List<T>, Il2CppObject, object);
-        if let Some(parent) = &self.parent {
-            let parent_name = parent.clone().to_type_path_token();
-            let parent_field_ident = format_ident!(r#"{}"#, PARENT_FIELD);
-
-            tokens.extend(quote! {
-                    quest_hook::libil2cpp::il2cpp_subtype!(#name_ident => #parent_name, #parent_field_ident);
-                });
-        }
-
-        // Parse the string into a `syn::File` AST
-        // let syntax_tree = parse_file(&tokens.to_string()).context("Failed to parse code")?;
-
-        // // Pretty-print the syntax tree
-        // let formatted_code = unparse(&syntax_tree);
-
-        // TODO: prettyplease
         writer.write_pretty_tokens(tokens)?;
 
         self.write_impl(writer, config)?;
