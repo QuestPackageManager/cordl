@@ -31,7 +31,7 @@ pub fn run_rust(
     if write_all {
         info!("Writing all");
         rs_context_collection.write_all(&STATIC_CONFIG)?;
-        rs_context_collection.write_namespace_headers(&STATIC_CONFIG)?;
+        rs_context_collection.write_namespace_modules(&STATIC_CONFIG)?;
     } else {
         // for t in &metadata.type_definitions {
         //     // Handle the generation for a single type
@@ -299,7 +299,7 @@ pub fn run_rust(
             .1
             .write(&STATIC_CONFIG)?;
 
-        rs_context_collection.write_namespace_headers(&STATIC_CONFIG)?;
+        rs_context_collection.write_namespace_modules(&STATIC_CONFIG)?;
 
         // for (_, context) in cpp_context_collection.get() {
         //     context.write().unwrap();
