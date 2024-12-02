@@ -577,11 +577,12 @@ impl RustType {
             }
         });
 
-        let cs_name_str = self.cs_name_components.combine_all();
+        let cs_namespace = self.cs_name_components.namespace.clone().unwrap_or_default();
+        let cs_name_str = self.cs_name_components.clone().remove_namespace().combine_all();
 
         let quest_hook_path: syn::Path = parse_quote!(quest_hook::libil2cpp);
         let macro_invoke: syn::ItemMacro = parse_quote! {
-            #quest_hook_path::unsafe_impl_reference_type!(in #quest_hook_path for #name_ident => #cs_name_str);
+            #quest_hook_path::unsafe_impl_reference_type!(in #quest_hook_path for #name_ident => #cs_namespace.#cs_name_str);
         };
 
         let mut tokens = quote! {
@@ -645,11 +646,12 @@ impl RustType {
 
         let name_ident = self.rs_name_components.to_name_ident();
 
-        let cs_name_str = self.cs_name_components.combine_all();
+        let cs_namespace = self.cs_name_components.namespace.clone().unwrap_or_default();
+        let cs_name_str = self.cs_name_components.clone().remove_namespace().combine_all();
 
         let quest_hook_path: syn::Path = parse_quote!(quest_hook::libil2cpp);
         let macro_invoke: syn::ItemMacro = parse_quote! {
-            #quest_hook_path::unsafe_impl_reference_type!(in #quest_hook_path for #name_ident => #cs_name_str);
+            #quest_hook_path::unsafe_impl_value_type!(in #quest_hook_path for #name_ident => #cs_namespace.#cs_name_str);
         };
 
         let tokens = quote! {
@@ -685,14 +687,15 @@ impl RustType {
             }
         });
 
-        let cs_name_str = self.cs_name_components.combine_all();
+        let cs_namespace = self.cs_name_components.namespace.clone().unwrap_or_default();
+        let cs_name_str = self.cs_name_components.clone().remove_namespace().combine_all();
 
         let quest_hook_path: syn::Path = parse_quote!(quest_hook::libil2cpp);
         let macro_invoke: syn::ItemMacro = parse_quote! {
-            #quest_hook_path::unsafe_impl_value_type!(in #quest_hook_path for #name_ident => #cs_name_str);
+            #quest_hook_path::unsafe_impl_value_type!(in #quest_hook_path for #name_ident => #cs_namespace.#cs_name_str);
         };
 
-        let mut tokens = quote! {
+        let tokens = quote! {
             #[repr(c)]
             #[derive(Debug, Clone)]
             pub struct #name_ident {

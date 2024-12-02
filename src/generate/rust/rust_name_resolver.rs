@@ -2,7 +2,10 @@ use brocolib::{global_metadata::Il2CppTypeDefinition, runtime_metadata::Il2CppTy
 use itertools::Itertools;
 
 use crate::{
-    data::type_resolver::{ResolvedType, ResolvedTypeData, TypeUsage},
+    data::{
+        name_components::NameComponents,
+        type_resolver::{ResolvedType, ResolvedTypeData, TypeUsage},
+    },
     generate::{cs_type_tag::CsTypeTag, metadata::CordlMetadata},
 };
 
@@ -96,6 +99,12 @@ impl<'a, 'b> RustNameResolver<'a, 'b> {
                 let tag = CsTypeTag::TypeDefinitionIndex(self.cordl_metadata.object_tdi);
                 self.get_type_from_tag(tag, declaring_cpp_type, metadata)
             }
+            ResolvedTypeData::Primitive(s) if *s == Il2CppTypeEnum::Void => RustNameComponents {
+                name: "Void".into(),
+                namespace: Some("quest_hook::libil2cpp".to_string()),
+
+                ..Default::default()
+            },
 
             ResolvedTypeData::Primitive(il2_cpp_type_enum) => {
                 let _requirements = &mut declaring_cpp_type.requirements;
@@ -203,7 +212,7 @@ impl<'a, 'b> RustNameResolver<'a, 'b> {
             Il2CppTypeEnum::R4 => "f32",
             Il2CppTypeEnum::R8 => "f64",
 
-            Il2CppTypeEnum::Void => "Void",
+            Il2CppTypeEnum::Void => "()",
             Il2CppTypeEnum::Boolean => "bool",
             Il2CppTypeEnum::Char => "char",
 
