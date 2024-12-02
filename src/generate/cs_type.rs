@@ -300,7 +300,6 @@ impl CsType {
         let tdi = self.self_tag.get_tdi();
         let t = Self::get_type_definition(metadata, tdi);
 
-
         if t.element_type_index != u32::MAX && t.is_enum_type() {
             let element_type = metadata
                 .metadata_registration
@@ -806,6 +805,16 @@ impl CsType {
                 estimated_size: is_concrete.then_some(method_calc.estimated_size),
                 slot: (method.slot != u16::MAX).then_some(method.slot),
             }
+        }
+
+        if method.name(metadata.metadata) == ".ctor" {
+            let constructor = CsConstructor {
+                name: m_name.to_string(),
+                parameters: method_decl.parameters.clone(),
+                template: method_decl.template.clone(),
+            };
+
+            self.constructors.push(constructor);
         }
 
         if !is_generic_method_inst {

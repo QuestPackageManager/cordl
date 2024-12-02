@@ -159,6 +159,7 @@ impl RustType {
         self.make_nested_types(&cs_type.nested_types, name_resolver);
 
         self.make_fields(&cs_type.fields, name_resolver, config);
+
         self.make_instance_methods(&cs_type.methods, name_resolver, config);
         self.make_static_methods(&cs_type.methods, name_resolver, config);
 
@@ -324,50 +325,69 @@ impl RustType {
         name_resolver: &RustNameResolver,
         config: &RustGenerationConfig,
     ) {
-        for m in methods.iter().filter(|m| m.instance) {
-            let m_name = &m.name;
-            let m_name_rs = config.name_rs(m_name);
+        for (_, overload_methods) in methods
+            .iter()
+            .filter(|m| m.instance)
+            .into_group_map_by(|m| &m.name)
+        {
+            for m in &overload_methods {
+                let m_name = &m.name;
+                let mut m_name_rs = config.name_rs(m_name);
 
-            let m_ret_ty = name_resolver
-                .resolve_name(self, &m.return_type, TypeUsage::Field, true)
-                .to_type_token();
-
-            let params = m
-                .parameters
-                .iter()
-                .map(|p| self.make_parameter(p, name_resolver, config))
-                .collect_vec();
-
-            let param_names = params.iter().map(|p| &p.name);
-
-            let body: Vec<syn::Stmt> = if m.return_type.data
-                == ResolvedTypeData::Primitive(Il2CppTypeEnum::Void)
-            {
-                parse_quote! {
-                    (self as &mut Il2CppObject).invoke_void(#m_name, ( #(#param_names),* ) )?;
-                    Ok(())
+                if overload_methods.len() > 1 {
+                    m_name_rs = format!(
+                        "{}{}",
+                        m_name_rs,
+                        m.parameters
+                            .iter()
+                            .map(|p| name_resolver
+                                .resolve_name(self, &p.il2cpp_ty, TypeUsage::Parameter, true)
+                                .name)
+                            .join("_")
+                    );
                 }
-            } else {
-                parse_quote! {
-                    let ret: #m_ret_ty = (self as &mut Il2CppObject).invoke(#m_name, ( #(#param_names),* ) )?;
 
-                    Ok(ret)
-                }
-            };
+                let m_ret_ty = name_resolver
+                    .resolve_name(self, &m.return_type, TypeUsage::ReturnType, true)
+                    .to_type_token();
 
-            let rust_func = RustFunction {
-                name: format_ident!("{m_name_rs}"),
-                body: Some(body),
+                let params = m
+                    .parameters
+                    .iter()
+                    .map(|p| self.make_parameter(p, name_resolver, config))
+                    .collect_vec();
 
-                is_mut: true,
-                is_ref: true,
-                is_self: m.instance,
-                params,
+                let param_names = params.iter().map(|p| &p.name);
 
-                return_type: Some(m_ret_ty),
-                visibility: (Visibility::Public),
-            };
-            self.methods.push(rust_func);
+                let body: Vec<syn::Stmt> = if m.return_type.data
+                    == ResolvedTypeData::Primitive(Il2CppTypeEnum::Void)
+                {
+                    parse_quote! {
+                        (self as &mut Il2CppObject).invoke_void(#m_name, ( #(#param_names),* ) )?;
+                        Ok(())
+                    }
+                } else {
+                    parse_quote! {
+                        let ret: #m_ret_ty = (self as &mut Il2CppObject).invoke(#m_name, ( #(#param_names),* ) )?;
+
+                        Ok(ret)
+                    }
+                };
+
+                let rust_func = RustFunction {
+                    name: format_ident!("{m_name_rs}"),
+                    body: Some(body),
+
+                    is_mut: true,
+                    is_ref: true,
+                    is_self: m.instance,
+                    params,
+
+                    return_type: Some(m_ret_ty),
+                    visibility: (Visibility::Public),
+                };
+                self.methods.push(rust_func);
+            }
         }
     }
 
@@ -377,50 +397,69 @@ impl RustType {
         name_resolver: &RustNameResolver,
         config: &RustGenerationConfig,
     ) {
-        for m in methods.iter().filter(|m| !m.instance) {
-            let m_name = &m.name;
-            let m_name_rs = config.name_rs(m_name);
+        for (_, overload_methods) in methods
+            .iter()
+            .filter(|m| !m.instance)
+            .into_group_map_by(|m| &m.name)
+        {
+            for m in &overload_methods {
+                let m_name = &m.name;
+                let mut m_name_rs = config.name_rs(m_name);
 
-            let m_ret_ty = name_resolver
-                .resolve_name(self, &m.return_type, TypeUsage::Field, true)
-                .to_type_token();
-
-            let params = m
-                .parameters
-                .iter()
-                .map(|p| self.make_parameter(p, name_resolver, config))
-                .collect_vec();
-
-            let param_names = params.iter().map(|p| &p.name);
-
-            let body: Vec<syn::Stmt> = if m.return_type.data
-                == ResolvedTypeData::Primitive(Il2CppTypeEnum::Void)
-            {
-                parse_quote! {
-                    Self::class().invoke_void(#m_name, ( #(#param_names),* ) )?;
-                    Ok(())
+                if overload_methods.len() > 1 {
+                    m_name_rs = format!(
+                        "{}{}",
+                        m_name,
+                        m.parameters
+                            .iter()
+                            .map(|p| name_resolver
+                                .resolve_name(self, &p.il2cpp_ty, TypeUsage::Parameter, true)
+                                .name)
+                            .join("_")
+                    );
                 }
-            } else {
-                parse_quote! {
-                    let ret: #m_ret_ty = Self::class().invoke_void(#m_name, ( #(#param_names),* ) );
 
-                    Ok(ret)
-                }
-            };
+                let m_ret_ty = name_resolver
+                    .resolve_name(self, &m.return_type, TypeUsage::ReturnType, true)
+                    .to_type_token();
 
-            let rust_func = RustFunction {
-                name: format_ident!("{m_name_rs}"),
-                body: Some(body),
+                let params = m
+                    .parameters
+                    .iter()
+                    .map(|p| self.make_parameter(p, name_resolver, config))
+                    .collect_vec();
 
-                is_mut: false,
-                is_ref: false,
-                is_self: false,
-                params,
+                let param_names = params.iter().map(|p| &p.name);
 
-                return_type: Some(m_ret_ty),
-                visibility: (Visibility::Public),
-            };
-            self.methods.push(rust_func);
+                let body: Vec<syn::Stmt> = if m.return_type.data
+                    == ResolvedTypeData::Primitive(Il2CppTypeEnum::Void)
+                {
+                    parse_quote! {
+                        Self::class().invoke_void(#m_name, ( #(#param_names),* ) )?;
+                        Ok(())
+                    }
+                } else {
+                    parse_quote! {
+                        let ret: #m_ret_ty = Self::class().invoke_void(#m_name, ( #(#param_names),* ) );
+
+                        Ok(ret)
+                    }
+                };
+
+                let rust_func = RustFunction {
+                    name: format_ident!("{m_name_rs}"),
+                    body: Some(body),
+
+                    is_mut: false,
+                    is_ref: false,
+                    is_self: false,
+                    params,
+
+                    return_type: Some(m_ret_ty),
+                    visibility: (Visibility::Public),
+                };
+                self.methods.push(rust_func);
+            }
         }
     }
 

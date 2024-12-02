@@ -212,18 +212,16 @@ pub struct CsMethod {
 // TODO: Generics
 #[derive(Clone, Debug)]
 pub struct CsConstructor {
-    pub cpp_name: String,
+    pub name: String,
     pub parameters: Vec<CsParam>,
     pub template: Option<CsGenericTemplate>,
 
-    pub brief: Option<String>,
 }
 
 impl PartialEq for CsConstructor {
     fn eq(&self, other: &Self) -> bool {
-        self.cpp_name == other.cpp_name
+        self.name == other.name
             && self.parameters == other.parameters
             && self.template == other.template
-            && self.brief == other.brief
     }
 }
