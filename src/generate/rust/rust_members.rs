@@ -64,9 +64,7 @@ pub struct RustParam {
 
 #[derive(Clone)]
 pub struct RustTrait {
-    pub name: String,
-    pub methods: Vec<RustFunction>,
-    pub visibility: Visibility,
+    pub ty: syn::TypePath,
 }
 
 #[derive(Clone)]

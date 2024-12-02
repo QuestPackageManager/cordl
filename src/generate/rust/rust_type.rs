@@ -157,6 +157,7 @@ impl RustType {
     ) {
         self.make_parent(cs_type.parent.as_ref(), name_resolver);
         self.make_nested_types(&cs_type.nested_types, name_resolver);
+        self.make_interfaces(&cs_type.interfaces, name_resolver, config);
 
         self.make_fields(&cs_type.fields, name_resolver, config);
 
@@ -272,6 +273,22 @@ impl RustType {
         //     self.fields.push(rust_field);
         // }
     }
+
+    fn make_interfaces(
+        &mut self,
+        interfaces: &[ResolvedType],
+        name_resolver: &RustNameResolver,
+        config: &RustGenerationConfig,
+    ) {
+        for i in interfaces {
+            let interface = name_resolver.resolve_name(self, i, TypeUsage::TypeName, true);
+            let rust_trait = RustTrait {
+                ty: interface.to_type_path_token(),
+            };
+            self.traits.push(rust_trait);
+        }
+    }
+
     fn make_ref_constructors(
         &mut self,
         constructors: &[CsConstructor],
@@ -694,6 +711,18 @@ impl RustType {
     fn write_impl(&self, writer: &mut Writer, _config: &RustGenerationConfig) -> Result<()> {
         let name_ident = self.rs_name_components.clone().to_name_ident();
 
+        let generics = self
+            .generics
+            .as_ref()
+            .map(|g| {
+                g.iter()
+                    .map(|g| -> syn::GenericArgument { syn::parse_str(g).unwrap() })
+                    .collect_vec()
+            })
+            .map(|g| -> syn::Generics {
+                parse_quote! { <#(#g),*> }
+            });
+
         let const_fields = self.constants.iter().map(|f| -> syn::ImplItemConst {
             let name = &f.name;
             let val = &f.value;
@@ -719,12 +748,51 @@ impl RustType {
 
         let nested_types = &self.nested_types;
 
-        let tokens: syn::ItemImpl = parse_quote! {
-            impl #name_ident {
-                #(#const_fields)*
-                #(#nested_types)*
-                #(#methods)*
+        let other_impls = self
+            .traits
+            .iter()
+            .map(|t| -> syn::ItemImpl {
+                let ty = &t.ty;
+
+                match generics.as_ref() {
+                    Some(generics) => {
+                        parse_quote! {
+                            impl #generics #ty for #name_ident {}
+                        }
+                    }
+                    None => {
+                        parse_quote! {
+                            impl #ty for #name_ident {}
+                        }
+                    }
+                }
+            })
+            .collect_vec();
+
+        let impl_tokens: syn::ItemImpl = match generics {
+            Some(generics) => {
+                parse_quote! {
+                    impl #generics #name_ident {
+                        #(#const_fields)*
+                        #(#nested_types)*
+                        #(#methods)*
+                    }
+                }
             }
+            None => {
+                parse_quote! {
+                    impl #name_ident {
+                        #(#const_fields)*
+                        #(#nested_types)*
+                        #(#methods)*
+                    }
+                }
+            }
+        };
+
+        let tokens = quote! {
+            #impl_tokens
+            #(#other_impls)*
         };
 
         writer.write_pretty_tokens(tokens.to_token_stream())?;
