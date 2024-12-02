@@ -597,11 +597,12 @@ impl RustType {
             .cs_name_components
             .clone()
             .remove_namespace()
+            .remove_generics()
             .combine_all();
 
         let quest_hook_path: syn::Path = parse_quote!(quest_hook::libil2cpp);
         let macro_invoke: syn::ItemMacro = parse_quote! {
-            #quest_hook_path::unsafe_impl_reference_type!(in #quest_hook_path for #name_ident => #cs_namespace.#cs_name_str);
+            #quest_hook_path::unsafe_impl_reference_type!(in #quest_hook_path for #name_ident => #cs_namespace.#cs_name_str #generics);
         };
 
         let mut tokens = quote! {
@@ -699,6 +700,18 @@ impl RustType {
     }
 
     fn write_value_type(&self, writer: &mut Writer, config: &RustGenerationConfig) -> Result<()> {
+        let generics = self
+            .generics
+            .as_ref()
+            .map(|g| {
+                g.iter()
+                    .map(|g| -> syn::GenericArgument { syn::parse_str(g).unwrap() })
+                    .collect_vec()
+            })
+            .map(|g| -> syn::Generics {
+                parse_quote! { <#(#g),*> }
+            });
+
         let name_ident = self.rs_name_components.to_name_ident();
 
         let fields = self.fields.iter().map(|f| {
@@ -728,7 +741,7 @@ impl RustType {
 
         let quest_hook_path: syn::Path = parse_quote!(quest_hook::libil2cpp);
         let macro_invoke: syn::ItemMacro = parse_quote! {
-            #quest_hook_path::unsafe_impl_value_type!(in #quest_hook_path for #name_ident => #cs_namespace.#cs_name_str);
+            #quest_hook_path::unsafe_impl_value_type!(in #quest_hook_path for #name_ident => #cs_namespace.#cs_name_str #generics);
         };
 
         let tokens = quote! {
@@ -840,6 +853,17 @@ impl RustType {
 
     fn write_interface(&self, writer: &mut Writer, _config: &RustGenerationConfig) -> Result<()> {
         let name_ident = self.rs_name_components.to_name_ident();
+        let generics = self
+            .generics
+            .as_ref()
+            .map(|g| {
+                g.iter()
+                    .map(|g| -> syn::GenericArgument { syn::parse_str(g).unwrap() })
+                    .collect_vec()
+            })
+            .map(|g| -> syn::Generics {
+                parse_quote! { <#(#g),*> }
+            });
         let methods = self
             .methods
             .iter()
@@ -854,11 +878,21 @@ impl RustType {
             .map(|f| f.to_token_stream())
             .map(|f| -> syn::ImplItemFn { parse_quote!(#f) });
 
-        let cs_name_str = self.cs_name_components.combine_all();
+        let cs_namespace = self
+            .cs_name_components
+            .namespace
+            .clone()
+            .unwrap_or_default();
+        let cs_name_str = self
+            .cs_name_components
+            .clone()
+            .remove_namespace()
+            .remove_generics()
+            .combine_all();
 
         let quest_hook_path: syn::Path = parse_quote!(quest_hook::libil2cpp);
         let macro_invoke: syn::ItemMacro = parse_quote! {
-            #quest_hook_path::unsafe_impl_reference_type!(in #quest_hook_path for #name_ident => #cs_name_str);
+            #quest_hook_path::unsafe_impl_reference_type!(in #quest_hook_path for #name_ident => #cs_namespace.#cs_name_str #generics);
         };
 
         let tokens = quote! {
