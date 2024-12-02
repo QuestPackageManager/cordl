@@ -250,29 +250,22 @@ impl RustContextCollection {
                 if module == dir {
                     continue;
                 }
+
                 if !module.exists() {
                     continue;
                 }
+
                 let file_stem = module.file_stem().unwrap().to_string_lossy();
 
                 if module.is_dir() {
                     make_mod_dir(module, "mod.rs")?;
                     writeln!(buf_writer, "// namespace {};", file_stem)?;
                     writeln!(buf_writer, "pub mod {};", file_stem)?;
-                } else {
+                } else if module.extension() == Some(OsStr::new("rs")) {
                     writeln!(buf_writer, "// class {}; export all", file_stem)?;
                     writeln!(buf_writer, "mod {};", file_stem)?;
                     writeln!(buf_writer, "pub use {}::*;", file_stem)?;
                 }
-            }
-
-            let modules = modules_paths
-                .iter()
-                .map(|p| p.file_stem().unwrap().to_string_lossy().to_string())
-                .sorted();
-
-            for name in modules {
-                writeln!(buf_writer, "pub mod {};", name)?;
             }
 
             buf_writer.flush()?;
