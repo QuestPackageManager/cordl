@@ -242,24 +242,34 @@ impl RustContextCollection {
                 return Ok(());
             }
 
+            let mod_path = dir.join(name).with_extension("rs");
+            let mod_file = File::create(mod_path)?;
+            let mut buf_writer = BufWriter::new(mod_file);
+
             for module in &modules_paths {
                 if module == dir {
                     continue;
                 }
-                if !module.exists() || !module.is_dir() {
+                if !module.exists() {
                     continue;
                 }
-                make_mod_dir(module, "mod.rs")?;
+                let file_stem = module.file_stem().unwrap().to_string_lossy();
+
+                if module.is_dir() {
+                    make_mod_dir(module, "mod.rs")?;
+                    writeln!(buf_writer, "// namespace {};", file_stem)?;
+                    writeln!(buf_writer, "pub mod {};", file_stem)?;
+                } else {
+                    writeln!(buf_writer, "// class {}; export all", file_stem)?;
+                    writeln!(buf_writer, "mod {};", file_stem)?;
+                    writeln!(buf_writer, "pub use {}::*;", file_stem)?;
+                }
             }
 
             let modules = modules_paths
                 .iter()
                 .map(|p| p.file_stem().unwrap().to_string_lossy().to_string())
                 .sorted();
-
-            let mod_path = dir.join(name).with_extension("rs");
-            let mod_file = File::create(mod_path)?;
-            let mut buf_writer = BufWriter::new(mod_file);
 
             for name in modules {
                 writeln!(buf_writer, "pub mod {};", name)?;
