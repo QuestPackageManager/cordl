@@ -224,27 +224,38 @@ impl RustContextCollection {
             })
     }
 
-    pub fn write_namespace_headers(&self, config: &RustGenerationConfig) -> color_eyre::Result<()> {
+    pub fn write_namespace_modules(&self, config: &RustGenerationConfig) -> color_eyre::Result<()> {
+        info!("Writing namespace modules!");
         fn make_mod_dir(dir: &std::path::Path, name: &str) -> Result<(), color_eyre::eyre::Error> {
-            let modules = WalkDir::new(dir)
+            if !dir.exists() {
+                return Ok(());
+            }
+
+            let modules_paths = WalkDir::new(dir)
                 .max_depth(1)
                 .min_depth(1)
                 .into_iter()
-                .map(|c| {
-                    c.map(|entry| {
-                        entry
-                            .into_path()
-                            .file_stem()
-                            .unwrap()
-                            .to_string_lossy()
-                            .to_string()
-                    })
-                })
-                .collect::<walkdir::Result<Vec<String>>>()?;
+                .map(|c| c.map(|entry| entry.into_path()))
+                .collect::<walkdir::Result<Vec<_>>>()?;
 
-            if modules.is_empty() {
+            if modules_paths.is_empty() {
                 return Ok(());
             }
+
+            for module in &modules_paths {
+                if module == dir {
+                    continue;
+                }
+                if !module.exists() || !module.is_dir() {
+                    continue;
+                }
+                make_mod_dir(module, "mod.rs")?;
+            }
+
+            let modules = modules_paths
+                .iter()
+                .map(|p| p.file_stem().unwrap().to_string_lossy().to_string())
+                .sorted();
 
             let mod_path = dir.join(name).with_extension("rs");
             let mod_file = File::create(mod_path)?;
@@ -258,12 +269,6 @@ impl RustContextCollection {
 
             Ok(())
         }
-        self.all_contexts
-            .values()
-            .flat_map(|c| c.fundamental_path.parent())
-            .unique()
-            .filter(|d| d.exists())
-            .try_for_each(|d| make_mod_dir(d, "mod.rs"))?;
 
         make_mod_dir(&config.source_path, "lib.rs")?;
         Ok(())
