@@ -562,6 +562,17 @@ impl RustType {
         config: &RustGenerationConfig,
     ) -> Result<()> {
         let name_ident = self.rs_name_components.to_name_ident();
+        let generics = self
+            .generics
+            .as_ref()
+            .map(|g| {
+                g.iter()
+                    .map(|g| -> syn::GenericArgument { syn::parse_str(g).unwrap() })
+                    .collect_vec()
+            })
+            .map(|g| -> syn::Generics {
+                parse_quote! { <#(#g),*> }
+            });
 
         let fields = self.fields.iter().map(|f| {
             let f_name = format_ident!(r#"{}"#, f.name);
@@ -577,8 +588,16 @@ impl RustType {
             }
         });
 
-        let cs_namespace = self.cs_name_components.namespace.clone().unwrap_or_default();
-        let cs_name_str = self.cs_name_components.clone().remove_namespace().combine_all();
+        let cs_namespace = self
+            .cs_name_components
+            .namespace
+            .clone()
+            .unwrap_or_default();
+        let cs_name_str = self
+            .cs_name_components
+            .clone()
+            .remove_namespace()
+            .combine_all();
 
         let quest_hook_path: syn::Path = parse_quote!(quest_hook::libil2cpp);
         let macro_invoke: syn::ItemMacro = parse_quote! {
@@ -598,20 +617,7 @@ impl RustType {
         // il2cpp_subtype!(List, Il2CppObject, object);
         // macro_rules! il2cpp_subtype {
         //     ($type:ident, $target:ty, $field:ident) => {
-        //         impl<T: Type> std::ops::Deref for $type<T> {
-        //             type Target = $target;
 
-        //             fn deref(&self) -> &Self::Target {
-        //                 &self.$field
-        //             }
-        //         }
-
-        //         impl<T: Type> std::ops::DerefMut for $type<T> {
-        //             fn deref_mut(&mut self) -> &mut Self::Target {
-        //                 &mut self.$field
-        //             }
-        //         }
-        //     };
         // }
         // il2cpp_subtype!(List<T>, Il2CppObject, object);
         if let Some(parent) = &self.parent {
@@ -619,8 +625,22 @@ impl RustType {
             let parent_field_ident = format_ident!(r#"{}"#, PARENT_FIELD);
 
             tokens.extend(quote! {
-                    quest_hook::libil2cpp::il2cpp_subtype!(#name_ident => #parent_name, #parent_field_ident);
-                });
+
+            impl #generics std::ops::Deref for #name_ident {
+                type Target = #parent_name;
+
+                fn deref(&self) -> &Self::Target {
+                    &self.#parent_field_ident
+                }
+            }
+
+            impl #generics std::ops::DerefMut for #name_ident {
+                fn deref_mut(&mut self) -> &mut Self::Target {
+                    &mut self.#parent_field_ident
+                }
+            }
+
+            });
         }
 
         writer.write_pretty_tokens(tokens)?;
@@ -646,8 +666,16 @@ impl RustType {
 
         let name_ident = self.rs_name_components.to_name_ident();
 
-        let cs_namespace = self.cs_name_components.namespace.clone().unwrap_or_default();
-        let cs_name_str = self.cs_name_components.clone().remove_namespace().combine_all();
+        let cs_namespace = self
+            .cs_name_components
+            .namespace
+            .clone()
+            .unwrap_or_default();
+        let cs_name_str = self
+            .cs_name_components
+            .clone()
+            .remove_namespace()
+            .combine_all();
 
         let quest_hook_path: syn::Path = parse_quote!(quest_hook::libil2cpp);
         let macro_invoke: syn::ItemMacro = parse_quote! {
@@ -687,8 +715,16 @@ impl RustType {
             }
         });
 
-        let cs_namespace = self.cs_name_components.namespace.clone().unwrap_or_default();
-        let cs_name_str = self.cs_name_components.clone().remove_namespace().combine_all();
+        let cs_namespace = self
+            .cs_name_components
+            .namespace
+            .clone()
+            .unwrap_or_default();
+        let cs_name_str = self
+            .cs_name_components
+            .clone()
+            .remove_namespace()
+            .combine_all();
 
         let quest_hook_path: syn::Path = parse_quote!(quest_hook::libil2cpp);
         let macro_invoke: syn::ItemMacro = parse_quote! {
