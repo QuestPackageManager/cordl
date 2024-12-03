@@ -339,7 +339,7 @@ impl RustType {
             let body: Vec<syn::Stmt> = parse_quote! {
                 let object: &mut Self = Self::class().instantiate();
 
-                (object as &mut quest_hook::libil2cpp::object::Il2CppObject).invoke_void(".ctor", (#(#param_names),*))?;
+                quest_hook::libil2cpp::object::Il2CppObject::invoke_void(object, ".ctor", (#(#param_names),*))?;
 
                 Ok(object)
             };
@@ -472,12 +472,12 @@ impl RustType {
                     == ResolvedTypeData::Primitive(Il2CppTypeEnum::Void)
                 {
                     parse_quote! {
-                        (self as &mut quest_hook::libil2cpp::object::Il2CppObject).invoke_void(#m_name, ( #(#param_names),* ) )?;
+                        quest_hook::libil2cpp::object::Il2CppObject::invoke_void(self, #m_name, ( #(#param_names),* ))?;
                         Ok(())
                     }
                 } else {
                     parse_quote! {
-                        let ret: #m_ret_ty = (self as &mut quest_hook::libil2cpp::object::Il2CppObject).invoke(#m_name, ( #(#param_names),* ) )?;
+                        let ret: #m_ret_ty = quest_hook::libil2cpp::object::Il2CppObject::invoke(self, #m_name, ( #(#param_names),* ))?;
 
                         Ok(ret)
                     }
@@ -548,7 +548,7 @@ impl RustType {
                     }
                 } else {
                     parse_quote! {
-                        let ret: #m_ret_ty = Self::class().invoke_void(#m_name, ( #(#param_names),* ) );
+                        let ret: #m_ret_ty = Self::class().invoke(#m_name, ( #(#param_names),* ) );
 
                         Ok(ret)
                     }
