@@ -33,7 +33,7 @@ impl RustGenerationConfig {
         if additional_exclude.contains(&string) {
             return format!("_cordl_{string}");
         }
-        if string.eq_ignore_ascii_case("mod") {
+        if string.to_lowercase() == "mod" {
             return format!("_cordl_{string}");
         }
 
@@ -111,8 +111,5 @@ impl RustGenerationConfig {
     }
     pub fn namespace_path(&self, string: &str) -> String {
         string.replace(['<', '>', '`', '/'], "_").replace('.', "/")
-    }
-    pub fn path_name(&self, string: &str) -> String {
-        string.replace(['<', '>', '`', '.', '/', ',', '(', ')'], "_")
     }
 }

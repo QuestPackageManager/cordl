@@ -46,12 +46,12 @@ impl RustContext {
 
         let path_name = match t.declaring_type_index != u32::MAX {
             true => {
-                let name = config.path_name(name);
+                let name = config.name_rs(name);
                 let base_name = components.declaring_types.unwrap_or_default().join("_");
 
                 format!("{base_name}_{name}")
             }
-            false => config.path_name(name),
+            false => config.name_rs(name),
         };
 
         let fundamental_path = config
