@@ -243,7 +243,11 @@ impl RustContextCollection {
             }
 
             let mod_path = dir.join(name).with_extension("rs");
-            let mod_file = File::create(mod_path)?;
+            let mod_file = File::options()
+                .write(true)
+                .truncate(false)
+                .create(true)
+                .open(mod_path)?;
             let mut buf_writer = BufWriter::new(mod_file);
 
             for module in &modules_paths {
@@ -273,7 +277,16 @@ impl RustContextCollection {
             Ok(())
         }
 
+        let mod_file = File::options()
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(config.source_path.join("lib.rs"))?;
+        let mut buf_writer = BufWriter::new(mod_file);
+        writeln!(buf_writer, "#![allow(clippy::all)]")?;
+
         make_mod_dir(&config.source_path, "lib.rs")?;
+
         Ok(())
     }
 }
