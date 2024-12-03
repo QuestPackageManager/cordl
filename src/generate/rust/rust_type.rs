@@ -168,6 +168,26 @@ impl RustType {
             self.make_ref_constructors(&cs_type.constructors, name_resolver, config);
         }
 
+        // check if any method name matches more than once
+        let duplicated_methods = self
+            .methods
+            .iter()
+            .filter(|m| {
+                self.methods
+                    .iter()
+                    .filter(|m2| m2.is_self == m.is_self && m2.name == m.name)
+                    .count()
+                    > 1
+            })
+            .collect_vec();
+        if !duplicated_methods.is_empty() {
+            panic!(
+                "Duplicate method names found! {} {}",
+                self.rs_name_components.combine_all(),
+                duplicated_methods.iter().map(|m| &m.name).join(", ")
+            );
+        }
+
         if let Some(backing_type) = cs_type.enum_backing_type {
             let backing_ty = RustNameResolver::primitive_to_rust_ty(&backing_type);
             let resolved_ty = RustNameComponents {
@@ -295,7 +315,19 @@ impl RustType {
         name_resolver: &RustNameResolver<'_, '_>,
         config: &RustGenerationConfig,
     ) {
-        for c in constructors {
+        let overloaded_method_data = constructors
+            .iter()
+            .map(|m| (m.name.clone(), m.parameters.as_slice()))
+            .collect_vec();
+
+        for (i, c) in constructors.iter().enumerate() {
+            let m_name_rs = self.make_overloaded_name(
+                &overloaded_method_data,
+                name_resolver,
+                ("New".to_string(), c.parameters.as_slice()),
+                i,
+            );
+
             let params = c
                 .parameters
                 .iter()
@@ -313,7 +345,7 @@ impl RustType {
             };
 
             let rust_func = RustFunction {
-                name: format_ident!("New"),
+                name: format_ident!("{}", m_name_rs),
                 body: Some(body),
 
                 is_mut: true,
@@ -336,6 +368,62 @@ impl RustType {
         // }
     }
 
+    fn make_overloaded_name<'a>(
+        &mut self,
+        overload_methods: &Vec<(String, &'a [CsParam])>,
+        name_resolver: &RustNameResolver<'_, '_>,
+        (m_name, m_params): (String, &'a [CsParam]),
+        index: usize,
+    ) -> String {
+        let config = name_resolver.config;
+
+        let mut m_name_rs = config.name_rs(&m_name);
+        if overload_methods.len() == 1 {
+            return m_name_rs;
+        }
+
+        let param_types: Vec<_> = overload_methods
+            .iter()
+            .map(|(m_name, m_params)| {
+                m_params
+                    .iter()
+                    .map(|p| {
+                        name_resolver
+                            .resolve_name(self, &p.il2cpp_ty, TypeUsage::Parameter, true)
+                            .name
+                    })
+                    .map(|s| config.name_rs(&s))
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+
+        let current_param_types = m_params
+            .iter()
+            .map(|p| {
+                name_resolver
+                    .resolve_name(self, &p.il2cpp_ty, TypeUsage::Parameter, true)
+                    .name
+            })
+            .map(|s| config.name_rs(&s))
+            .collect::<Vec<_>>();
+
+        let differing_params: Vec<_> = current_param_types
+            .iter()
+            .enumerate()
+            .filter(|(i, ty)| param_types.iter().any(|types| types.get(*i) != Some(ty)))
+            .map(|(_, ty)| ty.clone())
+            .collect();
+
+        if !differing_params.is_empty() {
+            m_name_rs = format!("{m_name_rs}_{}{index}", differing_params.join("_"));
+        } else {
+            // fallback
+            m_name_rs = format!("{m_name_rs}_{}{index}", current_param_types.join("_"));
+        }
+
+        m_name_rs
+    }
+
     fn make_instance_methods(
         &mut self,
         methods: &[CsMethod],
@@ -347,26 +435,25 @@ impl RustType {
             .filter(|m| m.instance)
             .into_group_map_by(|m| &m.name)
         {
-            for m in &overload_methods {
-                let m_name = &m.name;
-                let mut m_name_rs = config.name_rs(m_name);
+            let overloaded_method_data = overload_methods
+                .iter()
+                .map(|m| (m.name.clone(), m.parameters.as_slice()))
+                .collect_vec();
 
-                if overload_methods.len() > 1 {
-                    m_name_rs = format!(
-                        "{}{}",
-                        m_name_rs,
-                        m.parameters
-                            .iter()
-                            .map(|p| name_resolver
-                                .resolve_name(self, &p.il2cpp_ty, TypeUsage::Parameter, true)
-                                .name)
-                            .join("_")
-                    );
-                }
+            for (i, m) in overload_methods.iter().enumerate() {
+                let m_name = &m.name;
+
+                let m_name_rs = self.make_overloaded_name(
+                    &overloaded_method_data,
+                    name_resolver,
+                    (m_name.clone(), m.parameters.as_slice()),
+                    i,
+                );
 
                 let m_ret_ty = name_resolver
                     .resolve_name(self, &m.return_type, TypeUsage::ReturnType, true)
                     .to_type_token();
+                let m_result_ty: syn::Type = parse_quote!(quest_hook::Result<#m_ret_ty>);
 
                 let params = m
                     .parameters
@@ -400,7 +487,7 @@ impl RustType {
                     is_self: m.instance,
                     params,
 
-                    return_type: Some(m_ret_ty),
+                    return_type: Some(m_result_ty),
                     visibility: (Visibility::Public),
                 };
                 self.methods.push(rust_func);
@@ -419,26 +506,26 @@ impl RustType {
             .filter(|m| !m.instance)
             .into_group_map_by(|m| &m.name)
         {
-            for m in &overload_methods {
-                let m_name = &m.name;
-                let mut m_name_rs = config.name_rs(m_name);
+            let overloaded_method_data = overload_methods
+                .iter()
+                .map(|m| (m.name.clone(), m.parameters.as_slice()))
+                .collect_vec();
 
-                if overload_methods.len() > 1 {
-                    m_name_rs = format!(
-                        "{}{}",
-                        m_name,
-                        m.parameters
-                            .iter()
-                            .map(|p| name_resolver
-                                .resolve_name(self, &p.il2cpp_ty, TypeUsage::Parameter, true)
-                                .name)
-                            .join("_")
-                    );
-                }
+            for (i, m) in overload_methods.iter().enumerate() {
+                let m_name = &m.name;
+
+                let m_name_rs = self.make_overloaded_name(
+                    &overloaded_method_data,
+                    name_resolver,
+                    (m_name.clone(), m.parameters.as_slice()),
+                    i,
+                );
 
                 let m_ret_ty = name_resolver
                     .resolve_name(self, &m.return_type, TypeUsage::ReturnType, true)
                     .to_type_token();
+                let m_result_ty: syn::Type = parse_quote!(quest_hook::Result<#m_ret_ty>);
+
 
                 let params = m
                     .parameters
@@ -472,7 +559,7 @@ impl RustType {
                     is_self: false,
                     params,
 
-                    return_type: Some(m_ret_ty),
+                    return_type: Some(m_result_ty),
                     visibility: (Visibility::Public),
                 };
                 self.methods.push(rust_func);
