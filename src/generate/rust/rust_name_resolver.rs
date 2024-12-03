@@ -35,12 +35,13 @@ impl<'a, 'b> RustNameResolver<'a, 'b> {
                     self.resolve_name(declaring_cpp_type, array_type, type_usage, hard_include);
                 let generic_formatted = generic.combine_all();
 
-                declaring_cpp_type.requirements.needs_array_include();
+                // declaring_cpp_type.requirements.needs_array_include();
 
                 RustNameComponents {
                     name: "Il2CppArray".into(),
-                    namespace: None,
+                    namespace: Some("quest_hook::libil2cpp".to_string()),
                     generics: Some(vec![generic_formatted.clone()]),
+
                     ..Default::default()
                 }
             }
