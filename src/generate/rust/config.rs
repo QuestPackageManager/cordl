@@ -33,6 +33,9 @@ impl RustGenerationConfig {
         if additional_exclude.contains(&string) {
             return format!("_cordl_{string}");
         }
+        if string.eq_ignore_ascii_case("mod") {
+            return format!("_cordl_{string}");
+        }
 
         match string {
             // https://github.com/sc2ad/Il2Cpp-Modding-Codegen/blob/b3267c7099f0cc1853e57a1118d1bba3884b5f03/Codegen-CLI/Program.cs#L77-L87
