@@ -339,7 +339,7 @@ impl RustType {
             let body: Vec<syn::Stmt> = parse_quote! {
                 let object: &mut Self = Self::class().instantiate();
 
-                (object as &mut Il2CppObject).invoke_void(".ctor", (#(#param_names),*))?;
+                (object as &mut quest_hook::libil2cpp::object::Il2CppObject).invoke_void(".ctor", (#(#param_names),*))?;
 
                 Ok(object)
             };
@@ -472,12 +472,12 @@ impl RustType {
                     == ResolvedTypeData::Primitive(Il2CppTypeEnum::Void)
                 {
                     parse_quote! {
-                        (self as &mut Il2CppObject).invoke_void(#m_name, ( #(#param_names),* ) )?;
+                        (self as &mut quest_hook::libil2cpp::object::Il2CppObject).invoke_void(#m_name, ( #(#param_names),* ) )?;
                         Ok(())
                     }
                 } else {
                     parse_quote! {
-                        let ret: #m_ret_ty = (self as &mut Il2CppObject).invoke(#m_name, ( #(#param_names),* ) )?;
+                        let ret: #m_ret_ty = (self as &mut quest_hook::libil2cpp::object::Il2CppObject).invoke(#m_name, ( #(#param_names),* ) )?;
 
                         Ok(ret)
                     }
@@ -712,13 +712,6 @@ impl RustType {
             #macro_invoke
         };
 
-        // example of using the il2cpp_subtype macro
-        // il2cpp_subtype!(List, Il2CppObject, object);
-        // macro_rules! il2cpp_subtype {
-        //     ($type:ident, $target:ty, $field:ident) => {
-
-        // }
-        // il2cpp_subtype!(List<T>, Il2CppObject, object);
         if let Some(parent) = &self.parent {
             let parent_name = parent.clone().to_type_path_token();
             let parent_field_ident = format_ident!(r#"{}"#, PARENT_FIELD);
