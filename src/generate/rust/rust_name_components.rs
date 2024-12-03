@@ -12,6 +12,7 @@ pub struct RustNameComponents {
     pub generics: Option<Vec<String>>,
 
     pub is_ref: bool,
+    pub is_static_ref: bool,
     pub is_ptr: bool,
     pub is_mut: bool,
 }
@@ -35,7 +36,9 @@ impl RustNameComponents {
 
         let mut prefix: String = String::new();
         // &
-        if self.is_ref {
+        if self.is_static_ref {
+            prefix = "&'static".to_string();
+        } else if self.is_ref {
             prefix = "&".to_string();
         } else if self.is_ptr {
             prefix = "*".to_string();
@@ -55,17 +58,30 @@ impl RustNameComponents {
         self.is_ref = false;
         self.is_ptr = false;
         self.is_mut = false;
+        self.is_static_ref = false;
         self
     }
 
     pub fn with_ref(mut self) -> RustNameComponents {
         self.is_ref = true;
+
+        self.is_static_ref = false;
         self.is_ptr = false;
         self
     }
-    pub fn with_ptr(mut self) -> RustNameComponents {
+    pub fn with_static_ref(mut self) -> RustNameComponents {
+        self.is_static_ref = true;
+
         self.is_ref = false;
+        self.is_ptr = false;
+        self
+    }
+
+    pub fn with_ptr(mut self) -> RustNameComponents {
         self.is_ptr = true;
+
+        self.is_ref = false;
+        self.is_static_ref = false;
         self
     }
     pub fn with_mut(mut self) -> RustNameComponents {

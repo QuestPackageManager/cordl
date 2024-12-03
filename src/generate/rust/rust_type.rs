@@ -117,6 +117,7 @@ impl RustType {
             is_ref: false,
             is_ptr: cs_type.is_reference_type,
             is_mut: cs_type.is_reference_type, // value types don't need to be mutable
+            ..Default::default()
         };
 
         RustType {
@@ -197,6 +198,7 @@ impl RustType {
                 is_ref: false,
                 is_ptr: false,
                 is_mut: false,
+                ..Default::default()
             };
 
             self.backing_type_enum = Some(resolved_ty);
