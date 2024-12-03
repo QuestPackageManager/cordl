@@ -37,7 +37,7 @@ impl RustNameComponents {
         let mut prefix: String = String::new();
         // &
         if self.is_static_ref {
-            prefix = "&'static".to_string();
+            prefix = "&'static ".to_string();
         } else if self.is_ref {
             prefix = "&".to_string();
         } else if self.is_ptr {
