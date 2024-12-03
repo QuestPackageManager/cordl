@@ -415,12 +415,17 @@ impl RustType {
             .collect();
 
         if !differing_params.is_empty() {
-            m_name_rs = format!("{m_name_rs}_{}{index}", differing_params.join("_"));
+            m_name_rs = format!("{m_name_rs}_{}", differing_params.join("_"));
         } else {
             // fallback
-            m_name_rs = format!("{m_name_rs}_{}{index}", current_param_types.join("_"));
+            m_name_rs = format!("{m_name_rs}_{}", current_param_types.join("_"));
         }
 
+        if m_name_rs.chars().last().is_some_and(|s| s.is_numeric()) {
+            m_name_rs = format!("{m_name_rs}_{index}");
+        } else {
+            m_name_rs = format!("{m_name_rs}{index}");
+        }
         m_name_rs
     }
 
