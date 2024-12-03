@@ -531,7 +531,6 @@ impl RustType {
                     .to_type_token();
                 let m_result_ty: syn::Type = parse_quote!(quest_hook::Result<#m_ret_ty>);
 
-
                 let params = m
                     .parameters
                     .iter()
@@ -646,6 +645,13 @@ impl RustType {
 
         self.rs_name_components.namespace = Some(config.namespace_rs(declaring_namespace));
         self.rs_name_components.name = config.name_rs(&combined_name);
+    }
+    pub fn enum_fixup(&mut self, cs_type: &CsType) {
+        if !cs_type.is_enum_type {
+            return;
+        }
+        self.rs_name_components.generics = None;
+        self.generics = None;
     }
 
     fn write_reference_type(
@@ -988,7 +994,7 @@ impl RustType {
         };
 
         let tokens = quote! {
-            pub trait #name_ident: libil2cpp::typecheck::ty::Type {
+            pub trait #name_ident: quest_hook::libil2cpp::typecheck::ty::Type {
                 #(#methods)*
             }
 
