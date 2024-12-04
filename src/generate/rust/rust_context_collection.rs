@@ -244,8 +244,8 @@ impl RustContextCollection {
 
             let mod_path = dir.join(name).with_extension("rs");
             let mod_file = File::options()
-                .write(true)
                 .truncate(false)
+                .append(true)
                 .create(true)
                 .open(mod_path)?;
             let mut buf_writer = BufWriter::new(mod_file);
@@ -278,8 +278,8 @@ impl RustContextCollection {
         }
 
         let mod_file = File::options()
-            .write(true)
             .create(true)
+            .append(true)
             .truncate(false)
             .open(config.source_path.join("lib.rs"))?;
         let mut buf_writer = BufWriter::new(mod_file);
