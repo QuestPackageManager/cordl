@@ -247,11 +247,11 @@ impl RustContextCollection {
                 .truncate(false)
                 .append(true)
                 .create(true)
-                .open(mod_path)?;
+                .open(&mod_path)?;
             let mut buf_writer = BufWriter::new(mod_file);
 
             for module in &modules_paths {
-                if module == dir {
+                if module == dir || *module == mod_path {
                     continue;
                 }
 
