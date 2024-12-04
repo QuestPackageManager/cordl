@@ -121,12 +121,14 @@ impl<'a, 'b> RustNameResolver<'a, 'b> {
             ResolvedTypeData::ByRef(resolved_type) => {
                 let generic =
                     self.resolve_name(declaring_cpp_type, resolved_type, type_usage, hard_include);
-                let generic_formatted = generic.with_ptr().with_mut().combine_all();
+                let generic_formatted = generic.combine_all();
 
                 // declaring_cpp_type.requirements.needs_byref_include();
 
                 RustNameComponents {
-                    name: "ByRef".into(),
+                    name: "ByRefMut".into(),
+                    namespace: Some("quest_hook::libil2cpp".to_string()),
+
                     generics: Some(vec![generic_formatted.clone()]),
                     ..Default::default()
                 }
@@ -134,12 +136,14 @@ impl<'a, 'b> RustNameResolver<'a, 'b> {
             ResolvedTypeData::ByRefConst(resolved_type) => {
                 let generic =
                     self.resolve_name(declaring_cpp_type, resolved_type, type_usage, hard_include);
-                let generic_formatted = generic.with_ptr().with_mut().combine_all();
+                let generic_formatted = generic.combine_all();
 
                 // declaring_cpp_type.requirements.needs_byref_const_include();
 
                 RustNameComponents {
-                    name: "ByRefConst".into(),
+                    name: "ByRef".into(),
+                    namespace: Some("quest_hook::libil2cpp".to_string()),
+
                     generics: Some(vec![generic_formatted.clone()]),
                     ..Default::default()
                 }
