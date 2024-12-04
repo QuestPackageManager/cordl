@@ -284,6 +284,7 @@ impl RustContextCollection {
             .open(config.source_path.join("lib.rs"))?;
         let mut buf_writer = BufWriter::new(mod_file);
         writeln!(buf_writer, "#![allow(clippy::all)]")?;
+        buf_writer.flush()?;
 
         make_mod_dir(&config.source_path, "lib.rs")?;
 
