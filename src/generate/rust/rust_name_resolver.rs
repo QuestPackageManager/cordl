@@ -187,11 +187,14 @@ impl<'a, 'b> RustNameResolver<'a, 'b> {
             });
 
         let is_own_context = resolved_context_root_tag == self_context_root_tag;
-
         if !is_own_context {
             // declaring_cpp_type
             //     .requirements
             //     .add_module(&incl_context.get_module_path(self.config));
+        }
+
+        // add dependency
+        if incl_ty.self_tag != declaring_cpp_type.self_tag {
             declaring_cpp_type
                 .requirements
                 .add_dependency(incl_ty.self_tag);
