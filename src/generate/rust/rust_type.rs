@@ -269,7 +269,10 @@ impl RustType {
                 );
 
                 let target = rust_type.rs_name_components.to_type_path_token();
-                let target_generics = rust_type.get_generics();
+
+                let declaring_generic_count =
+                    self.generics.as_ref().map(|g| g.len()).unwrap_or_default();
+                let target_generics = rust_type.get_generics(declaring_generic_count);
 
                 let visibility = match rust_type.is_interface {
                     false => Visibility::Public,
@@ -694,8 +697,8 @@ impl RustType {
         let name_ident = self.rs_name_components.clone().to_name_ident();
         let path_ident = self.rs_name_components.to_type_path_token();
 
-        let generics = self.get_generics();
-        let generics_names = self.get_generics_names();
+        let generics = self.get_generics(0);
+        let generics_names = self.get_generics_names(0);
 
         let fields = self.fields.iter().map(|f| {
             let f_name = format_ident!(r#"{}"#, f.name);
@@ -754,7 +757,7 @@ impl RustType {
 
             tokens.extend(quote! {
             #feature
-            impl #generics std::ops::Deref for #name_ident {
+            impl #generics std::ops::Deref for #path_ident {
                 type Target = #parent_name;
 
                 fn deref(&self) -> &Self::Target {
@@ -763,7 +766,7 @@ impl RustType {
             }
 
             #feature
-            impl #generics std::ops::DerefMut for #name_ident {
+            impl #generics std::ops::DerefMut for #path_ident {
                 fn deref_mut(&mut self) -> &mut Self::Target {
                     unsafe{ &mut *self.#parent_field_ident }
                 }
@@ -839,12 +842,11 @@ impl RustType {
     }
 
     fn write_value_type(&self, writer: &mut Writer, config: &RustGenerationConfig) -> Result<()> {
-        let generics = self.get_generics();
-        let generic_names = self.get_generics_names();
+        let generics = self.get_generics(0);
+        let generic_names = self.get_generics_names(0);
 
         let name_ident = self.rs_name_components.clone().to_name_ident();
         let path_ident = self.rs_name_components.to_type_path_token();
-
 
         let fields = self.fields.iter().map(|f| {
             let f_name = format_ident!(r#"{}"#, f.name);
@@ -902,11 +904,12 @@ impl RustType {
         Ok(())
     }
 
-    fn get_generics(&self) -> Option<syn::Generics> {
+    fn get_generics(&self, skip_amount: usize) -> Option<syn::Generics> {
         self.generics
             .as_ref()
             .map(|g| {
                 g.iter()
+                    .skip(skip_amount)
                     .map(|g| -> syn::GenericArgument {
                         let s = g.to_string();
                         syn::parse_str(&s).unwrap()
@@ -917,11 +920,12 @@ impl RustType {
                 parse_quote! { <#(#g),*> }
             })
     }
-    fn get_generics_names(&self) -> Option<syn::Generics> {
+    fn get_generics_names(&self, skip_amount: usize) -> Option<syn::Generics> {
         self.generics
             .as_ref()
             .map(|g| {
                 g.iter()
+                    .skip(skip_amount)
                     .map(|g| -> syn::GenericArgument { syn::parse_str(&g.name).unwrap() })
                     .collect_vec()
             })
@@ -932,8 +936,9 @@ impl RustType {
 
     fn write_impl(&self, writer: &mut Writer, _config: &RustGenerationConfig) -> Result<()> {
         let name_ident = self.rs_name_components.clone().to_name_ident();
+        let path_ident = self.rs_name_components.clone().to_type_path_token();
 
-        let generics = self.get_generics();
+        let generics = self.get_generics(0);
 
         let const_fields = self.constants.iter().map(|f| -> syn::ImplItemConst {
             let name = &f.name;
@@ -976,12 +981,12 @@ impl RustType {
                 match generics.as_ref() {
                     Some(generics) => {
                         parse_quote! {
-                            impl #generics #ty for #name_ident {}
+                            impl #generics #ty for #path_ident {}
                         }
                     }
                     None => {
                         parse_quote! {
-                            impl #ty for #name_ident {}
+                            impl #ty for #path_ident {}
                         }
                     }
                 }
@@ -994,24 +999,11 @@ impl RustType {
             })
             .collect_vec();
 
-        let impl_tokens: syn::ItemImpl = match generics {
-            Some(generics) => {
-                parse_quote! {
-                    impl #generics #name_ident {
-                        #(#const_fields)*
-                        #(#nested_types)*
-                        #(#methods)*
-                    }
-                }
-            }
-            None => {
-                parse_quote! {
-                    impl #name_ident {
-                        #(#const_fields)*
-                        #(#nested_types)*
-                        #(#methods)*
-                    }
-                }
+        let impl_tokens: syn::ItemImpl = parse_quote! {
+            impl #generics #path_ident {
+                #(#const_fields)*
+                #(#nested_types)*
+                #(#methods)*
             }
         };
 
@@ -1032,7 +1024,7 @@ impl RustType {
             .clone()
             .remove_generics()
             .to_name_ident();
-        let generics = self.get_generics();
+        let generics = self.get_generics(0);
         let methods = self
             .methods
             .iter()
