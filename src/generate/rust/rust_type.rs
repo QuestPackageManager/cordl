@@ -370,7 +370,9 @@ impl RustType {
             let body: Vec<syn::Stmt> = parse_quote! {
                 let object: &mut Self = Self::class().instantiate();
 
-                object.invoke_void(".ctor", (#(#param_names),*))?;
+                let method = self.class().find_method::<A, (), N>(".ctor").unwrap();
+                unsafe { method.invoke_unchecked(self, ( #(#param_names),* )) }
+                // object.invoke_void(".ctor", (#(#param_names),*))?;
 
                 Ok(object)
             };
@@ -504,15 +506,19 @@ impl RustType {
                 let body: Vec<syn::Stmt> =
                     if m.return_type.data == ResolvedTypeData::Primitive(Il2CppTypeEnum::Void) {
                         parse_quote! {
-                            let obj: &mut quest_hook::libil2cpp::Il2CppObject::Il2CppObject = self;
-                            obj.invoke_void(#m_name, ( #(#param_names),* ))?;
+                            // let obj: &mut quest_hook::libil2cpp::Il2CppObject = self;
+                            // obj.invoke_void(#m_name, ( #(#param_names),* ))?;
+                            let method = self.class().find_method::<A, (), N>(#m_name).unwrap();
+                            unsafe { method.invoke_unchecked(self, ( #(#param_names),* )) }
                             Ok(())
                         }
                     } else {
                         parse_quote! {
-                            let obj: &mut quest_hook::libil2cpp::Il2CppObject::Il2CppObject = self;
+                            // let obj: &mut quest_hook::libil2cpp::Il2CppObject = self;
+                            // let ret: #m_ret_ty = obj.invoke(#m_name, ( #(#param_names),* ))?;
 
-                            let ret: #m_ret_ty = obj.invoke(#m_name, ( #(#param_names),* ))?;
+                            let method = self.class().find_method::<A, #m_ret_ty, N>(#m_name).unwrap();
+                            let ret: #m_ret_ty = unsafe { method.invoke_unchecked(self, ( #(#param_names),* )) };
 
                             Ok(ret)
                         }
