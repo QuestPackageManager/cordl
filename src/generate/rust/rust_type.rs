@@ -13,7 +13,7 @@ use crate::{
         type_resolver::{ResolvedType, ResolvedTypeData, TypeUsage},
     },
     generate::{
-        cs_members::{CsConstructor, CsField, CsMethod, CsParam},
+        cs_members::{CsConstructor, CsField, CsGenericTemplate, CsMethod, CsParam},
         cs_type::CsType,
         cs_type_tag::{self, CsTypeTag},
         metadata::CordlMetadata,
@@ -173,6 +173,9 @@ impl RustType {
         self.make_parent(cs_type.parent.as_ref(), name_resolver);
         self.make_nested_types(&cs_type.nested_types, name_resolver);
         self.make_interfaces(&cs_type.interfaces, name_resolver, config);
+        if let Some(generic_template) = cs_type.generic_template {
+            self.make_generics_with_bounds(generic_template, name_resolver, config);
+        }
 
         self.make_fields(&cs_type.fields, name_resolver, config);
 
@@ -258,6 +261,7 @@ impl RustType {
                 );
 
                 let target = rust_type.rs_name_components.to_type_path_token();
+                let target_generics = rust_type.get_generics();
 
                 let visibility = match rust_type.is_interface {
                     false => Visibility::Public,
@@ -266,7 +270,7 @@ impl RustType {
                 .to_token_stream();
 
                 parse_quote! {
-                    #visibility type #name = #target;
+                    #visibility type #name #target_generics = #target;
                 }
             });
 
@@ -325,6 +329,21 @@ impl RustType {
         }
     }
 
+    fn make_generics_with_bounds(
+        &mut self,
+        generics: CsGenericTemplate,
+        name_resolver: &RustNameResolver,
+        config: &RustGenerationConfig,
+    ) {
+        let bound_generics = generics
+            .just_names()
+            .map(|s| -> syn::GenericArgument { syn::parse_str(s).unwrap() })
+            .map(|g| -> syn::GenericArgument { parse_quote!(#g: quest_hook::libil2cpp::Type) })
+            .map(|s| s.to_token_stream().to_string())
+            .collect();
+        self.generics = Some(bound_generics);
+    }
+
     fn make_ref_constructors(
         &mut self,
         constructors: &[CsConstructor],
@@ -369,7 +388,9 @@ impl RustType {
                 is_self: false,
                 params,
 
-                return_type: Some(parse_quote!(quest_hook::libil2cpp::Result<&'static mut Self>)),
+                return_type: Some(parse_quote!(
+                    quest_hook::libil2cpp::Result<&'static mut Self>
+                )),
                 visibility: (Visibility::Public),
             };
             self.methods.push(rust_func);
@@ -675,7 +696,7 @@ impl RustType {
         writer: &mut Writer,
         config: &RustGenerationConfig,
     ) -> Result<()> {
-        let name_ident = self.rs_name_components.to_name_ident();
+        let name_ident = self.rs_name_components.clone().remove_generics().to_name_ident();
         let generics = self
             .generics
             .as_ref()
@@ -730,13 +751,13 @@ impl RustType {
             #feature
             #[repr(C)]
             #[derive(Debug)]
-            pub struct #name_ident {
+            pub struct #name_ident #generics {
                 #(#fields),*
             }
 
-            #feature 
+            #feature
             #macro_invoke
-            
+
         };
 
         if let Some(parent) = &self.parent {
@@ -817,7 +838,7 @@ impl RustType {
                 #(#fields),*
             }
 
-            #feature 
+            #feature
             #macro_invoke
         };
 
@@ -829,19 +850,9 @@ impl RustType {
     }
 
     fn write_value_type(&self, writer: &mut Writer, config: &RustGenerationConfig) -> Result<()> {
-        let generics = self
-            .generics
-            .as_ref()
-            .map(|g| {
-                g.iter()
-                    .map(|g| -> syn::GenericArgument { syn::parse_str(g).unwrap() })
-                    .collect_vec()
-            })
-            .map(|g| -> syn::Generics {
-                parse_quote! { <#(#g),*> }
-            });
+        let generics = self.get_generics();
 
-        let name_ident = self.rs_name_components.to_name_ident();
+        let name_ident = self.rs_name_components.clone().remove_generics().to_name_ident();
 
         let fields = self.fields.iter().map(|f| {
             let f_name = format_ident!(r#"{}"#, f.name);
@@ -884,11 +895,11 @@ impl RustType {
             #feature
             #[repr(C)]
             #[derive(Debug, Clone)]
-            pub struct #name_ident {
+            pub struct #name_ident #generics {
                 #(#fields),*
             }
 
-            #feature 
+            #feature
             #macro_invoke
         };
 
@@ -897,6 +908,19 @@ impl RustType {
         self.write_impl(writer, config)?;
 
         Ok(())
+    }
+
+    fn get_generics(&self) -> Option<syn::Generics> {
+        self.generics
+            .as_ref()
+            .map(|g| {
+                g.iter()
+                    .map(|g| -> syn::GenericArgument { syn::parse_str(g).unwrap() })
+                    .collect_vec()
+            })
+            .map(|g| -> syn::Generics {
+                parse_quote! { <#(#g),*> }
+            })
     }
 
     fn write_impl(&self, writer: &mut Writer, _config: &RustGenerationConfig) -> Result<()> {
@@ -1006,7 +1030,7 @@ impl RustType {
     }
 
     fn write_interface(&self, writer: &mut Writer, _config: &RustGenerationConfig) -> Result<()> {
-        let name_ident = self.rs_name_components.to_name_ident();
+        let name_ident = self.rs_name_components.clone().remove_generics().to_name_ident();
         let generics = self
             .generics
             .as_ref()
@@ -1058,13 +1082,13 @@ impl RustType {
 
         let tokens = quote! {
             #feature
-            pub trait #name_ident: quest_hook::libil2cpp::Type {
+            pub trait #name_ident #generics : quest_hook::libil2cpp::Type {
                 #(#methods)*
             }
 
-            // #feature 
+            // #feature
             // #macro_invoke
-            
+
         };
 
         writer.write_pretty_tokens(tokens)?;
