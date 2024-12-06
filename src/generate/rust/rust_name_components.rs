@@ -12,6 +12,7 @@ pub struct RustNameComponents {
     pub generics: Option<Vec<String>>,
 
     pub is_ref: bool,
+    pub is_dyn: bool,
     pub is_static_ref: bool,
     pub is_ptr: bool,
     pub is_mut: bool,
@@ -46,6 +47,9 @@ impl RustNameComponents {
         // mut
         if self.is_mut {
             prefix += "mut ";
+        }
+        if self.is_dyn {
+            prefix += "dyn ";
         }
 
         // add & or * or mut
@@ -150,6 +154,9 @@ impl RustNameComponents {
 
         if self.is_mut {
             prefix = parse_quote! { #prefix mut  };
+        }
+        if self.is_dyn {
+            prefix = parse_quote! { #prefix dyn  };
         }
 
         parse_quote! {

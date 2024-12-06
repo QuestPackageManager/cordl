@@ -125,6 +125,7 @@ impl RustType {
                 .as_ref()
                 .map(|s| config.namespace_rs(s)),
             is_ref: false,
+            is_dyn: cs_type.is_interface,
             is_ptr: cs_type.is_reference_type,
             is_mut: cs_type.is_reference_type, // value types don't need to be mutable
             ..Default::default()
