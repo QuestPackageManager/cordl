@@ -57,8 +57,8 @@ impl From<CsGenericTemplate> for CppTemplate {
                 .into_iter()
                 .map(|(constraint, name)| {
                     let cpp_ty = match constraint {
-                        CsGenericTemplateType::Any => "typename".to_string(),
-                        CsGenericTemplateType::Reference => {
+                        CsGenericTemplateType::AnyType => "typename".to_string(),
+                        CsGenericTemplateType::ReferenceType => {
                             CORDL_REFERENCE_TYPE_CONSTRAINT.to_string()
                         }
                     };

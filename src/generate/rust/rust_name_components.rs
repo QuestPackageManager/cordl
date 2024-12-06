@@ -1,15 +1,18 @@
 use brocolib::global_metadata::Token;
+use itertools::Itertools;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote, ToTokens};
 use syn::parse_quote;
 
 use crate::data::name_components::NameComponents;
 
+use super::rust_members::RustGeneric;
+
 #[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Default, Hash, Clone)]
 pub struct RustNameComponents {
     pub name: String,
     pub namespace: Option<String>,
-    pub generics: Option<Vec<String>>,
+    pub generics: Option<Vec<RustGeneric>>,
 
     pub is_ref: bool,
     pub is_dyn: bool,
@@ -32,7 +35,10 @@ impl RustNameComponents {
         let mut completed = format!("{prefix}{}", self.name);
 
         if let Some(generics) = &self.generics {
-            completed = format!("{completed}<{}>", generics.join(","));
+            completed = format!(
+                "{completed}<{}>",
+                generics.iter().map(|s| &s.name).join(",")
+            );
         }
 
         let mut prefix: String = String::new();
@@ -101,6 +107,17 @@ impl RustNameComponents {
         self.generics = None;
         self
     }
+    pub fn remove_generics_bounds(mut self) -> RustNameComponents {
+        self.generics = self.generics.map(|g| {
+            g.into_iter()
+                .map(|mut g| {
+                    g.bounds = Default::default();
+                    g
+                })
+                .collect()
+        });
+        self
+    }
     pub fn remove_namespace(mut self) -> RustNameComponents {
         self.namespace = None;
         self
@@ -109,9 +126,10 @@ impl RustNameComponents {
     pub fn to_name_ident(&self) -> TokenStream {
         match self.generics {
             Some(ref generics) => {
-                let generics = generics
-                    .iter()
-                    .map(|g| -> syn::GenericArgument { syn::parse_str(g).unwrap() });
+                let generics = generics.iter().map(|g| -> syn::GenericArgument {
+                    let s = g.to_string();
+                    syn::parse_str(&s).unwrap()
+                });
 
                 let name = format_ident!(r#"{}"#, self.name);
 
@@ -124,7 +142,11 @@ impl RustNameComponents {
     }
 
     pub fn to_type_path_token(&self) -> syn::TypePath {
-        let mut completed = self.to_name_ident().to_token_stream();
+        let mut completed = self
+            .clone()
+            .remove_generics_bounds()
+            .to_name_ident()
+            .to_token_stream();
 
         // add namespace
         if let Some(namespace) = self.namespace.as_ref() {
@@ -220,7 +242,14 @@ impl From<NameComponents> for RustNameComponents {
         Self {
             name: value.name,
             namespace: value.namespace,
-            generics: value.generics,
+            generics: value.generics.map(|g| {
+                g.into_iter()
+                    .map(|g| RustGeneric {
+                        name: g,
+                        ..Default::default()
+                    })
+                    .collect_vec()
+            }),
             ..Default::default()
         }
     }

@@ -15,8 +15,8 @@ pub struct CsGenericTemplate {
 #[derive(Debug, Eq, Hash, PartialEq, Clone, Default, PartialOrd, Ord)]
 pub enum CsGenericTemplateType {
     #[default]
-    Any,
-    Reference,
+    AnyType,
+    ReferenceType,
 }
 
 impl CsGenericTemplate {
@@ -24,7 +24,7 @@ impl CsGenericTemplate {
         CsGenericTemplate {
             names: names
                 .into_iter()
-                .map(|s| (CsGenericTemplateType::Any, s))
+                .map(|s| (CsGenericTemplateType::AnyType, s))
                 .collect(),
         }
     }
@@ -32,7 +32,7 @@ impl CsGenericTemplate {
         CsGenericTemplate {
             names: names
                 .into_iter()
-                .map(|s| (CsGenericTemplateType::Reference, s))
+                .map(|s| (CsGenericTemplateType::ReferenceType, s))
                 .collect(),
         }
     }

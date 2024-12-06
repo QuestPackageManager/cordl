@@ -11,7 +11,7 @@ use crate::{
 
 use super::{
     config::RustGenerationConfig, rust_context_collection::RustContextCollection,
-    rust_name_components::RustNameComponents, rust_type::RustType,
+    rust_members::RustGeneric, rust_name_components::RustNameComponents, rust_type::RustType,
 };
 
 pub struct RustNameResolver<'a, 'b> {
@@ -40,7 +40,7 @@ impl<'a, 'b> RustNameResolver<'a, 'b> {
                 RustNameComponents {
                     name: "Il2CppArray".into(),
                     namespace: Some("quest_hook::libil2cpp".to_string()),
-                    generics: Some(vec![generic_formatted.clone()]),
+                    generics: Some(vec![generic_formatted.clone().into()]),
 
                     ..Default::default()
                 }
@@ -54,6 +54,7 @@ impl<'a, 'b> RustNameResolver<'a, 'b> {
                         self.resolve_name(declaring_cpp_type, r, type_usage, *inc && hard_include)
                     })
                     .map(|n| n.combine_all())
+                    .map(|s| RustGeneric::from(s))
                     .collect_vec();
 
                 // add generics to type def
@@ -84,7 +85,7 @@ impl<'a, 'b> RustNameResolver<'a, 'b> {
                     self.resolve_name(declaring_cpp_type, resolved_type, type_usage, hard_include);
                 RustNameComponents {
                     namespace: Some("cordl_internals".into()),
-                    generics: Some(vec![generic_formatted.combine_all()]),
+                    generics: Some(vec![generic_formatted.combine_all().into()]),
                     name: "Ptr".into(),
                     ..Default::default()
                 }
@@ -127,7 +128,7 @@ impl<'a, 'b> RustNameResolver<'a, 'b> {
                     name: "ByRefMut".into(),
                     namespace: Some("quest_hook::libil2cpp".to_string()),
 
-                    generics: Some(vec![generic_formatted.clone()]),
+                    generics: Some(vec![generic_formatted.clone().into()]),
                     ..Default::default()
                 }
             }
@@ -142,7 +143,7 @@ impl<'a, 'b> RustNameResolver<'a, 'b> {
                     name: "ByRef".into(),
                     namespace: Some("quest_hook::libil2cpp".to_string()),
 
-                    generics: Some(vec![generic_formatted.clone()]),
+                    generics: Some(vec![generic_formatted.clone().into()]),
                     ..Default::default()
                 }
             }

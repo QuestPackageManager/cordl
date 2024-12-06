@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::parse_quote;
@@ -12,12 +14,44 @@ pub enum Visibility {
     Private,
 }
 
-
-
 #[derive(Clone)]
 pub struct RustStruct {
     pub fields: Vec<RustField>,
     pub packing: Option<u32>,
+}
+#[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Default, Hash, Clone)]
+pub struct RustGeneric {
+    pub name: String,
+    pub bounds: Vec<String>,
+}
+
+impl FromStr for RustGeneric {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(RustGeneric {
+            name: s.to_string(),
+            bounds: Default::default(),
+        })
+    }
+}
+
+impl From<String> for RustGeneric {
+    fn from(value: String) -> Self {
+        RustGeneric {
+            name: value,
+            bounds: Default::default(),
+        }
+    }
+}
+
+impl ToString for RustGeneric {
+    fn to_string(&self) -> String {
+        match self.bounds.is_empty() {
+            true => self.name.clone(),
+            false => format!("{}: {}", self.name, self.bounds.join("+")),
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -45,7 +79,7 @@ pub struct RustField {
 #[derive(Clone, Debug)]
 
 pub struct RustFeature {
-    pub name: String
+    pub name: String,
 }
 
 #[derive(Clone)]
@@ -124,7 +158,6 @@ impl RustFunction {
         };
 
         if let Some(body) = &self.body {
-            
             tokens = quote! {
                 #tokens {
                     #(#body)*
