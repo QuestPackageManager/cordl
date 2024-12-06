@@ -1058,7 +1058,7 @@ impl RustType {
 
         let tokens = quote! {
             #feature
-            pub trait #name_ident: quest_hook::libil2cpp::typecheck::ty::Type {
+            pub trait #name_ident: quest_hook::libil2cpp::Type {
                 #(#methods)*
             }
 
