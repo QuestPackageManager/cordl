@@ -474,7 +474,7 @@ impl RustType {
                 let m_ret_ty = name_resolver
                     .resolve_name(self, &m.return_type, TypeUsage::ReturnType, true)
                     .to_type_token();
-                let m_result_ty: syn::Type = parse_quote!(quest_hook::Result<#m_ret_ty>);
+                let m_result_ty: syn::Type = parse_quote!(quest_hook::libil2cpp::Result<#m_ret_ty>);
 
                 let params = m
                     .parameters
@@ -545,7 +545,7 @@ impl RustType {
                 let m_ret_ty = name_resolver
                     .resolve_name(self, &m.return_type, TypeUsage::ReturnType, true)
                     .to_type_token();
-                let m_result_ty: syn::Type = parse_quote!(quest_hook::Result<#m_ret_ty>);
+                let m_result_ty: syn::Type = parse_quote!(quest_hook::libil2cpp::Result<#m_ret_ty>);
 
                 let params = m
                     .parameters
