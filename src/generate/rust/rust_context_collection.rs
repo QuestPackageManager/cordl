@@ -349,7 +349,21 @@ impl RustContextCollection {
             .truncate(false)
             .open(config.source_path.join("lib.rs"))?;
         let mut buf_writer = BufWriter::new(mod_file);
-        writeln!(buf_writer, "#![allow(clippy::all)]")?;
+        writeln!(buf_writer, "
+        #![allow(clippy::all)]
+        #![allow(clippy::all)]
+        #![allow(unused)]
+        #![allow(non_snake_case)]
+        #![allow(non_camel_case_types)]
+        #![allow(non_upper_case_globals)]
+        #![allow(non_ascii_idents)]
+        #![allow(bad_style)]
+        #![allow(clippy::module_name_repetitions)]
+        #![allow(clippy::similar_names)]
+        #![allow(clippy::case_sensitive_file_name)]
+        #![allow(clippy::enum_variant_names)]
+        #![allow(clippy::large_enum_variant)]
+        ")?;
         buf_writer.flush()?;
 
         make_mod_dir(&config.source_path, "lib.rs")?;
