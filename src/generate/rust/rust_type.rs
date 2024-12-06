@@ -369,7 +369,7 @@ impl RustType {
                 is_self: false,
                 params,
 
-                return_type: Some(parse_quote!(quest_hook::Result<&'static mut Self>)),
+                return_type: Some(parse_quote!(quest_hook::libil2cpp::Result<&'static mut Self>)),
                 visibility: (Visibility::Public),
             };
             self.methods.push(rust_func);
