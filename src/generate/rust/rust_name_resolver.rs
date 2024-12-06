@@ -108,8 +108,6 @@ impl<'a, 'b> RustNameResolver<'a, 'b> {
             },
 
             ResolvedTypeData::Primitive(il2_cpp_type_enum) => {
-                let _requirements = &mut declaring_cpp_type.requirements;
-
                 let s = Self::primitive_to_rust_ty(il2_cpp_type_enum).to_string();
                 RustNameComponents::from(s)
             }
@@ -190,11 +188,14 @@ impl<'a, 'b> RustNameResolver<'a, 'b> {
 
         let is_own_context = resolved_context_root_tag == self_context_root_tag;
 
-        // if !is_own_context {
-        //     declaring_cpp_type
-        //         .requirements
-        //         .add_module(&incl_context.get_module_path(self.config));
-        // }
+        if !is_own_context {
+            // declaring_cpp_type
+            //     .requirements
+            //     .add_module(&incl_context.get_module_path(self.config));
+            declaring_cpp_type
+                .requirements
+                .add_dependency(incl_ty.self_tag);
+        }
 
         incl_ty.rs_name_components.clone()
     }

@@ -42,6 +42,11 @@ pub struct RustField {
     pub offset: u32,
 }
 
+#[derive(Clone, Debug)]
+
+pub struct RustFeature {
+    pub name: String
+}
 
 #[derive(Clone)]
 pub struct RustFunction {

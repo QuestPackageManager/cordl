@@ -15,7 +15,7 @@ use crate::{
     generate::{
         cs_members::{CsConstructor, CsField, CsMethod, CsParam},
         cs_type::CsType,
-        cs_type_tag::CsTypeTag,
+        cs_type_tag::{self, CsTypeTag},
         metadata::CordlMetadata,
         offsets::SizeInfo,
         type_extensions::{TypeDefinitionExtensions, TypeDefinitionIndexExtensions},
@@ -26,7 +26,9 @@ use crate::{
 use super::{
     config::RustGenerationConfig,
     rust_fields,
-    rust_members::{ConstRustField, RustField, RustFunction, RustParam, RustTrait, Visibility},
+    rust_members::{
+        ConstRustField, RustFeature, RustField, RustFunction, RustParam, RustTrait, Visibility,
+    },
     rust_name_components::RustNameComponents,
     rust_name_resolver::RustNameResolver,
 };
@@ -38,11 +40,15 @@ const PARENT_FIELD: &str = "__cordl_parent";
 #[derive(Clone, Debug, Default)]
 pub struct RustTypeRequirements {
     required_modules: HashSet<String>,
+    required_types: HashSet<CsTypeTag>,
 }
 
 impl RustTypeRequirements {
     pub fn add_module(&mut self, module: &str) {
         self.required_modules.insert(module.to_string());
+    }
+    pub fn add_dependency(&mut self, cs_type_tag: CsTypeTag) {
+        self.required_types.insert(cs_type_tag);
     }
 
     pub(crate) fn needs_object_include(&mut self) {
@@ -68,6 +74,9 @@ impl RustTypeRequirements {
     pub(crate) fn get_modules(&self) -> &HashSet<String> {
         &self.required_modules
     }
+    pub fn get_dependencies(&self) -> &HashSet<CsTypeTag> {
+        &self.required_types
+    }
 }
 
 #[derive(Clone)]
@@ -85,6 +94,7 @@ pub struct RustType {
     pub is_interface: bool,
 
     pub self_tag: CsTypeTag,
+    pub self_feature: Option<RustFeature>,
 
     pub parent: Option<RustNameComponents>,
     pub backing_type_enum: Option<RustNameComponents>,
@@ -120,6 +130,8 @@ impl RustType {
             ..Default::default()
         };
 
+        let feature_name = cs_name_components.combine_all().replace([':', '/'], "_");
+
         RustType {
             fields: Default::default(),
             methods: Default::default(),
@@ -135,6 +147,7 @@ impl RustType {
             backing_type_enum: Default::default(),
 
             requirements: RustTypeRequirements::default(),
+            self_feature: Some(RustFeature { name: feature_name }),
             self_tag: tag,
             generics: cs_type
                 .generic_template
@@ -705,12 +718,22 @@ impl RustType {
             #quest_hook_path::unsafe_impl_reference_type!(in #quest_hook_path for #name_ident => #cs_namespace.#cs_name_str #generics);
         };
 
+        let feature = self.self_feature.as_ref().map(|f| {
+            let name = &f.name;
+            quote! {
+                #[cfg(feature = #name)]
+            }
+        });
+
         let mut tokens = quote! {
+            #feature
             #[repr(c)]
             #[derive(Debug)]
             pub struct #name_ident {
                 #(#fields),*
             }
+
+            #feature
             #macro_invoke
         };
 
@@ -719,7 +742,7 @@ impl RustType {
             let parent_field_ident = format_ident!(r#"{}"#, PARENT_FIELD);
 
             tokens.extend(quote! {
-
+            #feature
             impl #generics std::ops::Deref for #name_ident {
                 type Target = #parent_name;
 
@@ -728,6 +751,7 @@ impl RustType {
                 }
             }
 
+            #feature
             impl #generics std::ops::DerefMut for #name_ident {
                 fn deref_mut(&mut self) -> &mut Self::Target {
                     &mut self.#parent_field_ident
@@ -776,12 +800,22 @@ impl RustType {
             #quest_hook_path::unsafe_impl_value_type!(in #quest_hook_path for #name_ident => #cs_namespace.#cs_name_str);
         };
 
+        let feature = self.self_feature.as_ref().map(|f| {
+            let name = &f.name;
+            quote! {
+                #[cfg(feature = #name)]
+            }
+        });
+
         let tokens = quote! {
+            #feature
             #[repr(#backing_type)]
             #[derive(Debug, Clone, Copy, PartialEq, Eq)]
             pub enum #name_ident {
                 #(#fields),*
             }
+
+            #feature
             #macro_invoke
         };
 
@@ -837,12 +871,22 @@ impl RustType {
             #quest_hook_path::unsafe_impl_value_type!(in #quest_hook_path for #name_ident => #cs_namespace.#cs_name_str #generics);
         };
 
+        let feature = self.self_feature.as_ref().map(|f| {
+            let name = &f.name;
+            quote! {
+                #[cfg(feature = #name)]
+            }
+        });
+
         let tokens = quote! {
+            #feature
             #[repr(c)]
             #[derive(Debug, Clone)]
             pub struct #name_ident {
                 #(#fields),*
             }
+
+            #feature
             #macro_invoke
         };
 
@@ -891,6 +935,13 @@ impl RustType {
             .map(|f| f.to_token_stream())
             .map(|f| -> syn::ImplItemFn { parse_quote!(#f) });
 
+        let feature = self.self_feature.as_ref().map(|f| {
+            let name = &f.name;
+            quote! {
+                #[cfg(feature = #name)]
+            }
+        });
+
         let nested_types = &self.nested_types;
 
         let other_impls = self
@@ -910,6 +961,12 @@ impl RustType {
                             impl #ty for #name_ident {}
                         }
                     }
+                }
+            })
+            .map(|i| {
+                quote! {
+                    #feature
+                    #i
                 }
             })
             .collect_vec();
@@ -936,7 +993,9 @@ impl RustType {
         };
 
         let tokens = quote! {
+            #feature
             #impl_tokens
+
             #(#other_impls)*
         };
 
@@ -988,11 +1047,20 @@ impl RustType {
             #quest_hook_path::unsafe_impl_reference_type!(in #quest_hook_path for #name_ident => #cs_namespace.#cs_name_str #generics);
         };
 
+        let feature = self.self_feature.as_ref().map(|f| {
+            let name = &f.name;
+            quote! {
+                #[cfg(feature = #name)]
+            }
+        });
+
         let tokens = quote! {
+            #feature
             pub trait #name_ident: quest_hook::libil2cpp::typecheck::ty::Type {
                 #(#methods)*
             }
 
+            #feature
             #macro_invoke
         };
 

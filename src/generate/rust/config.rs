@@ -2,10 +2,12 @@ use std::{path::PathBuf, sync::LazyLock};
 
 pub static STATIC_CONFIG: LazyLock<RustGenerationConfig> = LazyLock::new(|| RustGenerationConfig {
     source_path: PathBuf::from("./codegen-rs/src"),
+    cargo_config: PathBuf::from("./codegen-rs/Cargo.toml"),
 });
 
 pub struct RustGenerationConfig {
     pub source_path: PathBuf,
+    pub cargo_config: PathBuf
 }
 
 impl RustGenerationConfig {

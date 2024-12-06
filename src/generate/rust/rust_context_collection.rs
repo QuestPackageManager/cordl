@@ -5,6 +5,7 @@ use std::{
     io::{BufWriter, Write},
 };
 
+use color_eyre::owo_colors::colors::Default;
 use rayon::prelude::*;
 
 use itertools::Itertools;
@@ -19,8 +20,8 @@ use crate::generate::{
 };
 
 use super::{
-    config::RustGenerationConfig, rust_context::RustContext, rust_name_resolver::RustNameResolver,
-    rust_type::RustType,
+    config::RustGenerationConfig, rust_context::RustContext, rust_members::RustFeature,
+    rust_name_resolver::RustNameResolver, rust_type::RustType,
 };
 
 #[derive(Default)]
@@ -222,6 +223,56 @@ impl RustContextCollection {
                 );
                 c.write(config)
             })
+    }
+
+    pub fn write_feature_block(&self, config: &RustGenerationConfig) -> color_eyre::Result<()> {
+        let dependency_graph: Vec<(&RustType, Vec<&RustFeature>)> = self
+            .all_contexts
+            .values()
+            .flat_map(|c| c.typedef_types.values())
+            .filter(|t| t.self_feature.is_some())
+            .map(|t| {
+                let dependencies = t
+                    .requirements
+                    .get_dependencies()
+                    .iter()
+                    .filter_map(|o| self.get_cpp_type(*o))
+                    .filter_map(|o| o.self_feature.as_ref())
+                    .collect_vec();
+                (t, dependencies)
+            })
+            .collect();
+
+        let feature_block = dependency_graph
+            .into_iter()
+            .map(|(t, features)| {
+                let feature_name = &t.self_feature.as_ref().unwrap().name;
+                let dependencies = features
+                    .iter()
+                    .map(|s| format!("\"{}\"", s.name))
+                    .join(", ");
+
+                let feature = format!("{feature_name} = [{dependencies}]",);
+
+                feature
+            })
+            .join("\n");
+
+        let mut cargo_config = match std::fs::read_to_string("./cordl_internals_rs/Cargo_template.toml")
+        {
+            Ok(content) => content,
+            Err(_) => {
+                eprintln!("Failed to load file `./cordl_internals_rs/Cargo_template.toml`");
+                return Err(color_eyre::eyre::eyre!("Failed to load Cargo template"));
+            }
+        };
+
+        cargo_config = cargo_config.replace("#cordl_features", &feature_block);
+
+        let mut file = File::create(&config.cargo_config)?;
+        file.write_all(cargo_config.as_bytes())?;
+
+        Ok(())
     }
 
     pub fn write_namespace_modules(&self, config: &RustGenerationConfig) -> color_eyre::Result<()> {
