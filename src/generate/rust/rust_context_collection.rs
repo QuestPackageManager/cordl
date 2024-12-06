@@ -351,7 +351,6 @@ impl RustContextCollection {
         let mut buf_writer = BufWriter::new(mod_file);
         writeln!(buf_writer, "
         #![allow(clippy::all)]
-        #![allow(clippy::all)]
         #![allow(unused)]
         #![allow(non_snake_case)]
         #![allow(non_camel_case_types)]

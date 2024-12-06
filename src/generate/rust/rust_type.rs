@@ -734,8 +734,9 @@ impl RustType {
                 #(#fields),*
             }
 
-            #feature
-            #macro_invoke
+            #feature {
+                #macro_invoke
+            }
         };
 
         if let Some(parent) = &self.parent {
@@ -816,8 +817,9 @@ impl RustType {
                 #(#fields),*
             }
 
-            #feature
-            #macro_invoke
+            #feature {
+                #macro_invoke
+            }
         };
 
         writer.write_pretty_tokens(tokens)?;
@@ -887,8 +889,9 @@ impl RustType {
                 #(#fields),*
             }
 
-            #feature
-            #macro_invoke
+            #feature {
+                #macro_invoke
+            }
         };
 
         writer.write_pretty_tokens(tokens)?;
@@ -1061,8 +1064,9 @@ impl RustType {
                 #(#methods)*
             }
 
-            #feature
-            #macro_invoke
+            #feature {
+                #macro_invoke
+            }
         };
 
         writer.write_pretty_tokens(tokens)?;
