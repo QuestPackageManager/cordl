@@ -83,12 +83,13 @@ impl<'a, 'b> RustNameResolver<'a, 'b> {
             ResolvedTypeData::Ptr(resolved_type) => {
                 let generic_formatted =
                     self.resolve_name(declaring_cpp_type, resolved_type, type_usage, hard_include);
-                RustNameComponents {
-                    namespace: Some("cordl_internals".into()),
-                    generics: Some(vec![generic_formatted.combine_all().into()]),
-                    name: "Ptr".into(),
-                    ..Default::default()
-                }
+                // RustNameComponents {
+                //     namespace: Some("cordl_internals".into()),
+                //     generics: Some(vec![generic_formatted.combine_all().into()]),
+                //     name: "Ptr".into(),
+                //     ..Default::default()
+                // }
+                generic_formatted
             }
             ResolvedTypeData::Type(resolved_tag) => {
                 self.get_type_from_tag(*resolved_tag, declaring_cpp_type, metadata)
