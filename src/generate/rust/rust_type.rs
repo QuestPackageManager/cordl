@@ -1062,8 +1062,8 @@ impl RustType {
                 #(#methods)*
             }
 
-            #feature 
-            #macro_invoke
+            // #feature 
+            // #macro_invoke
             
         };
 
