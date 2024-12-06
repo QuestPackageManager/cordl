@@ -56,7 +56,7 @@ impl RustContext {
 
         let fundamental_path = config
             .source_path
-            .join(path.join(path_name).with_extension("rs"));
+            .join(path.join(format!("{path_name}_mod")).with_extension("rs"));
 
         let mut x: RustContext = RustContext {
             fundamental_path,
