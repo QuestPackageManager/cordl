@@ -130,7 +130,8 @@ impl RustType {
             ..Default::default()
         };
 
-        let feature_name = cs_name_components.combine_all().replace([':', '/'], "_");
+        let feature_name =
+            config.feature_name(&cs_name_components.clone().remove_generics().combine_all());
 
         RustType {
             fields: Default::default(),

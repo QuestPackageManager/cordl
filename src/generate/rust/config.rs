@@ -7,7 +7,7 @@ pub static STATIC_CONFIG: LazyLock<RustGenerationConfig> = LazyLock::new(|| Rust
 
 pub struct RustGenerationConfig {
     pub source_path: PathBuf,
-    pub cargo_config: PathBuf
+    pub cargo_config: PathBuf,
 }
 
 impl RustGenerationConfig {
@@ -113,5 +113,10 @@ impl RustGenerationConfig {
     }
     pub fn namespace_path(&self, string: &str) -> String {
         string.replace(['<', '>', '`', '/'], "_").replace('.', "/")
+    }
+
+    pub(crate) fn feature_name(&self, s: &str) -> String {
+        s.replace([':', '`', '<', '>', '$', '=', ',', '|'], "_")
+            .replace(['.', '/'], "+")
     }
 }

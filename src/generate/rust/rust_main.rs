@@ -18,6 +18,8 @@ pub fn run_rust(
     let rs_context_collection =
         RustContextCollection::from_cs_collection(cs_collection, metadata, &STATIC_CONFIG);
 
+    rs_context_collection.write_feature_block(&STATIC_CONFIG)?;
+
     info!("Registering handlers!");
 
     // let e = cpp_context_collection.cyclic_include_check()?;

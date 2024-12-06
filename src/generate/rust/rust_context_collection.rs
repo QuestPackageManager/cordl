@@ -236,6 +236,7 @@ impl RustContextCollection {
                     .requirements
                     .get_dependencies()
                     .iter()
+                    .filter(|o| **o != t.self_tag)
                     .filter_map(|o| self.get_cpp_type(*o))
                     .filter_map(|o| o.self_feature.as_ref())
                     .collect_vec();
@@ -244,28 +245,42 @@ impl RustContextCollection {
             .collect();
 
         let feature_block = dependency_graph
+        // combine all features with same name that somehow exist
             .into_iter()
-            .map(|(t, features)| {
-                let feature_name = &t.self_feature.as_ref().unwrap().name;
+            .into_group_map_by(|(t, _)| t.self_feature.as_ref().unwrap().name.clone())
+            .into_iter()
+            .map(|(feature_name, features)| {
+                (
+                    feature_name,
+                    features.into_iter().fold(Vec::new(), |mut a, b| {
+                        a.extend(b.1);
+                        a
+                    }),
+                )
+            })
+            // make feature block
+            .map(|(feature_name, features)| {
                 let dependencies = features
                     .iter()
                     .map(|s| format!("\"{}\"", s.name))
                     .join(", ");
 
-                let feature = format!("{feature_name} = [{dependencies}]",);
+                let feature = format!("\"{feature_name}\" = [{dependencies}]",);
 
                 feature
             })
+            .unique()
+            .sorted()
             .join("\n");
 
-        let mut cargo_config = match std::fs::read_to_string("./cordl_internals_rs/Cargo_template.toml")
-        {
-            Ok(content) => content,
-            Err(_) => {
-                eprintln!("Failed to load file `./cordl_internals_rs/Cargo_template.toml`");
-                return Err(color_eyre::eyre::eyre!("Failed to load Cargo template"));
-            }
-        };
+        let mut cargo_config =
+            match std::fs::read_to_string("./cordl_internals_rs/Cargo_template.toml") {
+                Ok(content) => content,
+                Err(_) => {
+                    eprintln!("Failed to load file `./cordl_internals_rs/Cargo_template.toml`");
+                    return Err(color_eyre::eyre::eyre!("Failed to load Cargo template"));
+                }
+            };
 
         cargo_config = cargo_config.replace("#cordl_features", &feature_block);
 
