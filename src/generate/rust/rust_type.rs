@@ -728,7 +728,7 @@ impl RustType {
 
         let mut tokens = quote! {
             #feature
-            #[repr(c)]
+            #[repr(C)]
             #[derive(Debug)]
             pub struct #name_ident {
                 #(#fields),*
@@ -882,7 +882,7 @@ impl RustType {
 
         let tokens = quote! {
             #feature
-            #[repr(c)]
+            #[repr(C)]
             #[derive(Debug, Clone)]
             pub struct #name_ident {
                 #(#fields),*
@@ -1044,10 +1044,10 @@ impl RustType {
             .remove_generics()
             .combine_all();
 
-        let quest_hook_path: syn::Path = parse_quote!(quest_hook::libil2cpp);
-        let macro_invoke: syn::ItemMacro = parse_quote! {
-            #quest_hook_path::unsafe_impl_reference_type!(in #quest_hook_path for #name_ident => #cs_namespace.#cs_name_str #generics);
-        };
+        // let quest_hook_path: syn::Path = parse_quote!(quest_hook::libil2cpp);
+        // let macro_invoke: syn::ItemMacro = parse_quote! {
+        //     #quest_hook_path::unsafe_impl_reference_type!(in #quest_hook_path for #name_ident => #cs_namespace.#cs_name_str #generics);
+        // };
 
         let feature = self.self_feature.as_ref().map(|f| {
             let name = &f.name;
