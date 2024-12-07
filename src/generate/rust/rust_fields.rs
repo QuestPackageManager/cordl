@@ -229,6 +229,7 @@ pub fn handle_static_fields(
             is_ref: false,
             is_mut: false,
             is_self: false,
+            generics: Default::default(),
 
             return_type: Some(get_return_type.to_type_token()),
             params: vec![],
@@ -241,6 +242,7 @@ pub fn handle_static_fields(
 
         let setter_decl = RustFunction {
             name: setter_name,
+            generics: Default::default(),
 
             is_ref: false,
             is_mut: false,
@@ -277,8 +279,6 @@ pub(crate) fn handle_const_fields(
     }
 
     for field_info in fields.iter().filter(|f| f.is_const) {
-
-
         let f_resolved_type = &field_info.field_ty;
         let f_type = name_resolver
             .resolve_name(cpp_type, f_resolved_type, TypeUsage::Field, true)

@@ -376,10 +376,23 @@ impl RustType {
 
                 Ok(object)
             };
+            let generics = c
+                .template
+                .as_ref()
+                .map(|t| {
+                    t.just_names()
+                        .map(|g| RustGeneric {
+                            name: g.clone(),
+                            bounds: vec!["quest_hook::libil2cpp::Type".to_string()],
+                        })
+                        .collect_vec()
+                })
+                .unwrap_or_default();
 
             let rust_func = RustFunction {
                 name: format_ident!("{}", m_name_rs),
                 body: Some(body),
+                generics,
 
                 is_mut: true,
                 is_ref: true,
@@ -503,31 +516,45 @@ impl RustType {
 
                 let param_names = params.iter().map(|p| &p.name);
 
-                let body: Vec<syn::Stmt> =
-                    if m.return_type.data == ResolvedTypeData::Primitive(Il2CppTypeEnum::Void) {
-                        parse_quote! {
-                            // let obj: &mut quest_hook::libil2cpp::Il2CppObject = self;
-                            // obj.invoke_void(#m_name, ( #(#param_names),* ))?;
-                            let method = self.class().find_method::<A, (), N>(#m_name).unwrap();
-                            unsafe { method.invoke_unchecked(self, ( #(#param_names),* )) }
-                            Ok(())
-                        }
-                    } else {
-                        parse_quote! {
-                            // let obj: &mut quest_hook::libil2cpp::Il2CppObject = self;
-                            // let ret: #m_ret_ty = obj.invoke(#m_name, ( #(#param_names),* ))?;
+                let body: Vec<syn::Stmt> = if m.return_type.data
+                    == ResolvedTypeData::Primitive(Il2CppTypeEnum::Void)
+                {
+                    parse_quote! {
+                        // let obj: &mut quest_hook::libil2cpp::Il2CppObject = self;
+                        // obj.invoke_void(#m_name, ( #(#param_names),* ))?;
+                        let method = self.class().find_method::<A, (), N>(#m_name).unwrap();
+                        unsafe { method.invoke_unchecked(self, ( #(#param_names),* )) }
+                        Ok(())
+                    }
+                } else {
+                    parse_quote! {
+                        // let obj: &mut quest_hook::libil2cpp::Il2CppObject = self;
+                        // let ret: #m_ret_ty = obj.invoke(#m_name, ( #(#param_names),* ))?;
 
-                            let method = self.class().find_method::<A, #m_ret_ty, N>(#m_name).unwrap();
-                            let ret: #m_ret_ty = unsafe { method.invoke_unchecked(self, ( #(#param_names),* )) };
+                        let method = self.class().find_method::<A, #m_ret_ty, N>(#m_name).unwrap();
+                        let ret: #m_ret_ty = unsafe { method.invoke_unchecked(self, ( #(#param_names),* )) };
 
-                            Ok(ret)
-                        }
-                    };
+                        Ok(ret)
+                    }
+                };
+
+                let generics = m
+                    .template
+                    .as_ref()
+                    .map(|t| {
+                        t.just_names()
+                            .map(|g| RustGeneric {
+                                name: g.clone(),
+                                bounds: vec!["quest_hook::libil2cpp::Type".to_string()],
+                            })
+                            .collect_vec()
+                    })
+                    .unwrap_or_default();
 
                 let rust_func = RustFunction {
                     name: format_ident!("{m_name_rs}"),
                     body: Some(body),
-
+                    generics,
                     is_mut: true,
                     is_ref: true,
                     is_self: m.instance,
@@ -595,9 +622,23 @@ impl RustType {
                     }
                 };
 
+                let generics = m
+                    .template
+                    .as_ref()
+                    .map(|t| {
+                        t.just_names()
+                            .map(|g| RustGeneric {
+                                name: g.clone(),
+                                bounds: vec!["quest_hook::libil2cpp::Type".to_string()],
+                            })
+                            .collect_vec()
+                    })
+                    .unwrap_or_default();
+
                 let rust_func = RustFunction {
                     name: format_ident!("{m_name_rs}"),
                     body: Some(body),
+                    generics,
 
                     is_mut: false,
                     is_ref: false,
