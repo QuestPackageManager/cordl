@@ -604,21 +604,21 @@ impl RustType {
             // instance, value type
             (true, true) => parse_quote! {
 
-                let ret: #m_ret_ty = quest_hook::libil2cpp::ValueTypeExt::invoke(obj, #m_name, ( #(#param_names),* ))?;
+                let __cordl_ret: #m_ret_ty = quest_hook::libil2cpp::ValueTypeExt::invoke(obj, #m_name, ( #(#param_names),* ))?;
 
-                Ok(ret)
+                Ok(__cordl_ret)
             },
             // instance, ref type
             (true, false) => parse_quote! {
-                let ret: #m_ret_ty = obj.invoke(#m_name, ( #(#param_names),* ))?;
+                let __cordl_ret: #m_ret_ty = obj.invoke(#m_name, ( #(#param_names),* ))?;
 
-                Ok(ret)
+                Ok(__cordl_ret)
             },
             // static
             (false, _) => parse_quote! {
-                let ret: #m_ret_ty = Self::class().invoke(#m_name, ( #(#param_names),* ) )?;
+                let __cordl_ret: #m_ret_ty = Self::class().invoke(#m_name, ( #(#param_names),* ) )?;
 
-                Ok(ret)
+                Ok(__cordl_ret)
             },
         };
 
