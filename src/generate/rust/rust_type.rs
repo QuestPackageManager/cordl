@@ -182,6 +182,9 @@ impl RustType {
         config: &RustGenerationConfig,
     ) {
         self.make_parent(cs_type.parent.as_ref(), name_resolver);
+        if cs_type.namespace() == "System" && cs_type.name() == "Object" {
+            self.make_object_parent();
+        }
         self.make_nested_types(&cs_type.nested_types, name_resolver);
         self.make_interfaces(&cs_type.interfaces, name_resolver, config);
 
@@ -240,6 +243,34 @@ impl RustType {
 
         let Some(parent) = parent else { return };
         let parent = name_resolver.resolve_name(self, parent, TypeUsage::TypeName, true);
+        let parent_field = RustField {
+            name: format_ident!("{}", PARENT_FIELD),
+            field_type: parent.to_type_token(),
+            visibility: Visibility::Private,
+            offset: 0,
+        };
+
+        self.fields.insert(0, parent_field);
+        self.parent = Some(parent);
+    }
+    fn make_object_parent(
+        &mut self,
+    ) {
+        if self.is_value_type || self.is_enum_type {
+            return;
+        }
+
+        let parent = RustNameComponents {
+            name: "Il2CppObject".to_string(),
+            namespace: Some("quest_hook::libil2cpp".to_string()),
+            generics: None,
+            is_mut: true,
+            is_ptr: true,
+
+            is_ref: false,
+            is_dyn: false,
+            is_static_ref: false,
+        };
         let parent_field = RustField {
             name: format_ident!("{}", PARENT_FIELD),
             field_type: parent.to_type_token(),
@@ -562,7 +593,7 @@ impl RustType {
                 let obj = self;
             },
         };
-        
+
         let invoke_call: Vec<syn::Stmt> = match (m.instance, return_void) {
             // instance, void
             (true, true) => parse_quote! {
@@ -584,7 +615,7 @@ impl RustType {
             }
             // static, something
             (false, false) => parse_quote! {
-                          let ret: #m_ret_ty = Self::class().invoke(#m_name, ( #(#param_names),* ) );
+                let ret: #m_ret_ty = Self::class().invoke(#m_name, ( #(#param_names),* ) );
 
                 Ok(ret)
             },
@@ -1010,9 +1041,29 @@ impl RustType {
             }
         };
 
+        let impl_object_tokens: Option<syn::ItemImpl> = self.parent.as_ref().map(|_| -> syn::ItemImpl {
+            let parent_field_ident = format_ident!(r#"{}"#, PARENT_FIELD);
+
+            parse_quote! {
+                #feature
+                impl #generics quest_hook::libil2cpp::ObjectType for #path_ident {
+                    fn as_object(&self) -> &Il2CppObject {
+                        self.#parent_field_ident.as_object()
+                    }
+
+                    fn as_object_mut(&mut self) -> &mut Il2CppObject {
+                        self.#parent_field_ident.as_object_mut()
+                    }
+                }
+            }
+        });
+
         let tokens = quote! {
             #feature
             #impl_tokens
+
+
+            #impl_object_tokens
 
             #(#other_impls)*
         };
