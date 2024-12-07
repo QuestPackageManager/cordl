@@ -1112,7 +1112,7 @@ impl RustType {
 
         let tokens = quote! {
             #feature
-            pub trait #name_ident #generics : quest_hook::libil2cpp::Type {
+            pub trait #name_ident #generics : quest_hook::libil2cpp::Type + Sized {
                 #(#methods)*
             }
 
