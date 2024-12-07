@@ -406,7 +406,7 @@ impl RustType {
             let body: Vec<syn::Stmt> = parse_quote! {
                 let object: &mut Self = <Self as quest_hook::libil2cpp::Type>::class().instantiate();
 
-                object.as_object_mut().invoke_void(".ctor", (#(#param_names),*))?;
+                quest_hook::libil2cpp::ObjectType::as_object_mut(object).invoke_void(".ctor", (#(#param_names),*))?;
 
                 Ok(object)
             };
