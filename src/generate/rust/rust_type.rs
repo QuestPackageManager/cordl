@@ -587,7 +587,7 @@ impl RustType {
 
         let obj_var: Vec<syn::Stmt> = match self.is_reference_type {
             true => parse_quote! {
-                let obj: &mut quest_hook::libil2cpp::Il2CppObject = self.as_object_mut();
+                let obj: &mut quest_hook::libil2cpp::Il2CppObject = quest_hook::libil2cpp::ObjectType::as_object_mut(self);
             },
             false => parse_quote! {
                 let obj = self;
