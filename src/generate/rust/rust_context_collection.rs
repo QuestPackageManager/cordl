@@ -350,6 +350,8 @@ impl RustContextCollection {
             .open(config.source_path.join("lib.rs"))?;
         let mut buf_writer = BufWriter::new(mod_file);
         writeln!(buf_writer, "
+        #![feature(inherent_associated_types)]  
+
         #![allow(clippy::all)]
         #![allow(unused)]
         #![allow(non_snake_case)]
