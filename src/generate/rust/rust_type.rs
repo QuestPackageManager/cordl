@@ -583,39 +583,34 @@ impl RustType {
         param_names: impl Iterator<Item = &'a syn::Ident>,
         m_ret_ty: syn::Type,
     ) -> Vec<syn::Stmt> {
-        let return_void = m.return_type.data == ResolvedTypeData::Primitive(Il2CppTypeEnum::Void);
+        let is_value_type = self.is_value_type || self.is_enum_type;
 
         let obj_var: Vec<syn::Stmt> = match self.is_reference_type {
             true => parse_quote! {
                 let obj: &mut quest_hook::libil2cpp::Il2CppObject = self.as_object_mut();
             },
             false => parse_quote! {
-                let obj = self as &mut quest_hook::libil2cpp::ValueTypeExt;
+                let obj = self;
             },
         };
 
-        let invoke_call: Vec<syn::Stmt> = match (m.instance, return_void) {
-            // instance, void
+        let invoke_call: Vec<syn::Stmt> = match (m.instance, is_value_type) {
+            // instance, value type
             (true, true) => parse_quote! {
-                obj.invoke_void(#m_name, ( #(#param_names),* ))?;
-                Ok(())
+                
+                let ret: #m_ret_ty = quest_hook::libil2cpp::ValueTypeExt::invoke(obj, #m_name, ( #(#param_names),* ))?;
+
+                Ok(ret)
             },
-            // instance, something
+            // instance, ref type
             (true, false) => parse_quote! {
                 let ret: #m_ret_ty = obj.invoke(#m_name, ( #(#param_names),* ))?;
 
                 Ok(ret)
             },
-            // static, void
-            (false, true) => {
-                parse_quote! {
-                    Self::class().invoke_void(#m_name, ( #(#param_names),* ) )?;
-                    Ok(())
-                }
-            }
-            // static, something
-            (false, false) => parse_quote! {
-                let ret: #m_ret_ty = Self::class().invoke(#m_name, ( #(#param_names),* ) );
+            // static
+            (false, _) => parse_quote! {
+                let ret: #m_ret_ty = Self::class().invoke(#m_name, ( #(#param_names),* ) )?;
 
                 Ok(ret)
             },
