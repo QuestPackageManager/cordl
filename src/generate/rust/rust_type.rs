@@ -1043,11 +1043,11 @@ impl RustType {
                 #feature
                 impl #generics quest_hook::libil2cpp::ObjectType for #path_ident {
                     fn as_object(&self) -> &Il2CppObject {
-                        self.#parent_field_ident.as_object()
+                        quest_hook::libil2cpp::ObjectType::as_object(self.#parent_field_ident)
                     }
 
                     fn as_object_mut(&mut self) -> &mut Il2CppObject {
-                        self.#parent_field_ident.as_object_mut()
+                        quest_hook::libil2cpp::ObjectType::as_object_mut(self.#parent_field_ident)
                     }
                 }
             }
