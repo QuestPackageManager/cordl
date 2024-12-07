@@ -572,6 +572,8 @@ impl RustType {
             // instance, something
             (true, false) => parse_quote! {
                 let ret: #m_ret_ty = obj.invoke(#m_name, ( #(#param_names),* ))?;
+
+                Ok(ret)
             },
             // static, void
             (false, true) => {
@@ -584,7 +586,7 @@ impl RustType {
             (false, false) => parse_quote! {
                           let ret: #m_ret_ty = Self::class().invoke(#m_name, ( #(#param_names),* ) );
 
-                            Ok(ret)
+                Ok(ret)
             },
         };
 
