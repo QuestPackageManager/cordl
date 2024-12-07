@@ -253,9 +253,7 @@ impl RustType {
         self.fields.insert(0, parent_field);
         self.parent = Some(parent);
     }
-    fn make_object_parent(
-        &mut self,
-    ) {
+    fn make_object_parent(&mut self) {
         if self.is_value_type || self.is_enum_type {
             return;
         }
@@ -310,7 +308,15 @@ impl RustType {
                 }
                 .to_token_stream();
 
+                let feature = rust_type.self_feature.as_ref().map(|f| {
+                    let name = &f.name;
+                    quote! {
+                        #[cfg(feature = #name)]
+                    }
+                });
+
                 parse_quote! {
+                    #feature
                     #visibility type #name #target_generics = #target;
                 }
             });
@@ -597,7 +603,7 @@ impl RustType {
         let invoke_call: Vec<syn::Stmt> = match (m.instance, is_value_type) {
             // instance, value type
             (true, true) => parse_quote! {
-                
+
                 let ret: #m_ret_ty = quest_hook::libil2cpp::ValueTypeExt::invoke(obj, #m_name, ( #(#param_names),* ))?;
 
                 Ok(ret)
