@@ -404,7 +404,7 @@ impl RustType {
             let param_names = params.iter().map(|p| &p.name);
 
             let body: Vec<syn::Stmt> = parse_quote! {
-                let object: &mut Self = Self::class().instantiate();
+                let object: &mut Self = <Self as quest_hook::libil2cpp::Type>::class().instantiate();
 
                 object.as_object_mut().invoke_void(".ctor", (#(#param_names),*))?;
 
@@ -440,14 +440,6 @@ impl RustType {
             };
             self.methods.push(rust_func);
         }
-
-        //         pub fn new() -> &'static mut Self {
-        //     let object: &mut Self = Self::class().instantiate();
-
-        //     object.object.invoke_void(".ctor", ()).unwrap();
-
-        //     object
-        // }
     }
 
     fn make_overloaded_name<'a>(
@@ -616,7 +608,7 @@ impl RustType {
             },
             // static
             (false, _) => parse_quote! {
-                let __cordl_ret: #m_ret_ty = Self::class().invoke(#m_name, ( #(#param_names),* ) )?;
+                let __cordl_ret: #m_ret_ty = <Self as quest_hook::libil2cpp::Type>::class().invoke(#m_name, ( #(#param_names),* ) )?;
 
                 Ok(__cordl_ret)
             },
@@ -1135,7 +1127,7 @@ impl RustType {
     }
 
     pub(crate) fn classof_name(&self) -> String {
-        format!("{}::class()", self.rs_name())
+        format!("<{} as quest_hook::libil2cpp::Type>::class()", self.rs_name())
     }
 }
 
