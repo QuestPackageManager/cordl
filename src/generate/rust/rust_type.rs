@@ -590,7 +590,7 @@ impl RustType {
                 let obj: &mut quest_hook::libil2cpp::Il2CppObject = self.as_object_mut();
             },
             false => parse_quote! {
-                let obj = self;
+                let obj = self as &mut quest_hook::libil2cpp::ValueTypeExt;
             },
         };
 
