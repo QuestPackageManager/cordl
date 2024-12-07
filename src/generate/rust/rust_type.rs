@@ -888,7 +888,7 @@ impl RustType {
             unsafe impl #quest_hook_path::ThisArgument for #path_ident {
                 type Type = Self;
 
-                fn matches(method: &quest_hook_path::MethodInfo) -> bool {
+                fn matches(method: &#quest_hook_path::MethodInfo) -> bool {
                     <Self as #quest_hook_path::Type>::matches_this_argument(method)
                 }
 
