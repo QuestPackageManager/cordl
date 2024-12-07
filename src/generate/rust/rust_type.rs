@@ -1048,11 +1048,11 @@ impl RustType {
             parse_quote! {
                 #feature
                 impl #generics quest_hook::libil2cpp::ObjectType for #path_ident {
-                    fn as_object(&self) -> &Il2CppObject {
+                    fn as_object(&self) -> &quest_hook::libil2cpp::Il2CppObject {
                         quest_hook::libil2cpp::ObjectType::as_object(self.#parent_field_ident)
                     }
 
-                    fn as_object_mut(&mut self) -> &mut Il2CppObject {
+                    fn as_object_mut(&mut self) -> &mut quest_hook::libil2cpp::Il2CppObject {
                         quest_hook::libil2cpp::ObjectType::as_object_mut(self.#parent_field_ident)
                     }
                 }
