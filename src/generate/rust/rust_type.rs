@@ -187,8 +187,7 @@ impl RustType {
 
         self.make_fields(&cs_type.fields, name_resolver, config);
 
-        self.make_instance_methods(&cs_type.methods, name_resolver, config);
-        self.make_static_methods(&cs_type.methods, name_resolver, config);
+        self.make_methods(&cs_type.methods, name_resolver, config);
 
         if self.is_reference_type {
             self.make_ref_constructors(&cs_type.constructors, name_resolver, config);
@@ -370,9 +369,7 @@ impl RustType {
             let body: Vec<syn::Stmt> = parse_quote! {
                 let object: &mut Self = Self::class().instantiate();
 
-                let method = self.class().find_method::<A, (), N>(".ctor").unwrap();
-                unsafe { method.invoke_unchecked(self, ( #(#param_names),* )) }
-                // object.invoke_void(".ctor", (#(#param_names),*))?;
+                object.as_object_mut().invoke_void(".ctor", (#(#param_names),*))?;
 
                 Ok(object)
             };
@@ -477,7 +474,7 @@ impl RustType {
         m_name_rs
     }
 
-    fn make_instance_methods(
+    fn make_methods(
         &mut self,
         methods: &[CsMethod],
         name_resolver: &RustNameResolver,
@@ -516,27 +513,7 @@ impl RustType {
 
                 let param_names = params.iter().map(|p| &p.name);
 
-                let body: Vec<syn::Stmt> = if m.return_type.data
-                    == ResolvedTypeData::Primitive(Il2CppTypeEnum::Void)
-                {
-                    parse_quote! {
-                        // let obj: &mut quest_hook::libil2cpp::Il2CppObject = self;
-                        // obj.invoke_void(#m_name, ( #(#param_names),* ))?;
-                        let method = self.class().find_method::<A, (), N>(#m_name).unwrap();
-                        unsafe { method.invoke_unchecked(self, ( #(#param_names),* )) }
-                        Ok(())
-                    }
-                } else {
-                    parse_quote! {
-                        // let obj: &mut quest_hook::libil2cpp::Il2CppObject = self;
-                        // let ret: #m_ret_ty = obj.invoke(#m_name, ( #(#param_names),* ))?;
-
-                        let method = self.class().find_method::<A, #m_ret_ty, N>(#m_name).unwrap();
-                        let ret: #m_ret_ty = unsafe { method.invoke_unchecked(self, ( #(#param_names),* )) };
-
-                        Ok(ret)
-                    }
-                };
+                let body = self.make_method_body(m, m_name, param_names, m_ret_ty);
 
                 let generics = m
                     .template
@@ -555,8 +532,8 @@ impl RustType {
                     name: format_ident!("{m_name_rs}"),
                     body: Some(body),
                     generics,
-                    is_mut: true,
-                    is_ref: true,
+                    is_mut: m.instance,
+                    is_ref: m.instance,
                     is_self: m.instance,
                     params,
 
@@ -568,88 +545,52 @@ impl RustType {
         }
     }
 
-    fn make_static_methods(
-        &mut self,
-        methods: &[CsMethod],
-        name_resolver: &RustNameResolver,
-        config: &RustGenerationConfig,
-    ) {
-        for (_, overload_methods) in methods
-            .iter()
-            .filter(|m| !m.instance)
-            .into_group_map_by(|m| &m.name)
-        {
-            let overloaded_method_data = overload_methods
-                .iter()
-                .map(|m| (m.name.clone(), m.parameters.as_slice()))
-                .collect_vec();
+    fn make_method_body<'a>(
+        &self,
+        m: &CsMethod,
+        m_name: &String,
+        param_names: impl Iterator<Item = &'a syn::Ident>,
+        m_ret_ty: syn::Type,
+    ) -> Vec<syn::Stmt> {
+        let return_void = m.return_type.data == ResolvedTypeData::Primitive(Il2CppTypeEnum::Void);
 
-            for (i, m) in overload_methods.iter().enumerate() {
-                let m_name = &m.name;
-
-                let m_name_rs = self.make_overloaded_name(
-                    &overloaded_method_data,
-                    name_resolver,
-                    (m_name.clone(), m.parameters.as_slice()),
-                    i,
-                );
-
-                let m_ret_ty = name_resolver
-                    .resolve_name(self, &m.return_type, TypeUsage::ReturnType, true)
-                    .to_type_token();
-                let m_result_ty: syn::Type = parse_quote!(quest_hook::libil2cpp::Result<#m_ret_ty>);
-
-                let params = m
-                    .parameters
-                    .iter()
-                    .map(|p| self.make_parameter(p, name_resolver, config))
-                    .collect_vec();
-
-                let param_names = params.iter().map(|p| &p.name);
-
-                let body: Vec<syn::Stmt> = if m.return_type.data
-                    == ResolvedTypeData::Primitive(Il2CppTypeEnum::Void)
-                {
-                    parse_quote! {
-                        Self::class().invoke_void(#m_name, ( #(#param_names),* ) )?;
-                        Ok(())
-                    }
-                } else {
-                    parse_quote! {
-                        let ret: #m_ret_ty = Self::class().invoke(#m_name, ( #(#param_names),* ) );
-
-                        Ok(ret)
-                    }
-                };
-
-                let generics = m
-                    .template
-                    .as_ref()
-                    .map(|t| {
-                        t.just_names()
-                            .map(|g| RustGeneric {
-                                name: g.clone(),
-                                bounds: vec!["quest_hook::libil2cpp::Type".to_string()],
-                            })
-                            .collect_vec()
-                    })
-                    .unwrap_or_default();
-
-                let rust_func = RustFunction {
-                    name: format_ident!("{m_name_rs}"),
-                    body: Some(body),
-                    generics,
-
-                    is_mut: false,
-                    is_ref: false,
-                    is_self: false,
-                    params,
-
-                    return_type: Some(m_result_ty),
-                    visibility: (Visibility::Public),
-                };
-                self.methods.push(rust_func);
+        let obj_var: Vec<syn::Stmt> = match self.is_reference_type {
+            true => parse_quote! {
+                let obj: &mut quest_hook::libil2cpp::Il2CppObject = self.as_object_mut();
+            },
+            false => parse_quote! {
+                let obj = self;
+            },
+        };
+        
+        let invoke_call: Vec<syn::Stmt> = match (m.instance, return_void) {
+            // instance, void
+            (true, true) => parse_quote! {
+                obj.invoke_void(#m_name, ( #(#param_names),* ))?;
+                Ok(())
+            },
+            // instance, something
+            (true, false) => parse_quote! {
+                let ret: #m_ret_ty = obj.invoke(#m_name, ( #(#param_names),* ))?;
+            },
+            // static, void
+            (false, true) => {
+                parse_quote! {
+                    Self::class().invoke_void(#m_name, ( #(#param_names),* ) )?;
+                    Ok(())
+                }
             }
+            // static, something
+            (false, false) => parse_quote! {
+                          let ret: #m_ret_ty = Self::class().invoke(#m_name, ( #(#param_names),* ) );
+
+                            Ok(ret)
+            },
+        };
+
+        parse_quote! {
+            #(#obj_var)*
+            #(#invoke_call)*
         }
     }
 
@@ -942,6 +883,19 @@ impl RustType {
 
             #feature
             #macro_invoke
+
+            #feature
+            unsafe impl #quest_hook_path::ThisArgument for #path_ident {
+                type Type = Self;
+
+                fn matches(method: &quest_hook_path::MethodInfo) -> bool {
+                    <Self as #quest_hook_path::Type>::matches_this_argument(method)
+                }
+
+                fn invokable(&mut self) -> *mut std::ffi::c_void {
+                    unsafe { #quest_hook_path::value_box(self) as *mut std::ffi::c_void }
+                }
+            }
         };
 
         writer.write_pretty_tokens(tokens)?;
