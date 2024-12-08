@@ -1092,7 +1092,11 @@ impl RustType {
             }
         });
 
-        let nested_types = &self.nested_types;
+        let nested_types = &self
+            .nested_types
+            .iter()
+            .sorted_by(|a, b| a.ident.cmp(&b.ident))
+            .collect_vec();
 
         let other_impls = self
             .traits
