@@ -267,7 +267,9 @@ impl RustType {
         }
 
         let Some(parent) = parent else { return };
-        let parent = name_resolver.resolve_name(self, parent, TypeUsage::TypeName, true);
+        let parent = name_resolver
+            .resolve_name(self, parent, TypeUsage::TypeName, true)
+            .with_no_prefix();
         let parent_field = RustField {
             name: format_ident!("{}", PARENT_FIELD),
             field_type: parent.to_type_token(),
@@ -287,8 +289,8 @@ impl RustType {
             name: "Il2CppObject".to_string(),
             namespace: Some("quest_hook::libil2cpp".to_string()),
             generics: None,
-            is_mut: true,
-            is_ptr: true,
+            is_mut: false,
+            is_ptr: false,
 
             is_ref: false,
             is_dyn: false,
@@ -775,7 +777,7 @@ impl RustType {
             .get_tdi()
             .get_type_definition(metadata.metadata);
         let declaring_name = declaring_td.get_name_components(metadata.metadata).name;
-        
+
         let context_td = context_tag.get_tdi().get_type_definition(metadata.metadata);
         let declaring_namespace = context_td.namespace(metadata.metadata);
 
