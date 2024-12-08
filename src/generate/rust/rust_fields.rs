@@ -282,10 +282,14 @@ pub(crate) fn handle_const_fields(
 
     for field_info in fields.iter().filter(|f| f.is_const) {
         let f_resolved_type = &field_info.field_ty;
-        let f_type = name_resolver
+        let mut f_type = name_resolver
             .resolve_name(cpp_type, f_resolved_type, TypeUsage::Field, true)
             .to_type_token();
         let f_name = format_ident!("{}", config.name_rs(&field_info.name));
+
+        if f_resolved_type.data == ResolvedTypeData::Primitive(Il2CppTypeEnum::String) {
+            f_type = parse_quote!(&'static str);
+        }
 
         let def_value = field_info.value.as_ref();
 
