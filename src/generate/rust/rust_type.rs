@@ -503,7 +503,7 @@ impl RustType {
                 where_clause: None,
 
                 return_type: Some(parse_quote!(
-                    quest_hook::libil2cpp::Result<&'static mut Self>
+                    quest_hook::libil2cpp::Result<*mut Self>
                 )),
                 visibility: (Visibility::Public),
             };
