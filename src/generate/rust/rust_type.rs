@@ -677,8 +677,6 @@ impl RustType {
     ) -> Vec<syn::Stmt> {
         let is_value_type = self.is_value_type || self.is_enum_type;
 
-
-
         let invoke_call: Vec<syn::Stmt> = match (m.instance, is_value_type) {
             // instance, value type
             (true, true) => parse_quote! {
@@ -762,6 +760,7 @@ impl RustType {
 
     pub fn nested_fixup(
         &mut self,
+        context_tag: &CsTypeTag,
         cs_type: &CsType,
         metadata: &CordlMetadata,
         config: &RustGenerationConfig,
@@ -774,9 +773,10 @@ impl RustType {
         let declaring_td = declaring_tag
             .get_tdi()
             .get_type_definition(metadata.metadata);
-
         let declaring_name = declaring_td.get_name_components(metadata.metadata).name;
-        let declaring_namespace = declaring_td.namespace(metadata.metadata);
+        
+        let context_td = context_tag.get_tdi().get_type_definition(metadata.metadata);
+        let declaring_namespace = context_td.namespace(metadata.metadata);
 
         let combined_name = format!("{}_{}", declaring_name, self.name());
 

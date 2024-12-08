@@ -66,7 +66,7 @@ impl RustContext {
 
         for (tag, ty) in &context.typedef_types {
             let mut rs_ty = RustType::make_rust_type(*tag, ty, config);
-            rs_ty.nested_fixup(ty, metadata, config);
+            rs_ty.nested_fixup(&context_tag, ty, metadata, config);
             rs_ty.enum_fixup(ty);
 
             // TODO: Implement blacklist
