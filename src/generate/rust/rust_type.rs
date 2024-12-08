@@ -194,6 +194,9 @@ impl RustType {
 
         self.make_methods(&cs_type.methods, name_resolver, config);
 
+        // add phantom markers
+        self.make_generics();
+
         if self.is_reference_type {
             self.make_ref_constructors(&cs_type.constructors, name_resolver, config);
         }
@@ -380,6 +383,25 @@ impl RustType {
         //     };
         //     self.fields.push(rust_field);
         // }
+    }
+
+    fn make_generics(
+        &mut self,
+    ) {
+        let Some(generic) = &self.generics else {
+            return;
+        };
+
+        for g in generic.iter() {
+            let name = format_ident!("{}", g.name);
+
+            self.fields.push(RustField {
+                name: format_ident!("__cordl_phantom_{name}"),
+                field_type: parse_quote!(std::marker::PhantomData<#name>),
+                visibility: Visibility::Private,
+                offset: 0,
+            });
+        }
     }
 
     fn make_interfaces(
