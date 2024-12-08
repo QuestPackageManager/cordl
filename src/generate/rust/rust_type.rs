@@ -133,10 +133,9 @@ impl RustType {
         let rs_name_components = RustNameComponents {
             generics: generics.clone(),
             name: config.name_rs(&cs_name_components.name),
-            namespace: cs_name_components
-                .namespace
-                .as_ref()
-                .map(|s| config.namespace_rs(s)),
+            namespace: Some(
+                config.namespace_rs(&cs_name_components.namespace.clone().unwrap_or_default()),
+            ),
             is_ref: false,
             is_dyn: false,
             is_ptr: cs_type.is_reference_type,
