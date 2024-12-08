@@ -280,69 +280,94 @@ pub(crate) fn handle_const_fields(
         return;
     }
 
-    for field_info in fields.iter().filter(|f| f.is_const) {
-        let f_resolved_type = &field_info.field_ty;
-        let mut f_type = name_resolver
-            .resolve_name(cpp_type, f_resolved_type, TypeUsage::Field, true)
-            .to_type_token();
-        let f_name = format_ident!("{}", config.name_rs(&field_info.name));
+    let fields = fields
+        .iter()
+        .filter(|f| f.is_const)
+        .filter_map(|field_info| {
+            let f_resolved_type = &field_info.field_ty;
+            let mut f_type = name_resolver
+                .resolve_name(cpp_type, f_resolved_type, TypeUsage::Field, true)
+                .to_type_token();
+            let f_name = format_ident!("{}", config.name_rs(&field_info.name));
 
-        if f_resolved_type.data == ResolvedTypeData::Primitive(Il2CppTypeEnum::String) {
-            f_type = parse_quote!(&'static str);
+            if f_resolved_type.data == ResolvedTypeData::Primitive(Il2CppTypeEnum::String) {
+                f_type = parse_quote!(&'static str);
+            }
+
+            // const fields with enum types not supported right now
+            // TODO:
+            if !cpp_type.is_enum_type && matches!(f_resolved_type.data, ResolvedTypeData::Type(_)) {
+                return None;
+            }
+
+            let def_value = field_info.value.as_ref();
+
+            let def_value = def_value.expect("Constant with no default value?");
+
+            let rs_def_value: syn::Expr = match def_value {
+                CsValue::String(s) => parse_quote! { #s },
+                CsValue::Bool(b) => parse_quote! { #b },
+                CsValue::U8(u) => parse_quote! { #u },
+                CsValue::U16(u) => parse_quote! { #u },
+                CsValue::U32(u) => parse_quote! { #u },
+                CsValue::U64(u) => parse_quote! { #u },
+                CsValue::I8(i) => parse_quote! { #i },
+                CsValue::I16(i) => parse_quote! { #i },
+                CsValue::I32(i) => parse_quote! { #i },
+                CsValue::I64(i) => parse_quote! { #i },
+                CsValue::F32(f) => match f {
+                    f if f.is_finite() => parse_quote! { #f },
+                    f if f.is_infinite() => {
+                        if f.is_sign_positive() {
+                            parse_quote! { std::f32::INFINITY }
+                        } else {
+                            parse_quote! { std::f32::NEG_INFINITY }
+                        }
+                    }
+                    f if f.is_nan() => parse_quote! { std::f64::NAN },
+                    _ => panic!("Unexpected f32 value: {}", f),
+                },
+                CsValue::F64(f) => match f {
+                    f if f.is_finite() => parse_quote! { #f },
+                    f if f.is_infinite() => {
+                        if f.is_sign_positive() {
+                            parse_quote! { std::f64::INFINITY }
+                        } else {
+                            parse_quote! { std::f64::NEG_INFINITY }
+                        }
+                    }
+                    f if f.is_nan() => parse_quote! { std::f64::NAN },
+                    _ => panic!("Unexpected f64 value: {}", f),
+                },
+                CsValue::Null => parse_quote! { Default::default() },
+                CsValue::Object(_) => todo!(),
+                CsValue::ValueType(_) => todo!(),
+            };
+
+            let cpp_field_template = ConstRustField {
+                name: f_name,
+                field_type: f_type,
+                visibility: Visibility::Public,
+                value: rs_def_value,
+            };
+
+            Some((cpp_field_template, field_info))
+        })
+        .sorted_by(|a, b| a.1.name.cmp(&b.1.name))
+        .collect_vec();
+
+    if cpp_type.is_enum_type {
+        // enums cannot have multiple entries with the same value
+        for f in fields
+            .into_iter()
+            .unique_by(|f| f.1.value.as_ref().unwrap().to_string())
+        {
+            cpp_type.constants.push(f.0);
         }
-
-        let def_value = field_info.value.as_ref();
-
-        let def_value = def_value.expect("Constant with no default value?");
-
-        let rs_def_value: syn::Expr = match def_value {
-            CsValue::String(s) => parse_quote! { #s },
-            CsValue::Bool(b) => parse_quote! { #b },
-            CsValue::U8(u) => parse_quote! { #u },
-            CsValue::U16(u) => parse_quote! { #u },
-            CsValue::U32(u) => parse_quote! { #u },
-            CsValue::U64(u) => parse_quote! { #u },
-            CsValue::I8(i) => parse_quote! { #i },
-            CsValue::I16(i) => parse_quote! { #i },
-            CsValue::I32(i) => parse_quote! { #i },
-            CsValue::I64(i) => parse_quote! { #i },
-            CsValue::F32(f) => match f {
-                f if f.is_finite() => parse_quote! { #f },
-                f if f.is_infinite() => {
-                    if f.is_sign_positive() {
-                        parse_quote! { std::f32::INFINITY }
-                    } else {
-                        parse_quote! { std::f32::NEG_INFINITY }
-                    }
-                }
-                f if f.is_nan() => parse_quote! { std::f64::NAN },
-                _ => panic!("Unexpected f32 value: {}", f),
-            },
-            CsValue::F64(f) => match f {
-                f if f.is_finite() => parse_quote! { #f },
-                f if f.is_infinite() => {
-                    if f.is_sign_positive() {
-                        parse_quote! { std::f64::INFINITY }
-                    } else {
-                        parse_quote! { std::f64::NEG_INFINITY }
-                    }
-                }
-                f if f.is_nan() => parse_quote! { std::f64::NAN },
-                _ => panic!("Unexpected f64 value: {}", f),
-            },
-            CsValue::Null => parse_quote! { Default::default() },
-            CsValue::Object(_) => todo!(),
-            CsValue::ValueType(_) => todo!(),
-        };
-
-        let cpp_field_template = ConstRustField {
-            name: f_name,
-            field_type: f_type,
-            visibility: Visibility::Public,
-            value: rs_def_value,
-        };
-
-        cpp_type.constants.push(cpp_field_template);
+    } else {
+        for f in fields {
+            cpp_type.constants.push(f.0);
+        }
     }
 }
 
