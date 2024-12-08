@@ -238,6 +238,7 @@ pub fn handle_static_fields(
                             #getter_call
             ,
                         }),
+            where_clause: None,
         };
 
         let setter_decl = RustFunction {
@@ -257,6 +258,7 @@ pub fn handle_static_fields(
             body: Some(parse_quote!(
                 #setter_call
             )),
+            where_clause: None,
         };
 
         // only push accessors if declaring ref type, or if static field

@@ -1,5 +1,6 @@
 use std::str::FromStr;
 
+use itertools::Itertools;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::parse_quote;
@@ -23,6 +24,22 @@ pub struct RustStruct {
 pub struct RustGeneric {
     pub name: String,
     pub bounds: Vec<String>,
+}
+
+impl RustGeneric {
+    pub fn to_token_stream(&self) -> syn::GenericParam {
+        let name = format_ident!("{}", self.name);
+        match self.bounds.is_empty() {
+            true => parse_quote!(#name),
+            false => {
+                let bounds = self
+                    .bounds
+                    .iter()
+                    .map(|b| -> syn::Type { syn::parse_str(b.as_str()).unwrap() });
+                parse_quote!(#name: #(#bounds)+*)
+            }
+        }
+    }
 }
 
 impl FromStr for RustGeneric {
@@ -89,6 +106,7 @@ pub struct RustFunction {
     pub return_type: Option<syn::Type>,
     pub body: Option<Vec<syn::Stmt>>,
     pub generics: Vec<RustGeneric>,
+    pub where_clause: Option<syn::WhereClause>,
 
     pub is_self: bool,
     pub is_ref: bool,
@@ -124,16 +142,15 @@ type Lifetime = String;
 impl RustFunction {
     pub fn to_token_stream(&self) -> TokenStream {
         let name: syn::Ident = format_ident!("{}", self.name);
-        let generics: Option<syn::Generics> =
-            match self.generics.is_empty() {
-                true => None,
-                false => {
-                    let generics = self.generics.iter().map(|g| -> syn::GenericParam {
-                                    syn::parse_str(g.to_string().as_str()).unwrap()
-                                });
-                    Some(parse_quote!(<#(#generics),*>))
-                },
-            };
+        let generics: Option<syn::Generics> = match self.generics.is_empty() {
+            true => None,
+            false => {
+                let generics = self.generics.iter().map(|g| -> syn::GenericParam {
+                    syn::parse_str(g.to_string().as_str()).unwrap()
+                });
+                Some(parse_quote!(<#(#generics),*>))
+            }
+        };
 
         let self_param: Option<syn::FnArg> = match self.is_self {
             true if self.is_mut && self.is_ref => Some(parse_quote! { &mut self }),
@@ -154,17 +171,18 @@ impl RustFunction {
             }
             None => parse_quote! {},
         };
+        let where_clause = &self.where_clause;
 
         let visibility = self.visibility.to_token_stream();
         let mut tokens = match self_param {
             Some(self_param) => {
                 quote! {
-                    #visibility fn #name #generics (#self_param, #(#params),*) #return_type
+                    #visibility fn #name #generics (#self_param, #(#params),*) #return_type #where_clause
                 }
             }
             None => {
                 quote! {
-                    #visibility fn #name #generics (#(#params),*) #return_type
+                    #visibility fn #name #generics (#(#params),*) #return_type #where_clause
                 }
             }
         };
