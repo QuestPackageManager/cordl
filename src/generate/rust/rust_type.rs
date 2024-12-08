@@ -866,14 +866,14 @@ impl RustType {
                 type Target = #parent_name;
 
                 fn deref(&self) -> &Self::Target {
-                    unsafe {&*self.#parent_field_ident}
+                    unsafe {&self.#parent_field_ident}
                 }
             }
 
             #feature
             impl #generics std::ops::DerefMut for #path_ident {
                 fn deref_mut(&mut self) -> &mut Self::Target {
-                    unsafe{ &mut *self.#parent_field_ident }
+                    unsafe{ &mut self.#parent_field_ident }
                 }
             }
 
@@ -1210,14 +1210,14 @@ impl RustType {
                 type Target = #parent_name;
 
                 fn deref(&self) -> &Self::Target {
-                    unsafe {&*self.#parent_field_ident}
+                    unsafe {&self.#parent_field_ident}
                 }
             }
 
             #feature
             impl #generics std::ops::DerefMut for #path_ident {
                 fn deref_mut(&mut self) -> &mut Self::Target {
-                    unsafe{ &mut *self.#parent_field_ident }
+                    unsafe{ &mut self.#parent_field_ident }
                 }
             }
 
