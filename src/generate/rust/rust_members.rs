@@ -103,8 +103,8 @@ pub struct RustParam {
 }
 
 #[derive(Clone)]
-pub struct RustTrait {
-    pub ty: syn::TypePath,
+pub struct RustTraitImpl {
+    pub impl_data: syn::ItemImpl,
 }
 
 #[derive(Clone)]

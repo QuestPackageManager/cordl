@@ -5,7 +5,7 @@ use color_eyre::eyre::{Context, ContextCompat, Result};
 use itertools::Itertools;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote, ToTokens};
-use syn::parse_quote;
+use syn::{parse, parse_quote};
 
 use crate::{
     data::{
@@ -29,8 +29,8 @@ use super::{
     config::RustGenerationConfig,
     rust_fields,
     rust_members::{
-        ConstRustField, RustFeature, RustField, RustFunction, RustGeneric, RustParam, RustTrait,
-        Visibility,
+        ConstRustField, RustFeature, RustField, RustFunction, RustGeneric, RustParam,
+        RustTraitImpl, Visibility,
     },
     rust_name_components::RustNameComponents,
     rust_name_resolver::RustNameResolver,
@@ -88,7 +88,7 @@ pub struct RustType {
     pub fields: Vec<RustField>,
     pub constants: Vec<ConstRustField>,
     pub methods: Vec<RustFunction>,
-    pub traits: Vec<RustTrait>,
+    pub traits: Vec<RustTraitImpl>,
     pub nested_types: Vec<syn::ItemType>,
 
     pub is_value_type: bool,
@@ -138,7 +138,7 @@ impl RustType {
                 .as_ref()
                 .map(|s| config.namespace_rs(s)),
             is_ref: false,
-            is_dyn: cs_type.is_interface,
+            is_dyn: false,
             is_ptr: cs_type.is_reference_type,
             is_mut: cs_type.is_reference_type, // value types don't need to be mutable
             ..Default::default()
@@ -181,10 +181,12 @@ impl RustType {
         name_resolver: &RustNameResolver,
         config: &RustGenerationConfig,
     ) {
-        self.make_parent(cs_type.parent.as_ref(), name_resolver);
-        if cs_type.namespace() == "System" && cs_type.name() == "Object" {
+        if cs_type.is_interface || cs_type.namespace() == "System" && cs_type.name() == "Object" {
             self.make_object_parent();
+        } else {
+            self.make_parent(cs_type.parent.as_ref(), name_resolver);
         }
+
         self.make_nested_types(&cs_type.nested_types, name_resolver);
         self.make_interfaces(&cs_type.interfaces, name_resolver, config);
 
@@ -194,6 +196,25 @@ impl RustType {
 
         if self.is_reference_type {
             self.make_ref_constructors(&cs_type.constructors, name_resolver, config);
+        }
+
+        if self.is_interface {
+            self.methods.push(RustFunction {
+                name: format_ident!("from_object_mut"),
+                body: Some(parse_quote! {
+                    Ok(unsafe{ (object_param as *mut Self) })
+                }),
+                generics: Default::default(),
+                is_mut: false,
+                is_ref: false,
+                is_self: false,
+                params: vec![RustParam {
+                    name: format_ident!("object_param"),
+                    param_type: parse_quote!(*mut quest_hook::libil2cpp::Il2CppObject),
+                }],
+                return_type: Some(parse_quote!(*mut Self)),
+                visibility: Visibility::Public,
+            });
         }
 
         // check if any method name matches more than once
@@ -367,10 +388,33 @@ impl RustType {
         name_resolver: &RustNameResolver,
         config: &RustGenerationConfig,
     ) {
+        return;
         for i in interfaces {
+            let self_ident = self.rs_name_components.to_type_path_token();
+
+            let generics = self.get_generics(0);
+
             let interface = name_resolver.resolve_name(self, i, TypeUsage::TypeName, true);
-            let rust_trait = RustTrait {
-                ty: interface.to_type_path_token(),
+            let interface_ident = interface.to_type_path_token();
+
+            let impl_data: Vec<syn::Stmt> = match self.is_reference_type {
+                true => parse_quote! {
+                    let obj: *mut quest_hook::libil2cpp::Il2CppObject = quest_hook::libil2cpp::ObjectType::as_object_mut(this);
+                    <#interface_ident>::from_object_mut(obj)
+                },
+                false => parse_quote! {
+                    // TODO: implement for value types
+                    todo!()
+                },
+            };
+            let rust_trait = RustTraitImpl {
+                impl_data: parse_quote! {
+                    impl #generics From<*mut #self_ident> for *mut #interface_ident {
+                        fn from(this: #self_ident) -> #interface_ident {
+                            #(#impl_data)*
+                        }
+                    }
+                },
             };
             self.traits.push(rust_trait);
         }
@@ -1003,25 +1047,11 @@ impl RustType {
             .traits
             .iter()
             .map(|t| -> syn::ItemImpl {
-                let ty = &t.ty;
+                let impl_data = &t.impl_data;
 
-                match generics.as_ref() {
-                    Some(generics) => {
-                        parse_quote! {
-                            impl #generics #ty for #path_ident {}
-                        }
-                    }
-                    None => {
-                        parse_quote! {
-                            impl #ty for #path_ident {}
-                        }
-                    }
-                }
-            })
-            .map(|i| {
-                quote! {
+                parse_quote! {
                     #feature
-                    #i
+                    #impl_data
                 }
             })
             .collect_vec();
@@ -1065,26 +1095,26 @@ impl RustType {
         Ok(())
     }
 
-    fn write_interface(&self, writer: &mut Writer, _config: &RustGenerationConfig) -> Result<()> {
-        let name_ident = self
-            .rs_name_components
-            .clone()
-            .remove_generics()
-            .to_name_ident();
+    fn write_interface(&self, writer: &mut Writer, config: &RustGenerationConfig) -> Result<()> {
+        let name_ident = self.rs_name_components.clone().to_name_ident();
+        let path_ident = self.rs_name_components.to_type_path_token();
+
         let generics = self.get_generics(0);
-        let methods = self
-            .methods
-            .iter()
-            .cloned()
-            .map(|mut f| {
-                f.body = f.body.or(Some(parse_quote! {
-                    todo!()
-                }));
-                f.visibility = Visibility::Private;
-                f
-            })
-            .map(|f| f.to_token_stream())
-            .map(|f| -> syn::ImplItemFn { parse_quote!(#f) });
+        let generics_names = self.get_generics_names(0);
+
+        let fields = self.fields.iter().map(|f| {
+            let f_name = format_ident!(r#"{}"#, f.name);
+            let f_ty = &f.field_type;
+            let f_visibility = match f.visibility {
+                Visibility::Public => quote! { pub },
+                Visibility::PublicCrate => quote! { pub(crate) },
+                Visibility::Private => quote! {},
+            };
+
+            quote! {
+                #f_visibility #f_name: #f_ty
+            }
+        });
 
         let cs_namespace = self
             .cs_name_components
@@ -1098,10 +1128,10 @@ impl RustType {
             .remove_generics()
             .combine_all();
 
-        // let quest_hook_path: syn::Path = parse_quote!(quest_hook::libil2cpp);
-        // let macro_invoke: syn::ItemMacro = parse_quote! {
-        //     #quest_hook_path::unsafe_impl_reference_type!(in #quest_hook_path for #name_ident => #cs_namespace.#cs_name_str #generics);
-        // };
+        let quest_hook_path: syn::Path = parse_quote!(quest_hook::libil2cpp);
+        let macro_invoke: syn::ItemMacro = parse_quote! {
+            #quest_hook_path::unsafe_impl_reference_type!(in #quest_hook_path for #path_ident => #cs_namespace.#cs_name_str #generics_names);
+        };
 
         let feature = self.self_feature.as_ref().map(|f| {
             let name = &f.name;
@@ -1110,24 +1140,55 @@ impl RustType {
             }
         });
 
-        let tokens = quote! {
+        let mut tokens = quote! {
             #feature
-            pub trait #name_ident #generics : quest_hook::libil2cpp::Type + Sized {
-                #(#methods)*
+            #[repr(C)]
+            #[derive(Debug)]
+            pub struct #name_ident {
+                #(#fields),*
             }
 
-            // #feature
-            // #macro_invoke
+            #feature
+            #macro_invoke
 
         };
 
+        if let Some(parent) = &self.parent {
+            let parent_name = parent.clone().to_type_path_token();
+            let parent_field_ident = format_ident!(r#"{}"#, PARENT_FIELD);
+
+            tokens.extend(quote! {
+            #feature
+            impl #generics std::ops::Deref for #path_ident {
+                type Target = #parent_name;
+
+                fn deref(&self) -> &Self::Target {
+                    unsafe {&*self.#parent_field_ident}
+                }
+            }
+
+            #feature
+            impl #generics std::ops::DerefMut for #path_ident {
+                fn deref_mut(&mut self) -> &mut Self::Target {
+                    unsafe{ &mut *self.#parent_field_ident }
+                }
+            }
+
+            });
+        }
+
         writer.write_pretty_tokens(tokens)?;
+
+        self.write_impl(writer, config)?;
 
         Ok(())
     }
 
     pub(crate) fn classof_name(&self) -> String {
-        format!("<{} as quest_hook::libil2cpp::Type>::class()", self.rs_name())
+        format!(
+            "<{} as quest_hook::libil2cpp::Type>::class()",
+            self.rs_name()
+        )
     }
 }
 
