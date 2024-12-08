@@ -432,6 +432,7 @@ impl RustType {
                 },
             };
             let rust_trait = RustTraitImpl {
+                name: interface.combine_all(),
                 impl_data: parse_quote! {
                     impl #generics From<*mut #self_ident> for *mut #interface_ident {
                         fn from(this: #self_ident) -> #interface_ident {
@@ -502,9 +503,7 @@ impl RustType {
                 params,
                 where_clause: None,
 
-                return_type: Some(parse_quote!(
-                    quest_hook::libil2cpp::Result<*mut Self>
-                )),
+                return_type: Some(parse_quote!(quest_hook::libil2cpp::Result<*mut Self>)),
                 visibility: (Visibility::Public),
             };
             self.methods.push(rust_func);
@@ -1058,19 +1057,24 @@ impl RustType {
 
         let generics = self.get_generics(0);
 
-        let const_fields = self.constants.iter().map(|f| -> syn::ImplItemConst {
-            let name = &f.name;
-            let val = &f.value;
-            let f_ty = &f.field_type;
+        let const_fields = self
+            .constants
+            .iter()
+            .sorted_by(|a, b| a.name.cmp(&b.name))
+            .map(|f| -> syn::ImplItemConst {
+                let name = &f.name;
+                let val = &f.value;
+                let f_ty = &f.field_type;
 
-            parse_quote! {
-                pub const #name: #f_ty = #val;
-            }
-        });
+                parse_quote! {
+                    pub const #name: #f_ty = #val;
+                }
+            });
 
         let methods = self
             .methods
             .iter()
+            .sorted_by(|a, b| a.name.cmp(&b.name))
             .cloned()
             .map(|mut f| {
                 f.body = f.body.or(Some(parse_quote! {
@@ -1093,6 +1097,7 @@ impl RustType {
         let other_impls = self
             .traits
             .iter()
+            .sorted_by(|a, b| a.name.cmp(&b.name))
             .map(|t| -> syn::ItemImpl {
                 let impl_data = &t.impl_data;
 

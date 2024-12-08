@@ -122,6 +122,7 @@ pub struct RustParam {
 
 #[derive(Clone)]
 pub struct RustTraitImpl {
+    pub name: String,
     pub impl_data: syn::ItemImpl,
 }
 
