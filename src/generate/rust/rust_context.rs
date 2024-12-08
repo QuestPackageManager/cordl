@@ -150,7 +150,7 @@ impl RustContext {
         for t in self
             .typedef_types
             .values()
-            .sorted_by(|a, b| a.name().cmp(b.name()))
+            .sorted_by(|a, b| a.rs_name().cmp(b.rs_name()))
         {
             if t.is_compiler_generated {
                 warn!("Skipping compiler generated type: {}", t.name());

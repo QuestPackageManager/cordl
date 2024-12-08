@@ -245,7 +245,7 @@ impl RustContextCollection {
             .collect();
 
         let feature_block = dependency_graph
-        // combine all features with same name that somehow exist
+            // combine all features with same name that somehow exist
             .into_iter()
             .into_group_map_by(|(t, _)| t.self_feature.as_ref().unwrap().name.clone())
             .into_iter()
@@ -263,6 +263,8 @@ impl RustContextCollection {
                 let dependencies = features
                     .iter()
                     .map(|s| format!("\"{}\"", s.name))
+                    // Sort so things don't break git diffs
+                    .sorted()
                     .join(", ");
 
                 let feature = format!("\"{feature_name}\" = [{dependencies}]",);
@@ -270,6 +272,7 @@ impl RustContextCollection {
                 feature
             })
             .unique()
+            // Sort so things don't break git diffs
             .sorted()
             .join("\n");
 
@@ -297,12 +300,15 @@ impl RustContextCollection {
                 return Ok(());
             }
 
-            let modules_paths = WalkDir::new(dir)
+            let mut modules_paths = WalkDir::new(dir)
                 .max_depth(1)
                 .min_depth(1)
                 .into_iter()
                 .map(|c| c.map(|entry| entry.into_path()))
                 .collect::<walkdir::Result<Vec<_>>>()?;
+
+            // Sort so things don't break git diffs
+            modules_paths.sort();
 
             if modules_paths.is_empty() {
                 return Ok(());
@@ -349,7 +355,9 @@ impl RustContextCollection {
             .truncate(false)
             .open(config.source_path.join("lib.rs"))?;
         let mut buf_writer = BufWriter::new(mod_file);
-        writeln!(buf_writer, "
+        writeln!(
+            buf_writer,
+            "
         #![feature(inherent_associated_types)]  
 
         #![allow(clippy::all)]
@@ -364,7 +372,8 @@ impl RustContextCollection {
         #![allow(clippy::case_sensitive_file_name)]
         #![allow(clippy::enum_variant_names)]
         #![allow(clippy::large_enum_variant)]
-        ")?;
+        "
+        )?;
         buf_writer.flush()?;
 
         make_mod_dir(&config.source_path, "lib.rs")?;
