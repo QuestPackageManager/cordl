@@ -299,13 +299,22 @@ pub(crate) fn handle_const_fields(
             if !cpp_type.is_enum_type && matches!(f_resolved_type.data, ResolvedTypeData::Type(_)) {
                 return None;
             }
-
             let def_value = field_info.value.as_ref();
 
             let def_value = def_value.expect("Constant with no default value?");
 
             let rs_def_value: syn::Expr = match def_value {
-                CsValue::String(s) => parse_quote! { #s },
+                CsValue::String(s) => {
+                    let new_s = s.replace("\\\\", "\\");
+
+                    let is_char =
+                        f_resolved_type.data == ResolvedTypeData::Primitive(Il2CppTypeEnum::Char);
+
+                    match is_char {
+                        true => syn::parse_str(format!("'{}'", new_s).as_str()).unwrap(),
+                        false => parse_quote! { #new_s },
+                    }
+                }
                 CsValue::Bool(b) => parse_quote! { #b },
                 CsValue::U8(u) => parse_quote! { #u },
                 CsValue::U16(u) => parse_quote! { #u },
