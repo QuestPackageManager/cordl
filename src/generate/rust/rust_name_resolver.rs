@@ -41,6 +41,8 @@ impl<'a, 'b> RustNameResolver<'a, 'b> {
                     name: "Il2CppArray".into(),
                     namespace: Some("quest_hook::libil2cpp".to_string()),
                     generics: Some(vec![generic_formatted.clone().into()]),
+                    is_ptr: true,
+                    is_mut: true,
 
                     ..Default::default()
                 }
