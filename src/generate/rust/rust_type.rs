@@ -205,7 +205,7 @@ impl RustType {
             self.methods.push(RustFunction {
                 name: format_ident!("from_object_mut"),
                 body: Some(parse_quote! {
-                    Ok(unsafe{ (object_param as *mut Self) })
+                    unsafe{ (object_param as *mut Self) }
                 }),
                 generics: Default::default(),
                 is_mut: false,
