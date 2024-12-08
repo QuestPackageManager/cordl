@@ -573,10 +573,11 @@ impl RustType {
                     i,
                 );
 
-                let m_ret_ty = name_resolver
-                    .resolve_name(self, &m.return_type, TypeUsage::ReturnType, true)
-                    .to_type_token();
-                let m_result_ty: syn::Type = parse_quote!(quest_hook::libil2cpp::Result<#m_ret_ty>);
+                let m_ret_ty =
+                    name_resolver.resolve_name(self, &m.return_type, TypeUsage::ReturnType, true);
+                let m_ret_ty_ident = m_ret_ty.to_type_token();
+                let m_result_ty: syn::Type =
+                    parse_quote!(quest_hook::libil2cpp::Result<#m_ret_ty_ident>);
 
                 let params = m
                     .parameters
@@ -586,16 +587,25 @@ impl RustType {
 
                 let param_names = params.iter().map(|p| &p.name);
 
-                let body = self.make_method_body(m, m_name, param_names, m_ret_ty);
+                let body = self.make_method_body(m, m_name, param_names, m_ret_ty_ident);
 
                 let generics = m
                     .template
                     .as_ref()
                     .map(|t| {
                         t.just_names()
-                            .map(|g| RustGeneric {
-                                name: g.clone(),
-                                bounds: vec!["quest_hook::libil2cpp::Type".to_string()],
+                            .map(|g| -> RustGeneric {
+                                // TODO: Add these bounds on demand
+                                let bounds = vec![
+                                    "quest_hook::libil2cpp::Type".to_string(),
+                                    "quest_hook::libil2cpp::Argument".to_owned(),
+                                    "quest_hook::libil2cpp::Returned".to_owned(),
+                                ];
+
+                                RustGeneric {
+                                    name: g.clone(),
+                                    bounds,
+                                }
                             })
                             .collect_vec()
                     })
