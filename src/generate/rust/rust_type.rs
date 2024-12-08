@@ -469,11 +469,11 @@ impl RustType {
             let param_names = params.iter().map(|p| &p.name);
 
             let body: Vec<syn::Stmt> = parse_quote! {
-                let object: &mut Self = <Self as quest_hook::libil2cpp::Type>::class().instantiate();
+                let __cordl_object: &mut Self = <Self as quest_hook::libil2cpp::Type>::class().instantiate();
 
-                quest_hook::libil2cpp::ObjectType::as_object_mut(object).invoke_void(".ctor", (#(#param_names),*))?;
+                quest_hook::libil2cpp::ObjectType::as_object_mut(__cordl_object).invoke_void(".ctor", (#(#param_names),*))?;
 
-                Ok(object)
+                Ok(__cordl_object)
             };
             let generics = c
                 .template
@@ -677,26 +677,21 @@ impl RustType {
     ) -> Vec<syn::Stmt> {
         let is_value_type = self.is_value_type || self.is_enum_type;
 
-        let obj_var: Vec<syn::Stmt> = match self.is_reference_type {
-            true => parse_quote! {
-                let obj: &mut quest_hook::libil2cpp::Il2CppObject = quest_hook::libil2cpp::ObjectType::as_object_mut(self);
-            },
-            false => parse_quote! {
-                let obj = self;
-            },
-        };
+
 
         let invoke_call: Vec<syn::Stmt> = match (m.instance, is_value_type) {
             // instance, value type
             (true, true) => parse_quote! {
 
-                let __cordl_ret: #m_ret_ty = quest_hook::libil2cpp::ValueTypeExt::invoke(obj, #m_name, ( #(#param_names),* ))?;
+                let __cordl_ret: #m_ret_ty = quest_hook::libil2cpp::ValueTypeExt::invoke(self, #m_name, ( #(#param_names),* ))?;
 
                 Ok(__cordl_ret)
             },
             // instance, ref type
             (true, false) => parse_quote! {
-                let __cordl_ret: #m_ret_ty = obj.invoke(#m_name, ( #(#param_names),* ))?;
+                let __cordl_object: &mut quest_hook::libil2cpp::Il2CppObject = quest_hook::libil2cpp::ObjectType::as_object_mut(self);
+
+                let __cordl_ret: #m_ret_ty = __cordl_object.invoke(#m_name, ( #(#param_names),* ))?;
 
                 Ok(__cordl_ret)
             },
@@ -709,7 +704,6 @@ impl RustType {
         };
 
         parse_quote! {
-            #(#obj_var)*
             #(#invoke_call)*
         }
     }
@@ -1005,7 +999,7 @@ impl RustType {
             #macro_invoke
 
             #feature
-            unsafe impl #quest_hook_path::ThisArgument for #path_ident {
+            unsafe impl #generics #quest_hook_path::ThisArgument for #path_ident {
                 type Type = Self;
 
                 fn matches(method: &#quest_hook_path::MethodInfo) -> bool {
