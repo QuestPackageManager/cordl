@@ -314,6 +314,7 @@ impl RustType {
         let nested_types = nested_types
             .iter()
             .filter_map(|tag| name_resolver.collection.get_cpp_type(*tag))
+            .sorted_by(|a, b| a.rs_name_components.name.cmp(&b.rs_name_components.name))
             .map(|rust_type| -> syn::ItemType {
                 let mut name = name_resolver
                     .config
@@ -775,10 +776,25 @@ impl RustType {
             return;
         };
 
-        let declaring_td = declaring_tag
+        let mut declaring_td = declaring_tag
             .get_tdi()
             .get_type_definition(metadata.metadata);
-        let declaring_name = declaring_td.get_name_components(metadata.metadata).name;
+        let mut declaring_name = declaring_td.get_name_components(metadata.metadata).name;
+
+        while declaring_td.declaring_type_index != u32::MAX {
+            let declaring_ty =
+                &metadata.metadata_registration.types[declaring_td.declaring_type_index as usize];
+
+            let declaring_tag =
+                cs_type_tag::CsTypeTag::from_type_data(declaring_ty.data, metadata.metadata);
+
+            declaring_td = declaring_tag
+                .get_tdi()
+                .get_type_definition(metadata.metadata);
+
+            let name = declaring_td.get_name_components(metadata.metadata).name;
+            declaring_name = format!("{declaring_name}_{name}",);
+        }
 
         let context_td = context_tag.get_tdi().get_type_definition(metadata.metadata);
         let declaring_namespace = context_td.namespace(metadata.metadata);
