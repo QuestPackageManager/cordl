@@ -409,6 +409,7 @@ impl RustType {
         name_resolver: &RustNameResolver,
         config: &RustGenerationConfig,
     ) {
+        // TODO: Implement AsMut
         return;
         for i in interfaces {
             let self_ident = self.rs_name_components.to_type_path_token();

@@ -56,7 +56,7 @@ impl<'a, 'b> RustNameResolver<'a, 'b> {
                         self.resolve_name(declaring_cpp_type, r, type_usage, *inc && hard_include)
                     })
                     .map(|n| n.combine_all())
-                    .map(|s| RustGeneric::from(s))
+                    .map(RustGeneric::from)
                     .collect_vec();
 
                 // add generics to type def
@@ -91,7 +91,16 @@ impl<'a, 'b> RustNameResolver<'a, 'b> {
                 //     name: "Ptr".into(),
                 //     ..Default::default()
                 // }
-                generic_formatted
+
+                // TODO: Ptr type
+                RustNameComponents {
+                    name: "Il2CppObject".into(),
+                    namespace: Some("quest_hook::libil2cpp".to_string()),
+                    is_ptr: true,
+                    is_mut: true,
+
+                    ..Default::default()
+                }
             }
             ResolvedTypeData::Type(resolved_tag) => {
                 self.get_type_from_tag(*resolved_tag, declaring_cpp_type, metadata)
