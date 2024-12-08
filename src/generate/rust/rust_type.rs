@@ -368,8 +368,9 @@ impl RustType {
         }
 
         rust_fields::handle_static_fields(self, fields, name_resolver, config);
-        rust_fields::handle_const_fields(self, fields, name_resolver, config);
-
+        if !self.is_enum_type {
+            rust_fields::handle_const_fields(self, fields, name_resolver, config);
+        }
         // for f in fields {
         //     if !f.instance || f.is_const {
         //         continue;
@@ -774,7 +775,7 @@ impl RustType {
             .get_tdi()
             .get_type_definition(metadata.metadata);
         let declaring_name = declaring_td.get_name_components(metadata.metadata).name;
-        
+
         let context_td = context_tag.get_tdi().get_type_definition(metadata.metadata);
         let declaring_namespace = context_td.namespace(metadata.metadata);
 
