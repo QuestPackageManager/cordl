@@ -315,12 +315,16 @@ impl RustType {
             .iter()
             .filter_map(|tag| name_resolver.collection.get_cpp_type(*tag))
             .map(|rust_type| -> syn::ItemType {
-                let name = format_ident!(
-                    "{}",
-                    name_resolver
-                        .config
-                        .name_rs(&rust_type.cs_name_components.name)
-                );
+                let mut name = name_resolver
+                    .config
+                    .name_rs(&rust_type.cs_name_components.name);
+
+                if name == "Target" {
+                    // avoid conflict with Deref
+                    name = "TargetType".to_string();
+                }
+
+                let name_ident = format_ident!("{name}",);
 
                 let target = rust_type.rs_name_components.to_type_path_token();
 
@@ -343,7 +347,7 @@ impl RustType {
 
                 parse_quote! {
                     #feature
-                    #visibility type #name #target_generics = #target;
+                    #visibility type #name_ident #target_generics = #target;
                 }
             });
 
