@@ -496,6 +496,30 @@ impl RustType {
                 })
                 .unwrap_or_default();
 
+            let combined_generics = self
+                .generics
+                .clone()
+                .unwrap_or_default()
+                .into_iter()
+                .chain(generics.clone().into_iter())
+                .map(|mut g| {
+                    // TODO: Add these bounds on demand
+                    let bounds = vec![
+                        "quest_hook::libil2cpp::Type".to_string(),
+                        "quest_hook::libil2cpp::Argument".to_owned(),
+                        "quest_hook::libil2cpp::Returned".to_owned(),
+                    ];
+
+                    g.bounds.extend(bounds);
+                    g
+                })
+                .map(|g| -> syn::GenericParam { g.to_token_stream() })
+                .collect_vec();
+
+            let where_clause: syn::WhereClause = parse_quote! {
+                where #(#combined_generics),*
+            };
+
             let rust_func = RustFunction {
                 name: format_ident!("{}", m_name_rs),
                 body: Some(body),
@@ -505,7 +529,7 @@ impl RustType {
                 is_ref: true,
                 is_self: false,
                 params,
-                where_clause: None,
+                where_clause: Some(where_clause),
 
                 return_type: Some(parse_quote!(quest_hook::libil2cpp::Result<*mut Self>)),
                 visibility: (Visibility::Public),
