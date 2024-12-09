@@ -106,12 +106,28 @@ impl<'a, 'b> RustNameResolver<'a, 'b> {
                 self.get_type_from_tag(*resolved_tag, declaring_cpp_type, metadata)
             }
             ResolvedTypeData::Primitive(s) if *s == Il2CppTypeEnum::String => {
-                let tag = CsTypeTag::TypeDefinitionIndex(self.cordl_metadata.string_tdi);
-                self.get_type_from_tag(tag, declaring_cpp_type, metadata)
+                RustNameComponents {
+                    name: "Il2CppString".into(),
+                    namespace: Some("quest_hook::libil2cpp".to_string()),
+                    is_mut: true,
+                    is_ptr: true,
+
+                    ..Default::default()
+                }
+                // let tag = CsTypeTag::TypeDefinitionIndex(self.cordl_metadata.string_tdi);
+                // self.get_type_from_tag(tag, declaring_cpp_type, metadata)
             }
             ResolvedTypeData::Primitive(s) if *s == Il2CppTypeEnum::Object => {
-                let tag = CsTypeTag::TypeDefinitionIndex(self.cordl_metadata.object_tdi);
-                self.get_type_from_tag(tag, declaring_cpp_type, metadata)
+                // let tag = CsTypeTag::TypeDefinitionIndex(self.cordl_metadata.object_tdi);
+                // self.get_type_from_tag(tag, declaring_cpp_type, metadata)
+                RustNameComponents {
+                    name: "Il2CppObject".into(),
+                    namespace: Some("quest_hook::libil2cpp".to_string()),
+                    is_mut: true,
+                    is_ptr: true,
+
+                    ..Default::default()
+                }
             }
             ResolvedTypeData::Primitive(s) if *s == Il2CppTypeEnum::Void => RustNameComponents {
                 name: "Void".into(),
