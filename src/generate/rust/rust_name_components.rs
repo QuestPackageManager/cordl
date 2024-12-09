@@ -64,6 +64,26 @@ impl RustNameComponents {
         completed
     }
 
+    pub fn wrap_by_gc(self) -> RustNameComponents {
+        if !self.is_ptr {
+            return self;
+        }
+
+        RustNameComponents {
+            namespace: Some("quest_hook::libil2cpp".to_owned()),
+            name: "Gc".to_string(),
+            generics: Some(vec![RustGeneric {
+                name: self.with_no_prefix().combine_all(),
+                ..Default::default()
+            }]),
+            is_ref: false,
+            is_ptr: false,
+            is_mut: false,
+            is_static_ref: false,
+            is_dyn: false,
+        }
+    }
+
     pub fn with_no_prefix(mut self) -> RustNameComponents {
         self.is_ref = false;
         self.is_ptr = false;

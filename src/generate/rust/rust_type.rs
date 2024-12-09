@@ -481,7 +481,7 @@ impl RustType {
 
                 quest_hook::libil2cpp::ObjectType::as_object_mut(__cordl_object).invoke_void(".ctor", (#(#param_names),*))?;
 
-                Ok(__cordl_object)
+                Ok(__cordl_object.into())
             };
             let generics = c
                 .template
@@ -531,7 +531,7 @@ impl RustType {
                 params,
                 where_clause: Some(where_clause),
 
-                return_type: Some(parse_quote!(quest_hook::libil2cpp::Result<*mut Self>)),
+                return_type: Some(parse_quote!(quest_hook::libil2cpp::Result<quest_hook::libil2cpp::Gc<Self>>)),
                 visibility: (Visibility::Public),
             };
             self.methods.push(rust_func);
@@ -625,8 +625,9 @@ impl RustType {
                     i,
                 );
 
-                let m_ret_ty =
-                    name_resolver.resolve_name(self, &m.return_type, TypeUsage::ReturnType, true);
+                let m_ret_ty = name_resolver
+                    .resolve_name(self, &m.return_type, TypeUsage::ReturnType, true)
+                    .wrap_by_gc();
                 let m_ret_ty_ident = m_ret_ty.to_type_token();
                 let m_result_ty: syn::Type =
                     parse_quote!(quest_hook::libil2cpp::Result<#m_ret_ty_ident>);
@@ -713,7 +714,7 @@ impl RustType {
 
                 let __cordl_ret: #m_ret_ty = quest_hook::libil2cpp::ValueTypeExt::invoke(self, #m_name, ( #(#param_names),* ))?;
 
-                Ok(__cordl_ret)
+                Ok(__cordl_ret.into())
             },
             // instance, ref type
             (true, false) => parse_quote! {
@@ -721,13 +722,13 @@ impl RustType {
 
                 let __cordl_ret: #m_ret_ty = __cordl_object.invoke(#m_name, ( #(#param_names),* ))?;
 
-                Ok(__cordl_ret)
+                Ok(__cordl_ret.into())
             },
             // static
             (false, _) => parse_quote! {
                 let __cordl_ret: #m_ret_ty = <Self as quest_hook::libil2cpp::Type>::class().invoke(#m_name, ( #(#param_names),* ) )?;
 
-                Ok(__cordl_ret)
+                Ok(__cordl_ret.into())
             },
         };
 
@@ -742,7 +743,9 @@ impl RustType {
         name_resolver: &RustNameResolver<'_, '_>,
         config: &RustGenerationConfig,
     ) -> RustParam {
-        let p_ty = name_resolver.resolve_name(self, &p.il2cpp_ty, TypeUsage::Field, true);
+        let p_ty = name_resolver
+            .resolve_name(self, &p.il2cpp_ty, TypeUsage::Field, true)
+            .wrap_by_gc();
         // let p_il2cpp_ty = p.il2cpp_ty.get_type(name_resolver.cordl_metadata);
 
         let name_rs = config.name_rs(&p.name);
