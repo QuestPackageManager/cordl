@@ -643,73 +643,14 @@ impl CppType {
 
         self.declarations.reserve(constructors.len());
         for ctor in constructors {
-            let m_params = ctor
+            let m_params_with_def = ctor
                 .parameters
-                .into_iter()
-                .map(|p| self.make_param(p, name_resolver, config))
-                .collect_vec();
-
-            let params_no_default = m_params
                 .iter()
-                .cloned()
-                .map(|mut c| {
-                    c.def_value = None;
-                    c
-                })
+                .map(|p| self.make_param(p.clone(), name_resolver, config))
                 .collect_vec();
 
-            let ty_full_cpp_name = self.cpp_name_components.combine_all();
-
-            let decl: CppMethodDecl = CppMethodDecl {
-                cpp_name: "New_ctor".into(),
-                return_type: ty_full_cpp_name.clone(),
-                parameters: params_no_default,
-                template: ctor.template.clone().map(|t| t.into()),
-                body: None, // TODO:
-                brief: None,
-                is_no_except: false,
-                is_constexpr: false,
-                instance: false,
-                is_const: false,
-                is_implicit_operator: false,
-                is_explicit_operator: false,
-
-                is_virtual: false,
-                is_inline: true,
-                prefix_modifiers: vec![],
-                suffix_modifiers: vec![],
-            };
-
-            // To avoid trailing ({},)
-            let base_ctor_params = CppParam::params_names(&decl.parameters).join(", ");
-
-            let allocate_call = format!(
-                "THROW_UNLESS(::il2cpp_utils::NewSpecific<{ty_full_cpp_name}>({base_ctor_params}))"
-            );
-
-            let declaring_template = if self
-                .cpp_template
-                .as_ref()
-                .is_some_and(|t| !t.names.is_empty())
-            {
-                self.cpp_template.clone()
-            } else {
-                None
-            };
-
-            let cpp_constructor_impl = CppMethodImpl {
-                body: vec![Arc::new(CppLine::make(format!("return {allocate_call};")))],
-
-                declaring_cpp_full_name: self.cpp_name_components.remove_pointer().combine_all(),
-                parameters: m_params.to_vec(),
-                template: declaring_template,
-                ..decl.clone().into()
-            };
-
-            self.implementations
-                .push(CppMember::MethodImpl(cpp_constructor_impl).into());
-
-            self.declarations.push(CppMember::MethodDecl(decl).into());
+            let template: Option<CppTemplate> = ctor.template.clone().map(|t| t.into());
+            self.create_ref_constructor(&m_params_with_def, template.as_ref());
         }
     }
 
@@ -922,10 +863,6 @@ impl CppType {
         // TODO: Add template<typename ...> if a generic inst e.g
         // T UnityEngine.Component::GetComponent<T>() -> bs_hook::Il2CppWrapperType UnityEngine.Component::GetComponent()
         let template = method.template.clone().map(|t| t.into());
-
-        if method.name == ".ctor" {
-            Self::create_ref_constructor(self, method, &m_params_with_def, &template);
-        }
 
         let mut cpp_ret_type =
             name_resolver.resolve_name(self, &method.return_type, TypeUsage::ReturnType, false);
@@ -2063,12 +2000,7 @@ impl CppType {
             .push(CppMember::ConstructorDecl(default_ctor).into());
     }
 
-    fn create_ref_constructor(
-        &mut self,
-        _method: &CsMethod,
-        m_params: &[CppParam],
-        template: &Option<CppTemplate>,
-    ) {
+    fn create_ref_constructor(&mut self, m_params: &[CppParam], template: Option<&CppTemplate>) {
         if self.is_value_type || self.is_enum_type {
             return;
         }
@@ -2088,7 +2020,7 @@ impl CppType {
             cpp_name: "New_ctor".into(),
             return_type: ty_full_cpp_name.clone(),
             parameters: params_no_default,
-            template: template.clone(),
+            template: template.cloned(),
             body: None, // TODO:
             brief: None,
             is_no_except: false,
