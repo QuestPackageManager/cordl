@@ -7,6 +7,8 @@ use crate::data::type_resolver::ResolvedType;
 
 use std::hash::Hash;
 
+use super::cs_type_tag::CsTypeTag;
+
 #[derive(Debug, Eq, Hash, PartialEq, Clone, Default, PartialOrd, Ord)]
 pub struct CsGenericTemplate {
     pub names: Vec<(CsGenericTemplateType, String)>,
@@ -204,8 +206,11 @@ pub struct CsMethod {
     pub parameters: Vec<CsParam>,
     pub instance: bool,
     pub template: Option<CsGenericTemplate>,
-    pub method_data: CsMethodData,
     pub brief: Option<String>,
+
+    pub declaring_type: CsTypeTag,
+
+    pub method_data: CsMethodData,
     pub method_flags: CSMethodFlags,
 }
 

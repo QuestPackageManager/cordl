@@ -785,6 +785,7 @@ impl CsType {
                 TypeUsage::ReturnType,
                 true,
             ),
+            declaring_type: method.declaring_type.into(),
             parameters: m_params_no_def.clone(),
             instance: !method.is_static_method(),
             template: template.clone(),
