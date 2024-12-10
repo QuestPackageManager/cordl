@@ -390,10 +390,9 @@ impl CppType {
                 }),
             generics: cs_name_components.generics.clone(),
             name: config.name_cpp(&cs_name_components.name),
-            namespace: cs_name_components
-                .namespace
-                .as_ref()
-                .map(|s| config.namespace_cpp(s)),
+            namespace: Some(
+                config.namespace_cpp(&cs_name_components.namespace.clone().unwrap_or_default()),
+            ),
             is_pointer: cs_type.is_reference_type,
         };
 
@@ -2017,7 +2016,7 @@ impl CppType {
         let ty_full_cpp_name = self.cpp_name_components.combine_all();
 
         let decl: CppMethodDecl = CppMethodDecl {
-            cpp_name: "New_ctor".into(),
+            cpp_name: "".into(),
             return_type: ty_full_cpp_name.clone(),
             parameters: params_no_default,
             template: template.cloned(),
