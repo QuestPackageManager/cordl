@@ -136,7 +136,7 @@ impl CppContext {
             let tdi = tag.get_tdi();
 
             let mut cpp_ty = CppType::make_cpp_type(*tag, ty, config);
-            cpp_ty.nested_fixup(ty, metadata, config);
+            cpp_ty.nested_fixup(context_tag, ty, metadata, config);
 
             if metadata.blacklisted_types.contains(&tdi) {
                 let result = match t.is_value_type() {

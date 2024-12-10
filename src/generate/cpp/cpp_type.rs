@@ -435,6 +435,7 @@ impl CppType {
 
     pub fn nested_fixup(
         &mut self,
+        context_tag: CsTypeTag,
         cs_type: &CsType,
         metadata: &CordlMetadata,
         config: &CppGenerationConfig,
@@ -444,12 +445,27 @@ impl CppType {
             return;
         };
 
-        let declaring_td = declaring_tag
+        let mut declaring_td = declaring_tag
             .get_tdi()
             .get_type_definition(metadata.metadata);
+        let mut declaring_name = declaring_td.get_name_components(metadata.metadata).name;
 
-        let declaring_name = declaring_td.get_name_components(metadata.metadata).name;
-        let declaring_namespace = declaring_td.namespace(metadata.metadata);
+        while declaring_td.declaring_type_index != u32::MAX {
+            let declaring_ty =
+                &metadata.metadata_registration.types[declaring_td.declaring_type_index as usize];
+
+            let declaring_tag = CsTypeTag::from_type_data(declaring_ty.data, metadata.metadata);
+
+            declaring_td = declaring_tag
+                .get_tdi()
+                .get_type_definition(metadata.metadata);
+
+            let name = declaring_td.get_name_components(metadata.metadata).name;
+            declaring_name = format!("{declaring_name}_{name}",);
+        }
+
+        let context_td = context_tag.get_tdi().get_type_definition(metadata.metadata);
+        let declaring_namespace = context_td.namespace(metadata.metadata);
 
         let combined_name = format!("{}_{}", declaring_name, self.name());
 
