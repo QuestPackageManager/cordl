@@ -211,7 +211,7 @@ pub(crate) fn handle_const_fields(
     };
 
     for field_info in fields.iter().filter(|f| f.is_const) {
-        let cpp_field_template = make_cpp_field_decl(cpp_type, field_info, name_resolver, config);
+        let mut cpp_field_template = make_cpp_field_decl(cpp_type, field_info, name_resolver, config);
         let f_resolved_type = &field_info.field_ty;
         let f_type = field_info.field_ty.get_type(metadata);
         let f_name = &field_info.name;
@@ -221,6 +221,13 @@ pub(crate) fn handle_const_fields(
         let def_value = field_info.value.as_ref();
 
         let def_value = def_value.expect("Constant with no default value?");
+
+        if matches!(
+            f_resolved_type.data,
+            ResolvedTypeData::Primitive(Il2CppTypeEnum::String)
+        ) {
+            cpp_field_template.field_ty = "::ConstString".to_owned();
+        }
 
         match f_resolved_type.data {
             ResolvedTypeData::Primitive(_) => {

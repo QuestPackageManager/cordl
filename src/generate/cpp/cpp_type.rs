@@ -2165,7 +2165,7 @@ impl CppType {
 impl ToString for CsValue {
     fn to_string(&self) -> String {
         match self {
-            CsValue::String(s) => format!("\"{s}\""),
+            CsValue::String(s) => format!("u\"{s}\""),
             CsValue::Bool(v) => match v {
                 true => "true",
                 false => "false",
