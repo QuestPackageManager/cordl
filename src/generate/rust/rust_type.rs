@@ -416,7 +416,6 @@ impl RustType {
         config: &RustGenerationConfig,
     ) {
         // TODO: Implement AsMut
-        return;
         for i in interfaces {
             let self_ident = self.rs_name_components.to_type_path_token();
 
@@ -427,25 +426,35 @@ impl RustType {
 
             let impl_data: Vec<syn::Stmt> = match self.is_reference_type {
                 true => parse_quote! {
-                    let obj: *mut quest_hook::libil2cpp::Il2CppObject = quest_hook::libil2cpp::ObjectType::as_object_mut(this);
-                    <#interface_ident>::from_object_mut(obj)
+                    unsafe { std::mem::transmute(self) }
                 },
                 false => parse_quote! {
                     // TODO: implement for value types
                     todo!()
                 },
             };
-            let rust_trait = RustTraitImpl {
+            let as_ref = RustTraitImpl {
                 name: interface.combine_all(),
                 impl_data: parse_quote! {
-                    impl #generics From<*mut #self_ident> for *mut #interface_ident {
-                        fn from(this: #self_ident) -> #interface_ident {
+                    impl #generics AsRef<#interface_ident> for #self_ident {
+                        fn as_ref(&self) -> & #interface_ident {
                             #(#impl_data)*
                         }
                     }
                 },
             };
-            self.traits.push(rust_trait);
+            let as_mut = RustTraitImpl {
+                name: interface.combine_all(),
+                impl_data: parse_quote! {
+                    impl #generics AsMut<#interface_ident> for #self_ident {
+                        fn as_mut(&mut self) -> &mut #interface_ident {
+                            #(#impl_data)*
+                        }
+                    }
+                },
+            };
+            self.traits.push(as_ref);
+            self.traits.push(as_mut);
         }
     }
 
