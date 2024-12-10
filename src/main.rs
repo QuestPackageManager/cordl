@@ -404,7 +404,7 @@ fn main() -> color_eyre::Result<()> {
         TargetLang::Cpp => {
             use generate::cpp;
 
-            cpp::cpp_main::run_cpp(cs_context_collection, &metadata)?;
+            cpp::cpp_main::run_cpp(cs_context_collection, &metadata, cli.format)?;
             Ok(())
         }
         #[cfg(feature = "json")]
