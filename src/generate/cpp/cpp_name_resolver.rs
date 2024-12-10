@@ -94,68 +94,23 @@ impl<'a, 'b> CppNameResolver<'a, 'b> {
                     ..Default::default()
                 }
             }
-            ResolvedTypeData::Type(resolved_tag) => {
-                if *resolved_tag == declaring_cpp_type.self_tag {
-                    return declaring_cpp_type.cpp_name_components.clone();
-                }
-
-                let resolved_context_root_tag = self.collection.get_context_root_tag(*resolved_tag);
-                let self_context_root_tag = self
-                    .collection
-                    .get_context_root_tag(declaring_cpp_type.self_tag);
-
-                let incl_context = self
-                    .collection
-                    .get_context(*resolved_tag)
-                    .unwrap_or_else(|| panic!("Unable to find type {ty:#?}"));
-                let incl_ty = self
-                    .collection
-                    .get_cpp_type(*resolved_tag)
-                    .unwrap_or_else(|| {
-                        let td = &metadata.metadata.global_metadata.type_definitions
-                            [resolved_tag.get_tdi()];
-
-                        println!(
-                            "ty {resolved_tag:#?} vs aliased {:#?}",
-                            self.collection.alias_context.get(resolved_tag)
-                        );
-                        println!("{}", incl_context.fundamental_path.display());
-                        panic!(
-                            "Unable to find type {ty:#?} {}",
-                            td.full_name(metadata.metadata, true)
-                        );
-                    });
-
-                if hard_include {
-                    declaring_cpp_type.requirements.add_dependency(incl_ty);
-                }
-
-                let is_own_context = resolved_context_root_tag == self_context_root_tag;
-
-                if !is_own_context {
-                    match hard_include {
-                        // can add include
-                        true => {
-                            declaring_cpp_type.requirements.add_def_include(
-                                Some(incl_ty),
-                                CppInclude::new_context_typedef(incl_context),
-                            );
-                            declaring_cpp_type.requirements.add_impl_include(
-                                Some(incl_ty),
-                                CppInclude::new_context_typeimpl(incl_context),
-                            );
-                        }
-                        // add forward declare
-                        false => {
-                            declaring_cpp_type.requirements.add_forward_declare((
-                                CppForwardDeclare::from_cpp_type(incl_ty),
-                                CppInclude::new_context_typedef(incl_context),
-                            ));
-                        }
-                    }
-                }
-
-                self.resolve_redirect(incl_ty, type_usage)
+            ResolvedTypeData::Type(resolved_tag) => self.resolve_type(
+                resolved_tag,
+                declaring_cpp_type,
+                metadata,
+                hard_include,
+                type_usage,
+            ),
+            ResolvedTypeData::Primitive(il2_cpp_type_enum)
+                if *il2_cpp_type_enum == Il2CppTypeEnum::Object =>
+            {
+                self.resolve_type(
+                    &metadata.object_tdi.into(),
+                    declaring_cpp_type,
+                    metadata,
+                    hard_include,
+                    type_usage,
+                )
             }
             ResolvedTypeData::Primitive(il2_cpp_type_enum) => {
                 let requirements = &mut declaring_cpp_type.requirements;
@@ -195,7 +150,6 @@ impl<'a, 'b> CppNameResolver<'a, 'b> {
                     Il2CppTypeEnum::Void => "void".to_string(),
                     Il2CppTypeEnum::Boolean => "bool".to_string(),
                     Il2CppTypeEnum::Char => "char16_t".to_string(),
-                    Il2CppTypeEnum::Object => "void*".to_string(),
 
                     Il2CppTypeEnum::String => {
                         requirements.needs_stringw_include();
@@ -238,6 +192,71 @@ impl<'a, 'b> CppNameResolver<'a, 'b> {
                 }
             }
         }
+    }
+
+    fn resolve_type(
+        &self,
+        resolved_tag: &crate::generate::cs_type_tag::CsTypeTag,
+        declaring_cpp_type: &mut CppType,
+        metadata: &CordlMetadata<'b>,
+        hard_include: bool,
+        type_usage: TypeUsage,
+    ) -> CppNameComponents {
+        if *resolved_tag == declaring_cpp_type.self_tag {
+            return declaring_cpp_type.cpp_name_components.clone();
+        }
+        let resolved_context_root_tag = self.collection.get_context_root_tag(*resolved_tag);
+        let self_context_root_tag = self
+            .collection
+            .get_context_root_tag(declaring_cpp_type.self_tag);
+        let incl_context = self
+            .collection
+            .get_context(*resolved_tag)
+            .unwrap_or_else(|| panic!("Unable to find type {resolved_tag:#?}"));
+        let incl_ty = self
+            .collection
+            .get_cpp_type(*resolved_tag)
+            .unwrap_or_else(|| {
+                let td =
+                    &metadata.metadata.global_metadata.type_definitions[resolved_tag.get_tdi()];
+
+                println!(
+                    "ty {resolved_tag:#?} vs aliased {:#?}",
+                    self.collection.alias_context.get(resolved_tag)
+                );
+                println!("{}", incl_context.fundamental_path.display());
+                panic!(
+                    "Unable to find type {resolved_tag:#?} {}",
+                    td.full_name(metadata.metadata, true)
+                );
+            });
+        if hard_include {
+            declaring_cpp_type.requirements.add_dependency(incl_ty);
+        }
+        let is_own_context = resolved_context_root_tag == self_context_root_tag;
+        if !is_own_context {
+            match hard_include {
+                // can add include
+                true => {
+                    declaring_cpp_type.requirements.add_def_include(
+                        Some(incl_ty),
+                        CppInclude::new_context_typedef(incl_context),
+                    );
+                    declaring_cpp_type.requirements.add_impl_include(
+                        Some(incl_ty),
+                        CppInclude::new_context_typeimpl(incl_context),
+                    );
+                }
+                // add forward declare
+                false => {
+                    declaring_cpp_type.requirements.add_forward_declare((
+                        CppForwardDeclare::from_cpp_type(incl_ty),
+                        CppInclude::new_context_typedef(incl_context),
+                    ));
+                }
+            }
+        }
+        self.resolve_redirect(incl_ty, type_usage)
     }
 
     fn resolve_redirect(&self, incl_ty: &CppType, type_usage: TypeUsage) -> CppNameComponents {
