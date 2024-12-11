@@ -2032,7 +2032,7 @@ impl CppType {
         let ty_full_cpp_name = self.cpp_name_components.combine_all();
 
         let decl: CppMethodDecl = CppMethodDecl {
-            cpp_name: "".into(),
+            cpp_name: "New_ctor".into(),
             return_type: ty_full_cpp_name.clone(),
             parameters: params_no_default,
             template: template.cloned(),
