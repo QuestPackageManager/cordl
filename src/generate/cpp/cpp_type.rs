@@ -2113,6 +2113,7 @@ impl ToString for CsValue {
     fn to_string(&self) -> String {
         match self {
             CsValue::String(s) => format!("u\"{s}\""),
+            CsValue::Char(s) => format!("u'{s}'"),
             CsValue::Bool(v) => match v {
                 true => "true",
                 false => "false",
@@ -2138,7 +2139,7 @@ impl ToString for CsValue {
                 }
                 // make it include at least one decimal place
 
-                format!("static_cast<float_t>({f:1}f)")
+                format!("static_cast<float_t>({f:.1}f)")
             }
             CsValue::F64(f) => {
                 if *f == f64::INFINITY {
@@ -2151,7 +2152,7 @@ impl ToString for CsValue {
                     return "NAN".to_owned();
                 }
 
-                format!("static_cast<double_t>({f:1})")
+                format!("static_cast<double_t>({f:.1})")
             }
             CsValue::Object(_bytes) => todo!(),
             CsValue::ValueType(_bytes) => todo!(),

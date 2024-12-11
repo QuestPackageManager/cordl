@@ -307,14 +307,11 @@ pub(crate) fn handle_const_fields(
                 CsValue::String(s) => {
                     let new_s = s.replace("\\\\", "\\");
 
-                    let is_char =
-                        f_resolved_type.data == ResolvedTypeData::Primitive(Il2CppTypeEnum::Char);
-
-                    match is_char {
-                        true => syn::parse_str(format!("'{}'", new_s).as_str()).unwrap(),
-                        false => parse_quote! { #new_s },
-                    }
+                    parse_quote! { #new_s }
                 }
+                CsValue::Char(c) => {
+                    syn::parse_str(format!("'{}'", c).as_str()).unwrap()
+                },
                 CsValue::Bool(b) => parse_quote! { #b },
                 CsValue::U8(u) => parse_quote! { #u },
                 CsValue::U16(u) => parse_quote! { #u },
