@@ -2138,7 +2138,7 @@ impl ToString for CsValue {
                 }
                 // make it include at least one decimal place
 
-                format!("static_cast<float_32>({f:1}f)")
+                format!("static_cast<float_t>({f:1}f)")
             }
             CsValue::F64(f) => {
                 if *f == f64::INFINITY {
@@ -2151,7 +2151,7 @@ impl ToString for CsValue {
                     return "NAN".to_owned();
                 }
 
-                format!("static_cast<float_64>({f:1})")
+                format!("static_cast<double_t>({f:1})")
             }
             CsValue::Object(_bytes) => todo!(),
             CsValue::ValueType(_bytes) => todo!(),
