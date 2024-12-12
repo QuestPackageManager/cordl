@@ -863,7 +863,7 @@ impl CsType {
                     .escape_default()
                     .to_string();
 
-                CsValue::Char(res.chars().next().unwrap())
+                CsValue::Char(res)
             }
             Il2CppTypeEnum::String => {
                 let stru16_len = cursor.read_compressed_i32::<Endian>().unwrap();

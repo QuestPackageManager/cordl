@@ -93,7 +93,7 @@ pub struct CsMethodSizeData {
 #[derive(Clone, Debug, PartialEq, PartialOrd)]
 pub enum CsValue {
     String(String),
-    Char(char),
+    Char(String),
     Bool(bool),
 
     U8(u8),
