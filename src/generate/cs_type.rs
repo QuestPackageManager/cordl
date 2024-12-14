@@ -766,7 +766,17 @@ impl CsType {
             flag = flag.union(CSMethodFlags::SPECIAL_NAME);
         }
 
-        let mut method_decl = CsMethod {
+        // don't emit method size structs for generic methods
+        let is_concrete = !method.is_abstract_method();
+        let method_data = CsMethodData {
+            addrs: is_concrete.then(|| method_calc.map(|c| c.addrs)).flatten(),
+            estimated_size: is_concrete
+                .then(|| method_calc.map(|c| c.estimated_size))
+                .flatten(),
+            slot: (method.slot != u16::MAX).then_some(method.slot),
+        };
+
+        let method_decl = CsMethod {
             brief: format!(
                 "Method {m_name}, addr 0x{:x}, size 0x{:x}, virtual {}, abstract: {}, final {}",
                 method_calc.map(|m| m.addrs).unwrap_or(u64::MAX),
@@ -789,7 +799,7 @@ impl CsType {
             parameters: m_params_no_def.clone(),
             instance: !method.is_static_method(),
             template: template.clone(),
-            method_data: Default::default(),
+            method_data: method_data,
         };
 
         // if type is a generic
@@ -797,16 +807,6 @@ impl CsType {
             .generic_template
             .as_ref()
             .is_some_and(|t| !t.names.is_empty());
-
-        // don't emit method size structs for generic methods
-        if let Some(method_calc) = method_calc {
-            let is_concrete = !method.is_abstract_method();
-            method_decl.method_data = CsMethodData {
-                addrs: is_concrete.then_some(method_calc.addrs),
-                estimated_size: is_concrete.then_some(method_calc.estimated_size),
-                slot: (method.slot != u16::MAX).then_some(method.slot),
-            }
-        }
 
         if method.name(metadata.metadata) == ".ctor" {
             let constructor = CsConstructor {
