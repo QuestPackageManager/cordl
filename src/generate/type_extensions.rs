@@ -235,14 +235,6 @@ impl TypeDefinitionExtensions for Il2CppTypeDefinition {
             return true;
         }
 
-        if self.get_name_components(metadata).name == "Object" {
-            println!(
-                "{:?} {:?}",
-                self.get_name_components(metadata),
-                parent_ty.ty
-            );
-        }
-
         // if object, clearly this does not inherit `other_td`
         if !matches!(
             parent_ty.ty,
