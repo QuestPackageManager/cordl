@@ -2,6 +2,7 @@ use std::{
     collections::{HashMap, HashSet},
     rc::Rc,
     sync::Arc,
+    usize,
 };
 
 use brocolib::global_metadata::{FieldIndex, MethodIndex, TypeDefinitionIndex};
@@ -1097,67 +1098,66 @@ impl CppType {
             .is_some_and(|t| !t.names.is_empty());
 
         // don't emit method size structs for generic methods
-        if let Some(addr) = &method.method_data.addrs
-            && let Some(size) = method.method_data.estimated_size
-        {
-            let il2cpp_method = &metadata.metadata.global_metadata.methods[method.method_index];
-            let declaring_tdi = &il2cpp_method.declaring_type;
-            let declaring_td = declaring_tdi.get_type_definition(metadata.metadata);
-            let declaring_tag: CsTypeTag = CsTypeTag::TypeDefinitionIndex(*declaring_tdi);
+        let addr = method.method_data.addrs.unwrap_or(u64::MAX);
+        let size = method.method_data.estimated_size.unwrap_or(usize::MAX);
 
-            let resolved_generic_types = self
-                .method_generic_instantiation_map
-                .get(&method.method_index)
-                .cloned()
-                .map(|g| {
-                    g.iter()
-                        .map(|t| name_resolver.resolve_name(self, t, TypeUsage::TypeName, false))
-                        .map(|n| n.combine_all())
-                        .collect_vec()
-                });
+        let il2cpp_method = &metadata.metadata.global_metadata.methods[method.method_index];
+        let declaring_tdi = &il2cpp_method.declaring_type;
+        let declaring_td = declaring_tdi.get_type_definition(metadata.metadata);
+        let declaring_tag: CsTypeTag = CsTypeTag::TypeDefinitionIndex(*declaring_tdi);
 
-            let interface_declaring_cpp_type: Option<&CppType> =
-                if *declaring_tdi == self.self_tag.get_tdi() {
-                    Some(self)
-                } else {
-                    name_resolver.collection.get_cpp_type(declaring_tag)
-                };
+        let resolved_generic_types = self
+            .method_generic_instantiation_map
+            .get(&method.method_index)
+            .cloned()
+            .map(|g| {
+                g.iter()
+                    .map(|t| name_resolver.resolve_name(self, t, TypeUsage::TypeName, false))
+                    .map(|n| n.combine_all())
+                    .collect_vec()
+            });
 
-            let has_template_args = self
-                .cpp_template
-                .as_ref()
-                .is_some_and(|t| !t.names.is_empty());
+        let interface_declaring_cpp_type: Option<&CppType> =
+            if *declaring_tdi == self.self_tag.get_tdi() {
+                Some(self)
+            } else {
+                name_resolver.collection.get_cpp_type(declaring_tag)
+            };
 
-            // don't emit method size structs for generic methods
-            if template.is_none() && !has_template_args && !is_generic_method_inst {
-                self.nonmember_implementations
-                    .push(Arc::new(CppNonMember::SizeStruct(
-                        CppMethodSizeStruct {
-                            ret_ty: method_decl.return_type.clone(),
-                            cpp_method_name: method_decl.cpp_name.clone(),
-                            method_name: m_name.to_string(),
-                            declaring_type_name: method_impl.declaring_cpp_full_name.clone(),
-                            declaring_classof_call,
-                            method_info_lines,
-                            method_info_var: METHOD_INFO_VAR_NAME.to_string(),
-                            instance: method_decl.instance,
-                            params: method_decl.parameters.clone(),
-                            declaring_template: self.cpp_template.clone(),
-                            template: template.clone(),
-                            generic_literals: resolved_generic_types,
-                            method_data: CppMethodData {
-                                addrs: *addr,
-                                estimated_size: size,
-                            },
-                            interface_clazz_of: interface_declaring_cpp_type
-                                .map(|d| d.classof_cpp_name())
-                                .unwrap_or_else(|| format!("Bad stuff happened {declaring_td:?}")),
-                            is_final,
-                            slot: method.method_data.slot,
-                        }
-                        .into(),
-                    )));
-            }
+        let has_template_args = self
+            .cpp_template
+            .as_ref()
+            .is_some_and(|t| !t.names.is_empty());
+
+        // don't emit method size structs for generic methods
+        if template.is_none() && !has_template_args && !is_generic_method_inst {
+            self.nonmember_implementations
+                .push(Arc::new(CppNonMember::SizeStruct(
+                    CppMethodSizeStruct {
+                        ret_ty: method_decl.return_type.clone(),
+                        cpp_method_name: method_decl.cpp_name.clone(),
+                        method_name: m_name.to_string(),
+                        declaring_type_name: method_impl.declaring_cpp_full_name.clone(),
+                        declaring_classof_call,
+                        method_info_lines,
+                        method_info_var: METHOD_INFO_VAR_NAME.to_string(),
+                        instance: method_decl.instance,
+                        params: method_decl.parameters.clone(),
+                        declaring_template: self.cpp_template.clone(),
+                        template: template.clone(),
+                        generic_literals: resolved_generic_types,
+                        method_data: CppMethodData {
+                            addrs: addr,
+                            estimated_size: size,
+                        },
+                        interface_clazz_of: interface_declaring_cpp_type
+                            .map(|d| d.classof_cpp_name())
+                            .unwrap_or_else(|| format!("Bad stuff happened {declaring_td:?}")),
+                        is_final,
+                        slot: method.method_data.slot,
+                    }
+                    .into(),
+                )));
         }
 
         // TODO: Revise this
