@@ -56,7 +56,12 @@ impl<'a, 'b> CppNameResolver<'a, 'b> {
                 let generic_types_formatted = vec
                     .iter()
                     .map(|(r, inc)| {
-                        self.resolve_name(declaring_cpp_type, r, type_usage, *inc && hard_include)
+                        self.resolve_name(
+                            declaring_cpp_type,
+                            r,
+                            TypeUsage::GenericArg,
+                            *inc && hard_include,
+                        )
                     })
                     .map(|n| n.combine_all())
                     .collect_vec();
@@ -203,7 +208,7 @@ impl<'a, 'b> CppNameResolver<'a, 'b> {
         type_usage: TypeUsage,
     ) -> CppNameComponents {
         if *resolved_tag == declaring_cpp_type.self_tag {
-            return declaring_cpp_type.cpp_name_components.clone();
+            return self.resolve_redirect(declaring_cpp_type, type_usage);
         }
         let resolved_context_root_tag = self.collection.get_context_root_tag(*resolved_tag);
         let self_context_root_tag = self
