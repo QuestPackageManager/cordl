@@ -1,27 +1,24 @@
 use std::collections::HashSet;
 
-use brocolib::runtime_metadata::Il2CppTypeEnum;
 use color_eyre::eyre::{Context, ContextCompat, Result};
 use itertools::Itertools;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote, ToTokens};
-use syn::{parse, parse_quote};
+use syn::parse_quote;
 
 use crate::{
     data::{
         name_components::NameComponents,
-        type_resolver::{ResolvedType, ResolvedTypeData, TypeUsage},
+        type_resolver::{ResolvedType, TypeUsage},
     },
     generate::{
-        cs_members::{
-            CsConstructor, CsField, CsGenericTemplate, CsGenericTemplateType, CsMethod, CsParam,
-        },
+        cs_members::{CsConstructor, CsField, CsMethod, CsParam},
         cs_type::CsType,
         cs_type_tag::{self, CsTypeTag},
         metadata::CordlMetadata,
         offsets::SizeInfo,
         type_extensions::{TypeDefinitionExtensions, TypeDefinitionIndexExtensions},
-        writer::{Writable, Writer},
+        writer::Writer,
     },
 };
 
@@ -540,7 +537,9 @@ impl RustType {
                 params,
                 where_clause: Some(where_clause),
 
-                return_type: Some(parse_quote!(quest_hook::libil2cpp::Result<quest_hook::libil2cpp::Gc<Self>>)),
+                return_type: Some(parse_quote!(
+                    quest_hook::libil2cpp::Result<quest_hook::libil2cpp::Gc<Self>>
+                )),
                 visibility: (Visibility::Public),
             };
             self.methods.push(rust_func);

@@ -503,7 +503,7 @@ impl CsType {
                 let f_offset = get_offset(field, i, &mut offset_iter, field_offsets, metadata, t);
 
                 // calculate / fetch the field size
-                let f_size = get_size(field, self.generic_instantiations_args_types.as_ref(), &metadata);
+                let f_size = get_size(field, self.generic_instantiations_args_types.as_ref(), metadata);
 
 
                 // TODO: Check a flag to look for default values to speed this up
@@ -799,7 +799,7 @@ impl CsType {
             parameters: m_params_no_def.clone(),
             instance: !method.is_static_method(),
             template: template.clone(),
-            method_data: method_data,
+            method_data,
         };
 
         // if type is a generic

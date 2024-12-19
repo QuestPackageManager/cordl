@@ -5,8 +5,6 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::parse_quote;
 
-use super::rust_name_components::RustNameComponents;
-
 #[derive(Clone, Debug, Default)]
 pub enum Visibility {
     Public,

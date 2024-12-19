@@ -1,16 +1,13 @@
 use brocolib::{global_metadata::TypeDefinitionIndex, runtime_metadata::Il2CppTypeEnum};
 use itertools::Itertools;
 use log::warn;
-use quote::{format_ident, quote, ToTokens};
-use rayon::vec;
+use quote::{format_ident, quote};
 use syn::parse_quote;
 
 use crate::{
     data::type_resolver::{ResolvedTypeData, TypeUsage},
     generate::{
-        cpp,
         cs_members::{CsField, CsValue},
-        cs_type_tag::CsTypeTag,
         metadata::CordlMetadata,
         type_extensions::{TypeDefinitionExtensions, TypeDefinitionIndexExtensions},
     },
@@ -309,9 +306,7 @@ pub(crate) fn handle_const_fields(
 
                     parse_quote! { #new_s }
                 }
-                CsValue::Char(c) => {
-                    syn::parse_str(format!("'{}'", c).as_str()).unwrap()
-                },
+                CsValue::Char(c) => syn::parse_str(format!("'{}'", c).as_str()).unwrap(),
                 CsValue::Bool(b) => parse_quote! { #b },
                 CsValue::U8(u) => parse_quote! { #u },
                 CsValue::U16(u) => parse_quote! { #u },

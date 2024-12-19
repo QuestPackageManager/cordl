@@ -68,7 +68,7 @@ pub struct JsonMethod {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JsonMethodInfo {
-        pub estimated_size: Option<usize>,
+    pub estimated_size: Option<usize>,
     pub addrs: Option<u64>,
     pub slot: Option<u16>,
 }
@@ -149,7 +149,6 @@ fn make_method(method: &CsMethod, name_resolver: &JsonNameResolver) -> JsonMetho
         .iter()
         .map(|p| make_param(p, name_resolver))
         .collect_vec();
-
 
     let json_method_info = JsonMethodInfo {
         addrs: method.method_data.addrs,

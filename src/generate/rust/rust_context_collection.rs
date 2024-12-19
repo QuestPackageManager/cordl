@@ -5,18 +5,16 @@ use std::{
     io::{BufWriter, Write},
 };
 
-use color_eyre::owo_colors::colors::Default;
 use rayon::prelude::*;
 
 use itertools::Itertools;
 use log::{info, trace};
-use pathdiff::diff_paths;
 use rayon::iter::ParallelIterator;
 use walkdir::WalkDir;
 
 use crate::generate::{
     cs_context_collection::TypeContextCollection, cs_type::CsType, cs_type_tag::CsTypeTag,
-    metadata::CordlMetadata, rust::config::STATIC_CONFIG,
+    metadata::CordlMetadata,
 };
 
 use super::{

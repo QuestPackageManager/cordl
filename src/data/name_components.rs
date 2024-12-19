@@ -46,9 +46,8 @@ impl NameComponents {
         }
     }
 
-
     pub fn remove_namespace(self) -> Self {
-      Self {
+        Self {
             namespace: None,
             ..self
         }

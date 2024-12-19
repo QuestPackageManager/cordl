@@ -221,7 +221,6 @@ pub struct CsConstructor {
     pub name: String,
     pub parameters: Vec<CsParam>,
     pub template: Option<CsGenericTemplate>,
-
 }
 
 impl PartialEq for CsConstructor {

@@ -1,4 +1,7 @@
-use std::{fs::File, io::{BufWriter, Write}};
+use std::{
+    fs::File,
+    io::{BufWriter, Write},
+};
 
 pub struct Writer {
     pub stream: BufWriter<File>,

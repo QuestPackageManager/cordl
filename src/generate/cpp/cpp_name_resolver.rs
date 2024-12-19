@@ -24,7 +24,7 @@ pub struct CppNameResolver<'a, 'b> {
     pub collection: &'a CppContextCollection,
 }
 
-impl<'a, 'b> CppNameResolver<'a, 'b> {
+impl<'b> CppNameResolver<'_, 'b> {
     pub fn resolve_name(
         &self,
         declaring_cpp_type: &mut CppType,

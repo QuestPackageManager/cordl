@@ -2,10 +2,7 @@ use brocolib::{global_metadata::Il2CppTypeDefinition, runtime_metadata::Il2CppTy
 use itertools::Itertools;
 
 use crate::{
-    data::{
-        name_components::NameComponents,
-        type_resolver::{ResolvedType, ResolvedTypeData, TypeUsage},
-    },
+    data::type_resolver::{ResolvedType, ResolvedTypeData, TypeUsage},
     generate::{cs_type_tag::CsTypeTag, metadata::CordlMetadata},
 };
 
@@ -20,7 +17,7 @@ pub struct RustNameResolver<'a, 'b> {
     pub config: &'a RustGenerationConfig,
 }
 
-impl<'a, 'b> RustNameResolver<'a, 'b> {
+impl<'b> RustNameResolver<'_, 'b> {
     pub fn resolve_name(
         &self,
         declaring_cpp_type: &mut RustType,

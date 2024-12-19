@@ -15,7 +15,7 @@ pub struct JsonNameResolver<'a, 'b> {
     pub collection: &'a TypeContextCollection,
 }
 
-impl<'a, 'b> JsonNameResolver<'a, 'b> {
+impl JsonNameResolver<'_, '_> {
     pub fn resolve_name(&self, ty: &ResolvedType) -> NameComponents {
         let metadata = self.cordl_metadata;
         match &ty.data {

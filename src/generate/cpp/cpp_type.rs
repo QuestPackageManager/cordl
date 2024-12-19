@@ -899,7 +899,8 @@ impl CppType {
             // static functions with same name and params but
             // different ret types can exist
             // so we add their ret types
-            let fixup_name = match cpp_m_name == "op_Implicit" || cpp_m_name == "op_Explicit" {
+
+            match cpp_m_name == "op_Implicit" || cpp_m_name == "op_Explicit" {
                 true => {
                     cpp_m_name
                         + "_"
@@ -908,9 +909,7 @@ impl CppType {
                             .replace('*', "_")
                 }
                 false => cpp_m_name,
-            };
-
-            fixup_name
+            }
         };
 
         let metadata = name_resolver.cordl_metadata;

@@ -196,7 +196,9 @@ impl TypeDefinitionExtensions for Il2CppTypeDefinition {
         self.is_special_name()
             || (self.name(metadata).starts_with('<') && self.name(metadata).contains(">d__"))
             || self.name(metadata).contains("<>c")
-            || self.name(metadata).starts_with("<PrivateImplementationDetails>")
+            || self
+                .name(metadata)
+                .starts_with("<PrivateImplementationDetails>")
     }
     fn is_special_name(&self) -> bool {
         self.flags & TYPE_ATTRIBUTE_SPECIAL_NAME != 0

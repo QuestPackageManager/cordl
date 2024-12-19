@@ -7,7 +7,6 @@ use crate::generate::metadata::CordlMetadata;
 use crate::generate::type_extensions::{
     TypeDefinitionExtensions, TypeDefinitionIndexExtensions, TypeExtentions,
 };
-use crate::generate::writer::Writable;
 
 use itertools::Itertools;
 use log::warn;
@@ -211,7 +210,8 @@ pub(crate) fn handle_const_fields(
     };
 
     for field_info in fields.iter().filter(|f| f.is_const) {
-        let mut cpp_field_template = make_cpp_field_decl(cpp_type, field_info, name_resolver, config);
+        let mut cpp_field_template =
+            make_cpp_field_decl(cpp_type, field_info, name_resolver, config);
         let f_resolved_type = &field_info.field_ty;
         let f_type = field_info.field_ty.get_type(metadata);
         let f_name = &field_info.name;
@@ -455,7 +455,7 @@ pub(crate) fn handle_valuetype_fields(
 
         let backing_fields = fields
             .iter()
-            .map(|f| make_cpp_field_decl(cpp_type, &f, name_resolver, config))
+            .map(|f| make_cpp_field_decl(cpp_type, f, name_resolver, config))
             .map(|mut f| {
                 f.cpp_name = fixup_backing_field(&f.cpp_name);
                 f
@@ -466,7 +466,7 @@ pub(crate) fn handle_valuetype_fields(
     } else {
         let backing_fields = fields
             .iter()
-            .map(|f| make_cpp_field_decl(cpp_type, &f, name_resolver, config))
+            .map(|f| make_cpp_field_decl(cpp_type, f, name_resolver, config))
             .collect_vec();
 
         handle_instance_fields(cpp_type, &backing_fields, metadata, tdi);

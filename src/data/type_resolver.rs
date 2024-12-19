@@ -52,7 +52,7 @@ pub struct TypeResolver<'a, 'b> {
     pub collection: &'a TypeContextCollection,
 }
 
-impl<'a, 'b> TypeResolver<'a, 'b> {
+impl TypeResolver<'_, '_> {
     pub fn resolve_type(
         &self,
         declaring_cs_type: &mut CsType,
