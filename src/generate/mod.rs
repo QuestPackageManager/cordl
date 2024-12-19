@@ -8,5 +8,9 @@ pub mod offsets;
 pub mod type_extensions;
 pub mod writer;
 
+#[cfg(feature = "cpp")]
 pub mod cpp;
+#[cfg(feature = "json")]
 pub mod json;
+#[cfg(feature = "rust")]
+pub mod rust;

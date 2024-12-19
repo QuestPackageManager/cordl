@@ -5,9 +5,9 @@ use itertools::Itertools;
 
 use crate::data::type_resolver::ResolvedType;
 
+use std::hash::Hash;
 
-
-use std::{hash::Hash};
+use super::cs_type_tag::CsTypeTag;
 
 #[derive(Debug, Eq, Hash, PartialEq, Clone, Default, PartialOrd, Ord)]
 pub struct CsGenericTemplate {
@@ -17,8 +17,8 @@ pub struct CsGenericTemplate {
 #[derive(Debug, Eq, Hash, PartialEq, Clone, Default, PartialOrd, Ord)]
 pub enum CsGenericTemplateType {
     #[default]
-    Any,
-    Reference,
+    AnyType,
+    ReferenceType,
 }
 
 impl CsGenericTemplate {
@@ -26,7 +26,7 @@ impl CsGenericTemplate {
         CsGenericTemplate {
             names: names
                 .into_iter()
-                .map(|s| (CsGenericTemplateType::Any, s))
+                .map(|s| (CsGenericTemplateType::AnyType, s))
                 .collect(),
         }
     }
@@ -34,7 +34,7 @@ impl CsGenericTemplate {
         CsGenericTemplate {
             names: names
                 .into_iter()
-                .map(|s| (CsGenericTemplateType::Reference, s))
+                .map(|s| (CsGenericTemplateType::ReferenceType, s))
                 .collect(),
         }
     }
@@ -93,6 +93,7 @@ pub struct CsMethodSizeData {
 #[derive(Clone, Debug, PartialEq, PartialOrd)]
 pub enum CsValue {
     String(String),
+    Char(String),
     Bool(bool),
 
     U8(u8),
@@ -206,26 +207,26 @@ pub struct CsMethod {
     pub parameters: Vec<CsParam>,
     pub instance: bool,
     pub template: Option<CsGenericTemplate>,
-    pub method_data: CsMethodData,
     pub brief: Option<String>,
+
+    pub declaring_type: CsTypeTag,
+
+    pub method_data: CsMethodData,
     pub method_flags: CSMethodFlags,
 }
 
 // TODO: Generics
 #[derive(Clone, Debug)]
 pub struct CsConstructor {
-    pub cpp_name: String,
+    pub name: String,
     pub parameters: Vec<CsParam>,
     pub template: Option<CsGenericTemplate>,
-
-    pub brief: Option<String>,
 }
 
 impl PartialEq for CsConstructor {
     fn eq(&self, other: &Self) -> bool {
-        self.cpp_name == other.cpp_name
+        self.name == other.name
             && self.parameters == other.parameters
             && self.template == other.template
-            && self.brief == other.brief
     }
 }

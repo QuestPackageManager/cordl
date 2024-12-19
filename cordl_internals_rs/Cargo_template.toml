@@ -1,0 +1,15 @@
+[package]
+name = "bs_cordl"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+quest_hook = { git = "https://github.com/Fernthedev/quest-hook-rs.git", features = ["il2cpp_v31"], branch = "cordl-fixes"}
+# quest_hook = { path = "../../quest-hook-rs", features = ["il2cpp_v31"]}
+
+[lib]
+
+[features]
+default = []
+
+#cordl_features

@@ -2,6 +2,7 @@ use std::{
     collections::{HashMap, HashSet},
     rc::Rc,
     sync::Arc,
+    usize,
 };
 
 use brocolib::global_metadata::{FieldIndex, MethodIndex, TypeDefinitionIndex};
@@ -37,8 +38,9 @@ use super::{
     cpp_members::{
         CppConstructorDecl, CppConstructorImpl, CppFieldDecl, CppForwardDeclare, CppInclude,
         CppLine, CppMember, CppMethodData, CppMethodDecl, CppMethodImpl, CppNestedStruct,
-        CppNonMember, CppParam, CppPropertyDecl, CppTemplate, CppUsingAlias,
+        CppNonMember, CppParam, CppPropertyDecl, CppTemplate, CppUsingAlias, WritableDebug,
     },
+    cpp_name_components::CppNameComponents,
     cpp_name_resolver::{CppNameResolver, VALUE_WRAPPER_TYPE},
 };
 
@@ -183,7 +185,7 @@ pub struct CppType {
 
     pub cpp_template: Option<CppTemplate>,
     pub cs_name_components: NameComponents,
-    pub cpp_name_components: NameComponents,
+    pub cpp_name_components: CppNameComponents,
     pub(crate) prefix_comments: Vec<String>,
     pub packing: Option<u32>,
     pub size_info: Option<SizeInfo>,
@@ -377,7 +379,7 @@ impl CppType {
     ) -> CppType {
         let cs_name_components = &cs_type.cs_name_components;
 
-        let cpp_name_components = NameComponents {
+        let cpp_name_components = CppNameComponents {
             declaring_types: cs_name_components
                 .declaring_types
                 .as_ref()
@@ -389,11 +391,10 @@ impl CppType {
                 }),
             generics: cs_name_components.generics.clone(),
             name: config.name_cpp(&cs_name_components.name),
-            namespace: cs_name_components
-                .namespace
-                .as_ref()
-                .map(|s| config.namespace_cpp(s)),
-            is_pointer: cs_name_components.is_pointer,
+            namespace: Some(
+                config.namespace_cpp(&cs_name_components.namespace.clone().unwrap_or_default()),
+            ),
+            is_pointer: cs_type.is_reference_type,
         };
 
         let generic_instantiations_args_types = cs_type.generic_instantiations_args_types.clone();
@@ -435,6 +436,7 @@ impl CppType {
 
     pub fn nested_fixup(
         &mut self,
+        context_tag: CsTypeTag,
         cs_type: &CsType,
         metadata: &CordlMetadata,
         config: &CppGenerationConfig,
@@ -444,22 +446,33 @@ impl CppType {
             return;
         };
 
-        let declaring_td = declaring_tag
+        let mut declaring_td = declaring_tag
             .get_tdi()
             .get_type_definition(metadata.metadata);
+        let mut declaring_name = declaring_td.get_name_components(metadata.metadata).name;
 
-        let combined_name = self
-            .cpp_name_components
-            .clone()
-            .remove_generics()
-            .remove_pointer()
-            .combine_all();
+        while declaring_td.declaring_type_index != u32::MAX {
+            let declaring_ty =
+                &metadata.metadata_registration.types[declaring_td.declaring_type_index as usize];
 
-        self.cpp_name_components.namespace =
-            Some(config.namespace_cpp(declaring_td.namespace(metadata.metadata)));
-        self.cpp_name_components.declaring_types = None; // remove declaring types
+            let declaring_tag = CsTypeTag::from_type_data(declaring_ty.data, metadata.metadata);
 
+            declaring_td = declaring_tag
+                .get_tdi()
+                .get_type_definition(metadata.metadata);
+
+            let name = declaring_td.get_name_components(metadata.metadata).name;
+            declaring_name = format!("{declaring_name}_{name}",);
+        }
+
+        let context_td = context_tag.get_tdi().get_type_definition(metadata.metadata);
+        let declaring_namespace = context_td.namespace(metadata.metadata);
+
+        let combined_name = format!("{}_{}", declaring_name, self.name());
+
+        self.cpp_name_components.namespace = Some(config.namespace_cpp(declaring_namespace));
         self.cpp_name_components.name = config.sanitize_to_cpp_name(&combined_name);
+        self.cpp_name_components.declaring_types = None; // remove declaring types
     }
 
     pub fn fill(
@@ -646,76 +659,14 @@ impl CppType {
 
         self.declarations.reserve(constructors.len());
         for ctor in constructors {
-            let m_params = ctor
+            let m_params_with_def = ctor
                 .parameters
-                .into_iter()
-                .map(|p| self.make_param(p, name_resolver, config))
-                .collect_vec();
-
-            let params_no_default = m_params
                 .iter()
-                .cloned()
-                .map(|mut c| {
-                    c.def_value = None;
-                    c
-                })
+                .map(|p| self.make_param(p.clone(), name_resolver, config))
                 .collect_vec();
 
-            let ty_full_cpp_name = self.cpp_name_components.combine_all();
-
-            let decl: CppMethodDecl = CppMethodDecl {
-                cpp_name: "New_ctor".into(),
-                return_type: ty_full_cpp_name.clone(),
-                parameters: params_no_default,
-                template: ctor.template.clone().map(|t| t.into()),
-                body: None, // TODO:
-                brief: None,
-                is_no_except: false,
-                is_constexpr: false,
-                instance: false,
-                is_const: false,
-                is_implicit_operator: false,
-                is_explicit_operator: false,
-
-                is_virtual: false,
-                is_inline: true,
-                prefix_modifiers: vec![],
-                suffix_modifiers: vec![],
-            };
-
-            // To avoid trailing ({},)
-            let base_ctor_params = CppParam::params_names(&decl.parameters).join(", ");
-
-            let allocate_call = format!(
-                "THROW_UNLESS(::il2cpp_utils::NewSpecific<{ty_full_cpp_name}>({base_ctor_params}))"
-            );
-
-            let declaring_template = if self
-                .cpp_template
-                .as_ref()
-                .is_some_and(|t| !t.names.is_empty())
-            {
-                self.cpp_template.clone()
-            } else {
-                None
-            };
-
-            let cpp_constructor_impl = CppMethodImpl {
-                body: vec![Arc::new(CppLine::make(format!("return {allocate_call};")))],
-
-                declaring_cpp_full_name: self
-                    .cpp_name_components
-                    .remove_pointer()
-                    .combine_all(),
-                parameters: m_params.to_vec(),
-                template: declaring_template,
-                ..decl.clone().into()
-            };
-
-            self.implementations
-                .push(CppMember::MethodImpl(cpp_constructor_impl).into());
-
-            self.declarations.push(CppMember::MethodDecl(decl).into());
+            let template: Option<CppTemplate> = ctor.template.clone().map(|t| t.into());
+            self.create_ref_constructor(&m_params_with_def, template.as_ref());
         }
     }
 
@@ -816,7 +767,7 @@ impl CppType {
                 false => "static_cast<void*>(this)".to_string(),
             };
 
-            let body: Vec<Arc<dyn Writable>> = vec![Arc::new(CppLine::make(format!(
+            let body: Vec<Arc<dyn WritableDebug>> = vec![Arc::new(CppLine::make(format!(
                 "return static_cast<{interface_cpp_pointer}>({convert_line});"
             )))];
             let declaring_cpp_full_name = self.cpp_name_components.remove_pointer().combine_all();
@@ -929,10 +880,6 @@ impl CppType {
         // T UnityEngine.Component::GetComponent<T>() -> bs_hook::Il2CppWrapperType UnityEngine.Component::GetComponent()
         let template = method.template.clone().map(|t| t.into());
 
-        if method.name == ".ctor" {
-            Self::create_ref_constructor(self, method, &m_params_with_def, &template);
-        }
-
         let mut cpp_ret_type =
             name_resolver.resolve_name(self, &method.return_type, TypeUsage::ReturnType, false);
 
@@ -952,7 +899,8 @@ impl CppType {
             // static functions with same name and params but
             // different ret types can exist
             // so we add their ret types
-            let fixup_name = match cpp_m_name == "op_Implicit" || cpp_m_name == "op_Explicit" {
+
+            match cpp_m_name == "op_Implicit" || cpp_m_name == "op_Explicit" {
                 true => {
                     cpp_m_name
                         + "_"
@@ -961,9 +909,7 @@ impl CppType {
                             .replace('*', "_")
                 }
                 false => cpp_m_name,
-            };
-
-            fixup_name
+            }
         };
 
         let metadata = name_resolver.cordl_metadata;
@@ -1115,13 +1061,13 @@ impl CppType {
                 .iter()
                 .chain(method_body_lines.iter())
                 .cloned()
-                .map(|l| -> Arc<dyn Writable> { Arc::new(CppLine::make(l)) })
+                .map(|l| -> Arc<dyn WritableDebug> { Arc::new(CppLine::make(l)) })
                 .collect_vec(),
             false => method_info_lines
                 .iter()
                 .chain(method_body_lines.iter())
                 .cloned()
-                .map(|l| -> Arc<dyn Writable> { Arc::new(CppLine::make(l)) })
+                .map(|l| -> Arc<dyn WritableDebug> { Arc::new(CppLine::make(l)) })
                 .collect_vec(),
         };
 
@@ -1151,67 +1097,66 @@ impl CppType {
             .is_some_and(|t| !t.names.is_empty());
 
         // don't emit method size structs for generic methods
-        if let Some(addr) = &method.method_data.addrs
-            && let Some(size) = method.method_data.estimated_size
-        {
-            let il2cpp_method = &metadata.metadata.global_metadata.methods[method.method_index];
-            let declaring_tdi = &il2cpp_method.declaring_type;
-            let declaring_td = declaring_tdi.get_type_definition(metadata.metadata);
-            let declaring_tag: CsTypeTag = CsTypeTag::TypeDefinitionIndex(*declaring_tdi);
+        let addr = method.method_data.addrs.unwrap_or(u64::MAX);
+        let size = method.method_data.estimated_size.unwrap_or(usize::MAX);
 
-            let resolved_generic_types = self
-                .method_generic_instantiation_map
-                .get(&method.method_index)
-                .cloned()
-                .map(|g| {
-                    g.iter()
-                        .map(|t| name_resolver.resolve_name(self, t, TypeUsage::TypeName, false))
-                        .map(|n| n.combine_all())
-                        .collect_vec()
-                });
+        let il2cpp_method = &metadata.metadata.global_metadata.methods[method.method_index];
+        let declaring_tdi = &il2cpp_method.declaring_type;
+        let declaring_td = declaring_tdi.get_type_definition(metadata.metadata);
+        let declaring_tag: CsTypeTag = CsTypeTag::TypeDefinitionIndex(*declaring_tdi);
 
-            let interface_declaring_cpp_type: Option<&CppType> =
-                if *declaring_tdi == self.self_tag.get_tdi() {
-                    Some(self)
-                } else {
-                    name_resolver.collection.get_cpp_type(declaring_tag)
-                };
+        let resolved_generic_types = self
+            .method_generic_instantiation_map
+            .get(&method.method_index)
+            .cloned()
+            .map(|g| {
+                g.iter()
+                    .map(|t| name_resolver.resolve_name(self, t, TypeUsage::TypeName, false))
+                    .map(|n| n.combine_all())
+                    .collect_vec()
+            });
 
-            let has_template_args = self
-                .cpp_template
-                .as_ref()
-                .is_some_and(|t| !t.names.is_empty());
+        let interface_declaring_cpp_type: Option<&CppType> =
+            if *declaring_tdi == self.self_tag.get_tdi() {
+                Some(self)
+            } else {
+                name_resolver.collection.get_cpp_type(declaring_tag)
+            };
 
-            // don't emit method size structs for generic methods
-            if template.is_none() && !has_template_args && !is_generic_method_inst {
-                self.nonmember_implementations
-                    .push(Arc::new(CppNonMember::SizeStruct(
-                        CppMethodSizeStruct {
-                            ret_ty: method_decl.return_type.clone(),
-                            cpp_method_name: method_decl.cpp_name.clone(),
-                            method_name: m_name.to_string(),
-                            declaring_type_name: method_impl.declaring_cpp_full_name.clone(),
-                            declaring_classof_call,
-                            method_info_lines,
-                            method_info_var: METHOD_INFO_VAR_NAME.to_string(),
-                            instance: method_decl.instance,
-                            params: method_decl.parameters.clone(),
-                            declaring_template: self.cpp_template.clone(),
-                            template: template.clone(),
-                            generic_literals: resolved_generic_types,
-                            method_data: CppMethodData {
-                                addrs: *addr,
-                                estimated_size: size,
-                            },
-                            interface_clazz_of: interface_declaring_cpp_type
-                                .map(|d| d.classof_cpp_name())
-                                .unwrap_or_else(|| format!("Bad stuff happened {declaring_td:?}")),
-                            is_final,
-                            slot: method.method_data.slot,
-                        }
-                        .into(),
-                    )));
-            }
+        let has_template_args = self
+            .cpp_template
+            .as_ref()
+            .is_some_and(|t| !t.names.is_empty());
+
+        // don't emit method size structs for generic methods
+        if template.is_none() && !has_template_args && !is_generic_method_inst {
+            self.nonmember_implementations
+                .push(Arc::new(CppNonMember::SizeStruct(
+                    CppMethodSizeStruct {
+                        ret_ty: method_decl.return_type.clone(),
+                        cpp_method_name: method_decl.cpp_name.clone(),
+                        method_name: m_name.to_string(),
+                        declaring_type_name: method_impl.declaring_cpp_full_name.clone(),
+                        declaring_classof_call,
+                        method_info_lines,
+                        method_info_var: METHOD_INFO_VAR_NAME.to_string(),
+                        instance: method_decl.instance,
+                        params: method_decl.parameters.clone(),
+                        declaring_template: self.cpp_template.clone(),
+                        template: template.clone(),
+                        generic_literals: resolved_generic_types,
+                        method_data: CppMethodData {
+                            addrs: addr,
+                            estimated_size: size,
+                        },
+                        interface_clazz_of: interface_declaring_cpp_type
+                            .map(|d| d.classof_cpp_name())
+                            .unwrap_or_else(|| format!("Bad stuff happened {declaring_td:?}")),
+                        is_final,
+                        slot: method.method_data.slot,
+                    }
+                    .into(),
+                )));
         }
 
         // TODO: Revise this
@@ -1575,7 +1520,7 @@ impl CppType {
         // so then Parent()
         let base_ctor = self.parent.as_ref().map(|s| (s.clone(), "".to_string()));
 
-        let body: Vec<Arc<dyn Writable>> = instance_fields
+        let body: Vec<Arc<dyn WritableDebug>> = instance_fields
             .iter()
             .map(|p| {
                 let name = &p.name;
@@ -1583,7 +1528,7 @@ impl CppType {
             })
             .map(Arc::new)
             // Why is this needed? _sigh_
-            .map(|arc| -> Arc<dyn Writable> { arc })
+            .map(|arc| -> Arc<dyn WritableDebug> { arc })
             .collect_vec();
 
         let params_no_def = instance_fields
@@ -2069,12 +2014,7 @@ impl CppType {
             .push(CppMember::ConstructorDecl(default_ctor).into());
     }
 
-    fn create_ref_constructor(
-        &mut self,
-        _method: &CsMethod,
-        m_params: &[CppParam],
-        template: &Option<CppTemplate>,
-    ) {
+    fn create_ref_constructor(&mut self, m_params: &[CppParam], template: Option<&CppTemplate>) {
         if self.is_value_type || self.is_enum_type {
             return;
         }
@@ -2094,7 +2034,7 @@ impl CppType {
             cpp_name: "New_ctor".into(),
             return_type: ty_full_cpp_name.clone(),
             parameters: params_no_default,
-            template: template.clone(),
+            template: template.cloned(),
             body: None, // TODO:
             brief: None,
             is_no_except: false,
@@ -2171,7 +2111,8 @@ impl CppType {
 impl ToString for CsValue {
     fn to_string(&self) -> String {
         match self {
-            CsValue::String(s) => format!("\"{s}\""),
+            CsValue::String(s) => format!("u\"{s}\""),
+            CsValue::Char(s) => format!("u'{s}'"),
             CsValue::Bool(v) => match v {
                 true => "true",
                 false => "false",
@@ -2197,7 +2138,7 @@ impl ToString for CsValue {
                 }
                 // make it include at least one decimal place
 
-                format!("static_cast<float_32>({f:1}f)")
+                format!("static_cast<float_t>({f:.1}f)")
             }
             CsValue::F64(f) => {
                 if *f == f64::INFINITY {
@@ -2210,7 +2151,7 @@ impl ToString for CsValue {
                     return "NAN".to_owned();
                 }
 
-                format!("static_cast<float_64>({f:1})")
+                format!("static_cast<double_t>({f:.1})")
             }
             CsValue::Object(_bytes) => todo!(),
             CsValue::ValueType(_bytes) => todo!(),

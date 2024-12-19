@@ -1,7 +1,10 @@
-use std::{fs::File, io::Write};
+use std::{
+    fs::File,
+    io::{BufWriter, Write},
+};
 
 pub struct Writer {
-    pub stream: File,
+    pub stream: BufWriter<File>,
     pub indent: u16,
     pub newline: bool,
 }
@@ -37,7 +40,7 @@ impl Write for Writer {
     }
 }
 
-pub trait Writable: std::fmt::Debug {
+pub trait Writable {
     fn write(&self, writer: &mut Writer) -> color_eyre::Result<()>;
 }
 

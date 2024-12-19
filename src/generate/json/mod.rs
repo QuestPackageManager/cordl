@@ -108,7 +108,7 @@ pub fn is_real_declaring_type(ty: &CsType, metadata: &CordlMetadata) -> bool {
     let tdi = ty.self_tag.get_tdi();
     let td = tdi.get_type_definition(metadata.metadata);
 
-    let is_compiler_generated = td.is_compiler_generated();
+    let is_compiler_generated = td.is_compiler_generated(metadata.metadata);
 
     !is_compiler_generated
         && is_declaring_type

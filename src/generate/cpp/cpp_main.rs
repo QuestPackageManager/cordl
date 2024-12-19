@@ -25,6 +25,7 @@ use crate::{
 pub fn run_cpp(
     cs_collection: TypeContextCollection,
     metadata: &CordlMetadata,
+    format: bool,
 ) -> color_eyre::Result<()> {
     let mut cpp_context_collection =
         CppContextCollection::from_cs_collection(cs_collection, metadata, &STATIC_CONFIG);
@@ -362,6 +363,10 @@ pub fn run_cpp(
         // for (_, context) in cpp_context_collection.get() {
         //     context.write().unwrap();
         // }
+    }
+
+    if format {
+        format_files()?;
     }
 
     Ok(())

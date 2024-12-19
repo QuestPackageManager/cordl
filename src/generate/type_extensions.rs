@@ -169,7 +169,8 @@ impl TypeExtentions for Il2CppType {
 pub trait TypeDefinitionExtensions {
     fn is_value_type(&self) -> bool;
     fn is_enum_type(&self) -> bool;
-    fn is_compiler_generated(&self) -> bool;
+    fn is_special_name(&self) -> bool;
+    fn is_compiler_generated(&self, metadata: &Metadata) -> bool;
     fn is_interface(&self) -> bool;
     fn is_explicit_layout(&self) -> bool;
     fn is_assignable_to(&self, other_td: &Il2CppTypeDefinition, metadata: &Metadata) -> bool;
@@ -191,7 +192,15 @@ impl TypeDefinitionExtensions for Il2CppTypeDefinition {
         self.bitfield & 2 != 0
     }
 
-    fn is_compiler_generated(&self) -> bool {
+    fn is_compiler_generated(&self, metadata: &Metadata) -> bool {
+        self.is_special_name()
+            || (self.name(metadata).starts_with('<') && self.name(metadata).contains(">d__"))
+            || self.name(metadata).contains("<>c")
+            || self
+                .name(metadata)
+                .starts_with("<PrivateImplementationDetails>")
+    }
+    fn is_special_name(&self) -> bool {
         self.flags & TYPE_ATTRIBUTE_SPECIAL_NAME != 0
     }
 
@@ -226,14 +235,6 @@ impl TypeDefinitionExtensions for Il2CppTypeDefinition {
         // direct inheritance
         if other_td.byval_type_index == self.parent_index {
             return true;
-        }
-
-        if self.get_name_components(metadata).name == "Object" {
-            println!(
-                "{:?} {:?}",
-                self.get_name_components(metadata),
-                parent_ty.ty
-            );
         }
 
         // if object, clearly this does not inherit `other_td`
@@ -278,7 +279,13 @@ impl TypeDefinitionExtensions for Il2CppTypeDefinition {
     }
 
     fn get_name_components(&self, metadata: &Metadata) -> NameComponents {
-        let namespace = self.namespace(metadata);
+        let namespace_str = self.namespace(metadata);
+        let namespace = if namespace_str.is_empty() {
+            None
+        } else {
+            Some(namespace_str.to_string())
+        };
+
         let name = self.name(metadata);
 
         let generics = match self.generic_container_index.is_valid() {
@@ -296,7 +303,6 @@ impl TypeDefinitionExtensions for Il2CppTypeDefinition {
 
         let _ty =
             &metadata.runtime_metadata.metadata_registration.types[self.byval_type_index as usize];
-        let is_pointer = self.is_reference_type(metadata);
 
         match self.declaring_type_index != u32::MAX {
             true => {
@@ -319,15 +325,13 @@ impl TypeDefinitionExtensions for Il2CppTypeDefinition {
                     name: name.to_string(),
                     declaring_types: Some(declaring_types),
                     generics,
-                    is_pointer,
                 }
             }
             false => NameComponents {
-                namespace: Some(namespace.to_string()),
+                namespace,
                 name: name.to_string(),
                 declaring_types: None,
                 generics,
-                is_pointer,
             },
         }
     }

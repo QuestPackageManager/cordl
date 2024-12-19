@@ -17,9 +17,51 @@
       },
       "args": [
         "--metadata",
+        "./stuff/unity2022.3/global-metadata.dat",
+        "--libil2cpp",
+        "./stuff/unity2022.3/libil2cpp.so",
+        "cpp"
+      ],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug executable 'cordl' json",
+      "cargo": {
+        "args": ["build", "--bin=cordl", "--package=cordl"],
+        "filter": {
+          "name": "cordl",
+          "kind": "bin"
+        }
+      },
+      "args": [
+        "--metadata",
         "./stuff/bs1.34.2/global-metadata.dat",
         "--libil2cpp",
-        "./stuff/bs1.34.2/libil2cpp.so"
+        "./stuff/bs1.34.2/libil2cpp.so",
+        "--multi-json",
+        "./json_cordl"
+      ],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug executable 'cordl' rust",
+      "cargo": {
+        "args": ["build", "--bin=cordl", "--package=cordl"],
+        "filter": {
+          "name": "cordl",
+          "kind": "bin"
+        }
+      },
+      "args": [
+        "--metadata",
+        "./stuff/unity2022.3/global-metadata.dat",
+        "--libil2cpp",
+        "./stuff/unity2022.3/libil2cpp.so",
+        "rust"
       ],
       "cwd": "${workspaceFolder}"
     },

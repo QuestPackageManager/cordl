@@ -15,7 +15,7 @@ pub struct JsonNameResolver<'a, 'b> {
     pub collection: &'a TypeContextCollection,
 }
 
-impl<'a, 'b> JsonNameResolver<'a, 'b> {
+impl JsonNameResolver<'_, '_> {
     pub fn resolve_name(&self, ty: &ResolvedType) -> NameComponents {
         let metadata = self.cordl_metadata;
         match &ty.data {
@@ -27,7 +27,6 @@ impl<'a, 'b> JsonNameResolver<'a, 'b> {
                     name: "Array".into(),
                     namespace: Some("".into()),
                     generics: Some(vec![generic_formatted.clone()]),
-                    is_pointer: false,
                     ..Default::default()
                 }
             }
@@ -103,7 +102,6 @@ impl<'a, 'b> JsonNameResolver<'a, 'b> {
                     name: "Blacklisted".into(),
                     namespace: None,
                     generics: Some(vec![td.full_name(metadata.metadata, true)]),
-                    is_pointer: false,
                     ..Default::default()
                 }
             }
@@ -115,7 +113,6 @@ impl<'a, 'b> JsonNameResolver<'a, 'b> {
                     name: "ByRef".into(),
                     namespace: Some("".into()),
                     generics: Some(vec![generic_formatted.clone()]),
-                    is_pointer: false,
                     ..Default::default()
                 }
             }
@@ -127,7 +124,6 @@ impl<'a, 'b> JsonNameResolver<'a, 'b> {
                     name: "ByRefConst".into(),
                     namespace: Some("".into()),
                     generics: Some(vec![generic_formatted.clone()]),
-                    is_pointer: false,
                     ..Default::default()
                 }
             }

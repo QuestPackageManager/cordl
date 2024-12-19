@@ -63,6 +63,14 @@ pub struct JsonMethod {
     pub ret: String,
     pub ret_ty_tag: JsonResolvedTypeData,
     pub parameters: Vec<JsonParam>,
+    pub method_info: JsonMethodInfo,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct JsonMethodInfo {
+    pub estimated_size: Option<usize>,
+    pub addrs: Option<u64>,
+    pub slot: Option<u16>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -85,7 +93,7 @@ fn make_field(field: &CsField, name_resolver: &JsonNameResolver) -> JsonField {
 
         ty_name,
         offset,
-        ty_tag: ty.into(),
+        ty_tag: ty,
     }
 }
 fn make_property(property: &CsProperty, name_resolver: &JsonNameResolver) -> JsonProperty {
@@ -142,11 +150,18 @@ fn make_method(method: &CsMethod, name_resolver: &JsonNameResolver) -> JsonMetho
         .map(|p| make_param(p, name_resolver))
         .collect_vec();
 
+    let json_method_info = JsonMethodInfo {
+        addrs: method.method_data.addrs,
+        estimated_size: method.method_data.estimated_size,
+        slot: method.method_data.slot,
+    };
+
     JsonMethod {
         name: method.name.to_string(),
         parameters: params,
         ret: ret_ty_name,
         ret_ty_tag: ret_ty,
+        method_info: json_method_info,
     }
 }
 
@@ -165,8 +180,7 @@ pub fn make_type(
     let fields = td
         .fields
         .iter()
-        .enumerate()
-        .map(|(_i, f)| make_field(f, &name_resolver))
+        .map(|f| make_field(f, &name_resolver))
         .collect_vec();
     let properties = td
         .properties

@@ -3,3 +3,9 @@ global-metadata.dat
 libil2cpp.so
 codegen/
 codegen.zip
+0.3.0/
+extern/
+codegen-rs/
+
+stuff/
+json_cordl/

@@ -4,36 +4,27 @@ pub struct NameComponents {
     pub declaring_types: Option<Vec<String>>,
     pub name: String,
     pub generics: Option<Vec<String>>,
-    pub is_pointer: bool,
 }
 
 impl NameComponents {
     // TODO: Add setting for adding :: prefix
     // however, this cannot be allowed in all cases
     pub fn combine_all(&self) -> String {
-        let combined_declaring_types = self.declaring_types.as_ref().map(|d| d.join("::"));
+        let mut completed = self.name.clone();
 
-        // will be empty if no namespace or declaring types
-        let prefix = combined_declaring_types
-            .as_ref()
-            .or(self.namespace.as_ref())
-            .map(|s| {
-                if s.is_empty() {
-                    "::".to_string()
-                } else {
-                    format!("::{s}::")
-                }
-            })
-            .unwrap_or_default();
-
-        let mut completed = format!("{prefix}{}", self.name);
-
-        if let Some(generics) = &self.generics {
-            completed = format!("{completed}<{}>", generics.join(","));
+        // add declaring types
+        if let Some(declaring_types) = self.declaring_types.as_ref() {
+            completed = format!("{}/{completed}", declaring_types.join("/"));
         }
 
-        if self.is_pointer {
-            completed = format!("{completed}*")
+        // add namespace
+        if let Some(namespace) = self.namespace.as_ref() {
+            completed = format!("{namespace}.{completed}");
+        }
+
+        // add generics
+        if let Some(generics) = &self.generics {
+            completed = format!("{completed}<{}>", generics.join(","));
         }
 
         completed
@@ -55,16 +46,10 @@ impl NameComponents {
         }
     }
 
-    pub fn as_pointer(&self) -> Self {
+    pub fn remove_namespace(self) -> Self {
         Self {
-            is_pointer: true,
-            ..self.clone()
-        }
-    }
-    pub fn remove_pointer(&self) -> Self {
-        Self {
-            is_pointer: false,
-            ..self.clone()
+            namespace: None,
+            ..self
         }
     }
 

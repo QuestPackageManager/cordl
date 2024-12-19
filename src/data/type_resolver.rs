@@ -52,7 +52,7 @@ pub struct TypeResolver<'a, 'b> {
     pub collection: &'a TypeContextCollection,
 }
 
-impl<'a, 'b> TypeResolver<'a, 'b> {
+impl TypeResolver<'_, '_> {
     pub fn resolve_type(
         &self,
         declaring_cs_type: &mut CsType,
@@ -103,6 +103,7 @@ impl<'a, 'b> TypeResolver<'a, 'b> {
             | Il2CppTypeEnum::Void
             | Il2CppTypeEnum::Boolean
             | Il2CppTypeEnum::Char
+            | Il2CppTypeEnum::Object
             | Il2CppTypeEnum::String => {
                 declaring_cs_type
                     .requirements
@@ -112,10 +113,8 @@ impl<'a, 'b> TypeResolver<'a, 'b> {
                     ));
                  ResolvedTypeData::Primitive(to_resolve.ty)
             }
-
-            Il2CppTypeEnum::Object
+            Il2CppTypeEnum::Class
             | Il2CppTypeEnum::Valuetype
-            | Il2CppTypeEnum::Class
             | Il2CppTypeEnum::Typedbyref
             // ptr types
             | Il2CppTypeEnum::I

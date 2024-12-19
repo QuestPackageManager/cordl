@@ -7,7 +7,6 @@ use crate::generate::metadata::CordlMetadata;
 use crate::generate::type_extensions::{
     TypeDefinitionExtensions, TypeDefinitionIndexExtensions, TypeExtentions,
 };
-use crate::generate::writer::Writable;
 
 use itertools::Itertools;
 use log::warn;
@@ -21,7 +20,7 @@ use brocolib::global_metadata::TypeDefinitionIndex;
 use super::config::CppGenerationConfig;
 use super::cpp_members::{
     CppFieldDecl, CppFieldImpl, CppInclude, CppNestedStruct, CppNestedUnion, CppNonMember,
-    CppStaticAssert, CppTemplate,
+    CppStaticAssert, CppTemplate, WritableDebug,
 };
 use super::cpp_members::{
     CppLine, CppMember, CppMethodDecl, CppMethodImpl, CppParam, CppPropertyDecl,
@@ -211,7 +210,8 @@ pub(crate) fn handle_const_fields(
     };
 
     for field_info in fields.iter().filter(|f| f.is_const) {
-        let cpp_field_template = make_cpp_field_decl(cpp_type, field_info, name_resolver, config);
+        let mut cpp_field_template =
+            make_cpp_field_decl(cpp_type, field_info, name_resolver, config);
         let f_resolved_type = &field_info.field_ty;
         let f_type = field_info.field_ty.get_type(metadata);
         let f_name = &field_info.name;
@@ -221,6 +221,13 @@ pub(crate) fn handle_const_fields(
         let def_value = field_info.value.as_ref();
 
         let def_value = def_value.expect("Constant with no default value?");
+
+        if matches!(
+            f_resolved_type.data,
+            ResolvedTypeData::Primitive(Il2CppTypeEnum::String)
+        ) {
+            cpp_field_template.field_ty = "::ConstString".to_owned();
+        }
 
         match f_resolved_type.data {
             ResolvedTypeData::Primitive(_) => {
@@ -345,7 +352,7 @@ pub(crate) fn handle_instance_fields(
 
         resulting_fields
             .into_iter()
-            .map(|member| CppMember::FieldDecl(member))
+            .map(CppMember::FieldDecl)
             .for_each(|member| cpp_type.declarations.push(member.into()));
     };
 }
@@ -448,7 +455,7 @@ pub(crate) fn handle_valuetype_fields(
 
         let backing_fields = fields
             .iter()
-            .map(|f| make_cpp_field_decl(cpp_type, &f, name_resolver, config))
+            .map(|f| make_cpp_field_decl(cpp_type, f, name_resolver, config))
             .map(|mut f| {
                 f.cpp_name = fixup_backing_field(&f.cpp_name);
                 f
@@ -459,7 +466,7 @@ pub(crate) fn handle_valuetype_fields(
     } else {
         let backing_fields = fields
             .iter()
-            .map(|f| make_cpp_field_decl(cpp_type, &f, name_resolver, config))
+            .map(|f| make_cpp_field_decl(cpp_type, f, name_resolver, config))
             .collect_vec();
 
         handle_instance_fields(cpp_type, &backing_fields, metadata, tdi);
@@ -480,7 +487,6 @@ pub(crate) fn prop_decl_from_fieldinfo(
     let f_cpp_name = &cpp_field.cpp_name;
     let f_offset = cs_field.offset.unwrap_or(u32::MAX);
     let f_size = cs_field.size;
-    let _field_ty_cpp_name = &cs_field.field_ty;
 
     let (getter_name, setter_name) = method_names_from_fieldinfo(f_cpp_name);
 
@@ -640,7 +646,7 @@ pub(crate) fn prop_methods_from_fieldinfo(
     };
 
     // construct getter and setter bodies
-    let getter_body: Vec<Arc<dyn Writable>> =
+    let getter_body: Vec<Arc<dyn WritableDebug>> =
         if let Some(instance_null_check) = instance_null_check {
             vec![
                 Arc::new(CppLine::make(instance_null_check.into())),
@@ -650,7 +656,7 @@ pub(crate) fn prop_methods_from_fieldinfo(
             vec![Arc::new(CppLine::make(getter_call))]
         };
 
-    let setter_body: Vec<Arc<dyn Writable>> =
+    let setter_body: Vec<Arc<dyn WritableDebug>> =
         if let Some(instance_null_check) = instance_null_check {
             vec![
                 Arc::new(CppLine::make(instance_null_check.into())),
@@ -725,8 +731,6 @@ pub(crate) fn handle_referencetype_fields(
                 false => Some(t),
             });
 
-        let _declaring_cpp_full_name = cpp_type.cpp_name_components.remove_pointer().combine_all();
-
         let cpp_field_decl = make_cpp_field_decl(cpp_type, field_info, name_resolver, config);
 
         let prop = prop_decl_from_fieldinfo(metadata, field_info, &cpp_field_decl);
@@ -750,7 +754,7 @@ pub(crate) fn handle_referencetype_fields(
 
     let backing_fields = fields
         .iter()
-        .map(|f| make_cpp_field_decl(cpp_type, &f, name_resolver, config))
+        .map(|f| make_cpp_field_decl(cpp_type, f, name_resolver, config))
         .map(|mut f| {
             f.cpp_name = fixup_backing_field(&f.cpp_name);
             f
@@ -760,29 +764,13 @@ pub(crate) fn handle_referencetype_fields(
     handle_instance_fields(cpp_type, &backing_fields, metadata, tdi);
 }
 
-pub(crate) fn field_collision_check(instance_fields: &[CsField]) -> bool {
-    let mut next_offset = 0;
-    return instance_fields
-        .iter()
-        .sorted_by(|a, b| a.offset.cmp(&b.offset))
-        .any(|field| {
-            let offset = field.offset.unwrap_or(u32::MAX);
-            if offset < next_offset {
-                true
-            } else {
-                next_offset = offset + field.size as u32;
-                false
-            }
-        });
-}
-
 // inspired by what il2cpp does for explicitly laid out types
 pub(crate) fn pack_fields_into_single_union(fields: &[CppFieldDecl]) -> CppNestedUnion {
     // get the min offset to use as a base for the packed structs
     let min_offset = fields.iter().map(|f| f.offset.unwrap()).min().unwrap_or(0);
 
     let packed_structs = fields
-        .into_iter()
+        .iter()
         .cloned()
         .map(|field| {
             let structs = field_into_offset_structs(min_offset, field);

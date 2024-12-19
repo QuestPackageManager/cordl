@@ -1,5 +1,5 @@
 use std::cmp::Ordering;
-use std::io::Write;
+use std::io::{BufWriter, Write};
 use std::{
     collections::{HashMap, HashSet},
     fs::{create_dir_all, remove_file, File},
@@ -74,20 +74,6 @@ pub struct CppContext {
 ///
 /// - `write_il2cpp_arg_macros`: Writes IL2CPP argument macros for the given C++ type.
 impl CppContext {
-    /// Retrieves a mutable reference to a C++ type based on the given root tag.
-    pub fn get_cpp_type_recursive_mut(&mut self, root_tag: CsTypeTag) -> Option<&mut CppType> {
-        let ty = self.typedef_types.get_mut(&root_tag);
-
-        ty
-    }
-
-    /// Retrieves an immutable reference to a C++ type based on the given root tag.
-    pub fn get_cpp_type_recursive(&self, root_tag: CsTypeTag) -> Option<&CppType> {
-        let ty = self.typedef_types.get(&root_tag);
-
-        ty
-    }
-
     /// Returns the include path for the C++ type definitions.
     pub fn get_include_path(&self) -> &PathBuf {
         &self.typedef_path
@@ -150,7 +136,7 @@ impl CppContext {
             let tdi = tag.get_tdi();
 
             let mut cpp_ty = CppType::make_cpp_type(*tag, ty, config);
-            cpp_ty.nested_fixup(ty, metadata, config);
+            cpp_ty.nested_fixup(context_tag, ty, metadata, config);
 
             if metadata.blacklisted_types.contains(&tdi) {
                 let result = match t.is_value_type() {
@@ -209,17 +195,17 @@ impl CppContext {
 
         trace!("Writing {:?}", self.typedef_path.as_path());
         let mut typedef_writer = Writer {
-            stream: File::create(self.typedef_path.as_path())?,
+            stream: BufWriter::new(File::create(self.typedef_path.as_path())?),
             indent: 0,
             newline: true,
         };
         let mut typeimpl_writer = Writer {
-            stream: File::create(self.type_impl_path.as_path())?,
+            stream: BufWriter::new(File::create(self.type_impl_path.as_path())?),
             indent: 0,
             newline: true,
         };
         let mut fundamental_writer = Writer {
-            stream: File::create(self.fundamental_path.as_path())?,
+            stream: BufWriter::new(File::create(self.fundamental_path.as_path())?),
             indent: 0,
             newline: true,
         };

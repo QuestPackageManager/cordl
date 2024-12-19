@@ -79,8 +79,11 @@ pub struct CsType {
     pub is_value_type: bool,
     pub is_enum_type: bool,
     pub is_reference_type: bool,
+    pub is_compiler_generated: bool,
+
     pub requirements: CsTypeRequirements,
 
+    pub enum_backing_type: Option<Il2CppTypeEnum>,
     pub parent: Option<ResolvedType>,
     pub interfaces: Vec<ResolvedType>,
     pub generic_template: Option<CsGenericTemplate>, // Names of templates e.g T, TKey etc.
@@ -223,7 +226,7 @@ impl CsType {
             declaring_ty.map(|t| CsTypeTag::from_type_data(t.data, metadata.metadata));
 
         let cs_name_components = t.get_name_components(metadata.metadata);
-        let is_pointer = cs_name_components.is_pointer;
+        let is_pointer = t.is_reference_type(metadata.metadata);
 
         // TODO: Come up with a way to avoid this extra call to layout the entire type
         // We really just want to call it once for a given size and then move on
@@ -250,6 +253,7 @@ impl CsType {
 
             is_value_type: t.is_value_type(),
             is_enum_type: t.is_enum_type(),
+            is_compiler_generated: t.is_compiler_generated(metadata.metadata),
             is_reference_type: is_pointer,
             requirements: Default::default(),
 
@@ -263,6 +267,7 @@ impl CsType {
             method_generic_instantiation_map: Default::default(),
 
             nested_types: Default::default(),
+            enum_backing_type: None,
         };
 
         if t.parent_index == u32::MAX {
@@ -290,6 +295,20 @@ impl CsType {
         self.make_fields(type_resolver);
         self.make_properties(type_resolver);
         self.make_methods(type_resolver);
+
+        let metadata = type_resolver.cordl_metadata;
+        let tdi = self.self_tag.get_tdi();
+        let t = Self::get_type_definition(metadata, tdi);
+
+        if t.element_type_index != u32::MAX && t.is_enum_type() {
+            let element_type = metadata
+                .metadata_registration
+                .types
+                .get(t.element_type_index as usize)
+                .unwrap();
+
+            self.enum_backing_type = Some(element_type.ty);
+        }
     }
 
     fn make_parameters(
@@ -484,7 +503,7 @@ impl CsType {
                 let f_offset = get_offset(field, i, &mut offset_iter, field_offsets, metadata, t);
 
                 // calculate / fetch the field size
-                let f_size = get_size(field, self.generic_instantiations_args_types.as_ref(), &metadata);
+                let f_size = get_size(field, self.generic_instantiations_args_types.as_ref(), metadata);
 
 
                 // TODO: Check a flag to look for default values to speed this up
@@ -501,8 +520,8 @@ impl CsType {
                     instance: !f_type.is_static() && !f_type.is_constant(),
                     readonly: f_type.is_constant(),
                     brief_comment: Some(format!("Field {f_name}, offset: 0x{:x}, size: 0x{f_size:x}, def value: {def_value:?}", f_offset.unwrap_or(u32::MAX))),
+                    is_const: f_type.is_constant() || def_value.is_some(),
                     value: def_value,
-                    is_const: false,
                 }
             })
             .collect_vec();
@@ -747,7 +766,17 @@ impl CsType {
             flag = flag.union(CSMethodFlags::SPECIAL_NAME);
         }
 
-        let mut method_decl = CsMethod {
+        // don't emit method size structs for generic methods
+        let is_concrete = !method.is_abstract_method();
+        let method_data = CsMethodData {
+            addrs: is_concrete.then(|| method_calc.map(|c| c.addrs)).flatten(),
+            estimated_size: is_concrete
+                .then(|| method_calc.map(|c| c.estimated_size))
+                .flatten(),
+            slot: (method.slot != u16::MAX).then_some(method.slot),
+        };
+
+        let method_decl = CsMethod {
             brief: format!(
                 "Method {m_name}, addr 0x{:x}, size 0x{:x}, virtual {}, abstract: {}, final {}",
                 method_calc.map(|m| m.addrs).unwrap_or(u64::MAX),
@@ -766,10 +795,11 @@ impl CsType {
                 TypeUsage::ReturnType,
                 true,
             ),
+            declaring_type: method.declaring_type.into(),
             parameters: m_params_no_def.clone(),
             instance: !method.is_static_method(),
             template: template.clone(),
-            method_data: Default::default(),
+            method_data,
         };
 
         // if type is a generic
@@ -778,14 +808,14 @@ impl CsType {
             .as_ref()
             .is_some_and(|t| !t.names.is_empty());
 
-        // don't emit method size structs for generic methods
-        if let Some(method_calc) = method_calc {
-            let is_concrete = !method.is_abstract_method();
-            method_decl.method_data = CsMethodData {
-                addrs: is_concrete.then_some(method_calc.addrs),
-                estimated_size: is_concrete.then_some(method_calc.estimated_size),
-                slot: (method.slot != u16::MAX).then_some(method.slot),
-            }
+        if method.name(metadata.metadata) == ".ctor" {
+            let constructor = CsConstructor {
+                name: m_name.to_string(),
+                parameters: method_decl.parameters.clone(),
+                template: method_decl.template.clone(),
+            };
+
+            self.constructors.push(constructor);
         }
 
         if !is_generic_method_inst {
@@ -833,7 +863,7 @@ impl CsType {
                     .escape_default()
                     .to_string();
 
-                CsValue::String(res)
+                CsValue::Char(res)
             }
             Il2CppTypeEnum::String => {
                 let stru16_len = cursor.read_compressed_i32::<Endian>().unwrap();
