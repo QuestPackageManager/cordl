@@ -615,7 +615,7 @@ impl RustType {
     ) {
         for (_, overload_methods) in methods
             .iter()
-            .filter(|m| m.instance)
+            // .filter(|m| m.instance)
             .into_group_map_by(|m| &m.name)
         {
             let overloaded_method_data = overload_methods
