@@ -310,7 +310,7 @@ impl RustType {
     ) {
         let nested_types = nested_types
             .iter()
-            .filter_map(|tag| name_resolver.collection.get_cpp_type(*tag))
+            .filter_map(|tag| name_resolver.collection.get_rust_type(*tag))
             .filter(|t| !t.is_compiler_generated)
             .sorted_by(|a, b| a.rs_name_components.name.cmp(&b.rs_name_components.name))
             .map(|rust_type| -> syn::ItemType {

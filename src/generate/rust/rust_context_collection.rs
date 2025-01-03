@@ -129,7 +129,7 @@ impl RustContextCollection {
     ///
     /// By default will only look for nested types of the context, ignoring other CppTypes
     ///
-    pub fn get_cpp_type(&self, ty: CsTypeTag) -> Option<&RustType> {
+    pub fn get_rust_type(&self, ty: CsTypeTag) -> Option<&RustType> {
         let context_root_tag = self.get_context_root_tag(ty);
 
         self.get_context(context_root_tag)
@@ -235,7 +235,7 @@ impl RustContextCollection {
                     .get_dependencies()
                     .iter()
                     .filter(|o| **o != t.self_tag)
-                    .filter_map(|o| self.get_cpp_type(*o))
+                    .filter_map(|o| self.get_rust_type(*o))
                     .filter_map(|o| o.self_feature.as_ref())
                     .collect_vec();
                 (t, dependencies)

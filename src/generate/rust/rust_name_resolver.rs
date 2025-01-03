@@ -117,14 +117,7 @@ impl<'b> RustNameResolver<'_, 'b> {
             ResolvedTypeData::Primitive(s) if *s == Il2CppTypeEnum::Object => {
                 // let tag = CsTypeTag::TypeDefinitionIndex(self.cordl_metadata.object_tdi);
                 // self.get_type_from_tag(tag, declaring_cpp_type, metadata)
-                RustNameComponents {
-                    name: "Il2CppObject".into(),
-                    namespace: Some("quest_hook::libil2cpp".to_string()),
-                    is_mut: true,
-                    is_ptr: true,
-
-                    ..Default::default()
-                }
+                il2cpp_object()
             }
             ResolvedTypeData::Primitive(s) if *s == Il2CppTypeEnum::Void => RustNameComponents {
                 name: "Void".into(),
@@ -196,7 +189,7 @@ impl<'b> RustNameResolver<'_, 'b> {
             .unwrap_or_else(|| panic!("Unable to find type {resolved_tag:#?}"));
         let incl_ty = self
             .collection
-            .get_cpp_type(resolved_tag)
+            .get_rust_type(resolved_tag)
             .unwrap_or_else(|| {
                 let td =
                     &metadata.metadata.global_metadata.type_definitions[resolved_tag.get_tdi()];
@@ -211,6 +204,17 @@ impl<'b> RustNameResolver<'_, 'b> {
                     td.full_name(metadata.metadata, true)
                 );
             });
+
+        if incl_ty.is_compiler_generated {
+            return if incl_ty.is_reference_type || incl_ty.is_interface {
+                il2cpp_object()
+            } else if incl_ty.is_enum_type {
+                return incl_ty.backing_type_enum.clone().unwrap();
+            } else {
+                // TODO: not correct
+                return il2cpp_object();
+            };
+        }
 
         let is_own_context = resolved_context_root_tag == self_context_root_tag;
         if !is_own_context {
@@ -253,5 +257,16 @@ impl<'b> RustNameResolver<'_, 'b> {
 
             _ => panic!("Unsupported type {il2_cpp_type_enum:#?}"),
         }
+    }
+}
+
+fn il2cpp_object() -> RustNameComponents {
+    RustNameComponents {
+        name: "Il2CppObject".into(),
+        namespace: Some("quest_hook::libil2cpp".to_string()),
+        is_mut: true,
+        is_ptr: true,
+
+        ..Default::default()
     }
 }
