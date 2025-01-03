@@ -1047,7 +1047,7 @@ impl RustType {
         let tokens = quote! {
             #feature
             #[repr(C)]
-            #[derive(Debug, Clone)]
+            #[derive(Debug, Clone, Default)]
             pub struct #name_ident {
                 #(#fields),*
             }
