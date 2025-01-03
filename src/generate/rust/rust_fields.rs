@@ -547,7 +547,7 @@ fn make_rust_field(
 
     RustField {
         name: format_ident!("{}", config.name_rs(&f.name)),
-        field_type: field_type.to_type_token(),
+        field_type: field_type.wrap_by_gc().to_type_token(),
         visibility: Visibility::Public,
         offset: f.offset.unwrap_or_default(),
     }
