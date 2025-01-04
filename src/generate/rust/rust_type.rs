@@ -941,9 +941,17 @@ impl RustType {
     }
 
     fn write_enum_type(&self, writer: &mut Writer, config: &RustGenerationConfig) -> Result<()> {
-        let fields = self.constants.iter().map(|f| -> syn::Variant {
+        let fields = self.constants.iter().enumerate().map(|(i, f)| -> syn::Variant {
             let name = &f.name;
             let val = &f.value;
+
+            // add default for enum
+            if i == 0 {
+                return parse_quote! {
+                    #[default]
+                    #name = #val
+                };
+            }
 
             parse_quote! {
                 #name = #val
@@ -984,7 +992,7 @@ impl RustType {
         let tokens = quote! {
             #feature
             #[repr(#backing_type)]
-            #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+            #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
             pub enum #name_ident {
                 #(#fields),*
             }
