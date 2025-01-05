@@ -407,7 +407,7 @@ fn handle_instance_fields(
 
             let size_field = RustField {
                 name: format_ident!("padding"),
-                field_type: parse_quote!([u8; #size]),
+                field_type: parse_quote!(quest_hook::libil2cpp::ValueTypePadding<#size>),
                 visibility: Visibility::Private,
                 offset: 0,
             };
