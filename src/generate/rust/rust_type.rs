@@ -1063,6 +1063,7 @@ impl RustType {
             #feature
             #macro_invoke
 
+            // implement ThisArgument for value types
             #feature
             unsafe impl #generics #quest_hook_path::ThisArgument for #path_ident {
                 type Type = Self;
