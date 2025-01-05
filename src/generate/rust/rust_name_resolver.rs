@@ -51,6 +51,7 @@ impl<'b> RustNameResolver<'_, 'b> {
                     .iter()
                     .map(|(r, inc)| {
                         self.resolve_name(declaring_cpp_type, r, type_usage, *inc && hard_include)
+                            .wrap_by_gc()
                     })
                     .map(|n| n.combine_all())
                     .map(RustGeneric::from)
@@ -80,8 +81,9 @@ impl<'b> RustNameResolver<'_, 'b> {
                 generic_param.name(metadata.metadata).to_string().into()
             }
             ResolvedTypeData::Ptr(resolved_type) => {
-                let generic_formatted =
-                    self.resolve_name(declaring_cpp_type, resolved_type, type_usage, hard_include);
+                let generic_formatted = self
+                    .resolve_name(declaring_cpp_type, resolved_type, type_usage, hard_include)
+                    .wrap_by_gc();
                 // RustNameComponents {
                 //     namespace: Some("cordl_internals".into()),
                 //     generics: Some(vec![generic_formatted.combine_all().into()]),
@@ -136,8 +138,9 @@ impl<'b> RustNameResolver<'_, 'b> {
                 Self::wrapper_type_for_tdi(td)
             }
             ResolvedTypeData::ByRef(resolved_type) => {
-                let generic =
-                    self.resolve_name(declaring_cpp_type, resolved_type, type_usage, hard_include);
+                let generic = self
+                    .resolve_name(declaring_cpp_type, resolved_type, type_usage, hard_include)
+                    .wrap_by_gc();
                 let generic_formatted = generic.combine_all();
 
                 // declaring_cpp_type.requirements.needs_byref_include();
@@ -151,8 +154,9 @@ impl<'b> RustNameResolver<'_, 'b> {
                 }
             }
             ResolvedTypeData::ByRefConst(resolved_type) => {
-                let generic =
-                    self.resolve_name(declaring_cpp_type, resolved_type, type_usage, hard_include);
+                let generic = self
+                    .resolve_name(declaring_cpp_type, resolved_type, type_usage, hard_include)
+                    .wrap_by_gc();
                 let generic_formatted = generic.combine_all();
 
                 // declaring_cpp_type.requirements.needs_byref_const_include();

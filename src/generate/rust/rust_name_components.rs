@@ -64,7 +64,9 @@ impl RustNameComponents {
     }
 
     pub fn wrap_by_gc(self) -> RustNameComponents {
-        if !self.is_ptr {
+        if !self.is_ptr
+            || (self.namespace.as_deref() == Some("quest_hook::libil2cpp") && self.name == "Gc")
+        {
             return self;
         }
 

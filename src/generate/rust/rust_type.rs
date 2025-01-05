@@ -646,7 +646,7 @@ impl RustType {
                     .iter()
                     .map(|p| self.make_parameter(p, name_resolver, config))
                     .collect_vec();
-
+             
                 let param_names = params.iter().map(|p| &p.name);
 
                 let body = self.make_method_body(m, m_name, param_names, m_ret_ty_ident);
@@ -753,7 +753,7 @@ impl RustType {
         config: &RustGenerationConfig,
     ) -> RustParam {
         let p_ty = name_resolver
-            .resolve_name(self, &p.il2cpp_ty, TypeUsage::Field, true)
+            .resolve_name(self, &p.il2cpp_ty, TypeUsage::Parameter, true)
             .wrap_by_gc();
         // let p_il2cpp_ty = p.il2cpp_ty.get_type(name_resolver.cordl_metadata);
 
