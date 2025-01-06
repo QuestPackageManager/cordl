@@ -28,8 +28,9 @@ impl<'b> RustNameResolver<'_, 'b> {
         let metadata = self.cordl_metadata;
         match &ty.data {
             ResolvedTypeData::Array(array_type) => {
-                let generic =
-                    self.resolve_name(declaring_cpp_type, array_type, type_usage, hard_include);
+                let generic = self
+                    .resolve_name(declaring_cpp_type, array_type, type_usage, hard_include)
+                    .wrap_by_gc();
                 let generic_formatted = generic.combine_all();
 
                 // declaring_cpp_type.requirements.needs_array_include();
