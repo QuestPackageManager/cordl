@@ -99,7 +99,6 @@ pub struct RustType {
     pub parent: Option<RustNameComponents>,
     pub backing_type_enum: Option<RustNameComponents>,
 
-    pub generics: Option<Vec<RustGeneric>>,
     pub cs_name_components: NameComponents,
     pub rs_name_components: RustNameComponents,
     pub(crate) prefix_comments: Vec<String>,
@@ -128,7 +127,7 @@ impl RustType {
         });
 
         let rs_name_components = RustNameComponents {
-            generics: generics.clone(),
+            generics: generics,
             name: config.name_rs(&cs_name_components.name),
             namespace: Some(
                 config.namespace_rs(&cs_name_components.namespace.clone().unwrap_or_default()),
@@ -160,7 +159,6 @@ impl RustType {
             requirements: RustTypeRequirements::default(),
             self_feature: Some(RustFeature { name: feature_name }),
             self_tag: tag,
-            generics,
 
             rs_name_components,
             cs_name_components: cs_type.cs_name_components.clone(),
@@ -327,8 +325,12 @@ impl RustType {
 
                 let target = rust_type.rs_name_components.to_type_path_token();
 
-                let declaring_generic_count =
-                    self.generics.as_ref().map(|g| g.len()).unwrap_or_default();
+                let declaring_generic_count = self
+                    .rs_name_components
+                    .generics
+                    .as_ref()
+                    .map(|g| g.len())
+                    .unwrap_or_default();
                 let target_generics = rust_type.get_generics(declaring_generic_count);
 
                 let visibility = match rust_type.is_interface {
@@ -391,7 +393,7 @@ impl RustType {
     }
 
     fn make_generics(&mut self) {
-        let Some(generic) = &self.generics else {
+        let Some(generic) = &self.rs_name_components.generics else {
             return;
         };
 
@@ -504,6 +506,7 @@ impl RustType {
                 .unwrap_or_default();
 
             let combined_generics = self
+                .rs_name_components
                 .generics
                 .clone()
                 .unwrap_or_default()
@@ -646,7 +649,7 @@ impl RustType {
                     .iter()
                     .map(|p| self.make_parameter(p, name_resolver, config))
                     .collect_vec();
-             
+
                 let param_names = params.iter().map(|p| &p.name);
 
                 let body = self.make_method_body(m, m_name, param_names, m_ret_ty_ident);
@@ -667,6 +670,7 @@ impl RustType {
                     .unwrap_or_default();
 
                 let combined_generics = self
+                    .rs_name_components
                     .generics
                     .clone()
                     .unwrap_or_default()
@@ -845,7 +849,6 @@ impl RustType {
             return;
         }
         self.rs_name_components.generics = None;
-        self.generics = None;
     }
 
     fn write_reference_type(
@@ -857,7 +860,7 @@ impl RustType {
         let path_ident = self.rs_name_components.to_type_path_token();
 
         let generics = self.get_generics(0);
-        let generics_names = self.get_generics_names(0);
+        let generics_names = self.get_generics_unbound(0);
 
         let fields = self.fields.iter().map(|f| {
             let f_name = format_ident!(r#"{}"#, f.name);
@@ -885,10 +888,7 @@ impl RustType {
             .remove_generics()
             .combine_all();
 
-        let quest_hook_path: syn::Path = parse_quote!(quest_hook::libil2cpp);
-        let macro_invoke: syn::ItemMacro = parse_quote! {
-            #quest_hook_path::unsafe_impl_reference_type!(in #quest_hook_path for #path_ident => #cs_namespace.#cs_name_str #generics_names);
-        };
+        let impl_ref = self.implement_reference_type();
 
         let feature = self.self_feature.as_ref().map(|f| {
             let name = &f.name;
@@ -905,8 +905,7 @@ impl RustType {
                 #(#fields),*
             }
 
-            #feature
-            #macro_invoke
+            #impl_ref
 
         };
 
@@ -941,22 +940,26 @@ impl RustType {
     }
 
     fn write_enum_type(&self, writer: &mut Writer, config: &RustGenerationConfig) -> Result<()> {
-        let fields = self.constants.iter().enumerate().map(|(i, f)| -> syn::Variant {
-            let name = &f.name;
-            let val = &f.value;
+        let fields = self
+            .constants
+            .iter()
+            .enumerate()
+            .map(|(i, f)| -> syn::Variant {
+                let name = &f.name;
+                let val = &f.value;
 
-            // add default for enum
-            if i == 0 {
-                return parse_quote! {
-                    #[default]
+                // add default for enum
+                if i == 0 {
+                    return parse_quote! {
+                        #[default]
+                        #name = #val
+                    };
+                }
+
+                parse_quote! {
                     #name = #val
-                };
-            }
-
-            parse_quote! {
-                #name = #val
-            }
-        });
+                }
+            });
         let backing_type = self
             .backing_type_enum
             .as_ref()
@@ -978,9 +981,7 @@ impl RustType {
             .combine_all();
 
         let quest_hook_path: syn::Path = parse_quote!(quest_hook::libil2cpp);
-        let macro_invoke: syn::ItemMacro = parse_quote! {
-            #quest_hook_path::unsafe_impl_value_type!(in #quest_hook_path for #path_ident => #cs_namespace.#cs_name_str);
-        };
+        let impl_value = self.implement_value_type();
 
         let feature = self.self_feature.as_ref().map(|f| {
             let name = &f.name;
@@ -997,8 +998,8 @@ impl RustType {
                 #(#fields),*
             }
 
-            #feature
-            #macro_invoke
+
+            #impl_value
         };
 
         writer.write_pretty_tokens(tokens)?;
@@ -1010,7 +1011,7 @@ impl RustType {
 
     fn write_value_type(&self, writer: &mut Writer, config: &RustGenerationConfig) -> Result<()> {
         let generics = self.get_generics(0);
-        let generic_names = self.get_generics_names(0);
+        let generic_names = self.get_generics_unbound(0);
 
         let name_ident = self.rs_name_components.clone().to_name_ident();
         let path_ident = self.rs_name_components.to_type_path_token();
@@ -1041,9 +1042,7 @@ impl RustType {
             .combine_all();
 
         let quest_hook_path: syn::Path = parse_quote!(quest_hook::libil2cpp);
-        let macro_invoke: syn::ItemMacro = parse_quote! {
-            #quest_hook_path::unsafe_impl_value_type!(in #quest_hook_path for #path_ident => #cs_namespace.#cs_name_str #generic_names);
-        };
+        let impl_value = self.implement_value_type();
 
         let feature = self.self_feature.as_ref().map(|f| {
             let name = &f.name;
@@ -1055,13 +1054,13 @@ impl RustType {
         let tokens = quote! {
             #feature
             #[repr(C)]
-            #[derive(Debug, Clone, Default)]
+            #[derive(Debug, Clone, Default, PartialEq)]
             pub struct #name_ident {
                 #(#fields),*
             }
 
-            #feature
-            #macro_invoke
+
+            #impl_value
 
             // implement ThisArgument for value types
             #feature
@@ -1086,7 +1085,8 @@ impl RustType {
     }
 
     fn get_generics(&self, skip_amount: usize) -> Option<syn::Generics> {
-        self.generics
+        self.rs_name_components
+            .generics
             .as_ref()
             .map(|g| {
                 g.iter()
@@ -1101,18 +1101,29 @@ impl RustType {
                 parse_quote! { <#(#g),*> }
             })
     }
-    fn get_generics_names(&self, skip_amount: usize) -> Option<syn::Generics> {
-        self.generics
+    fn get_generics_unbound(&self, skip_amount: usize) -> Option<syn::Generics> {
+        self.rs_name_components
+            .generics
             .as_ref()
             .map(|g| {
                 g.iter()
                     .skip(skip_amount)
-                    .map(|g| -> syn::GenericArgument { syn::parse_str(&g.name).unwrap() })
+                    .map(|g: &RustGeneric| -> syn::GenericArgument {
+                        syn::parse_str(&g.name).unwrap()
+                    })
                     .collect_vec()
             })
             .map(|g| -> syn::Generics {
                 parse_quote! { <#(#g),*> }
             })
+    }
+    fn get_generics_names_args(&self, skip_amount: usize) -> Option<Vec<syn::GenericArgument>> {
+        self.rs_name_components.generics.as_ref().map(|g| {
+            g.iter()
+                .skip(skip_amount)
+                .map(|g| -> syn::GenericArgument { syn::parse_str(&g.name).unwrap() })
+                .collect_vec()
+        })
     }
 
     fn write_impl(&self, writer: &mut Writer, _config: &RustGenerationConfig) -> Result<()> {
@@ -1220,7 +1231,7 @@ impl RustType {
         let path_ident = self.rs_name_components.to_type_path_token();
 
         let generics = self.get_generics(0);
-        let generics_names = self.get_generics_names(0);
+        let generics_names = self.get_generics_unbound(0);
 
         let fields = self.fields.iter().map(|f| {
             let f_name = format_ident!(r#"{}"#, f.name);
@@ -1249,9 +1260,7 @@ impl RustType {
             .combine_all();
 
         let quest_hook_path: syn::Path = parse_quote!(quest_hook::libil2cpp);
-        let macro_invoke: syn::ItemMacro = parse_quote! {
-            #quest_hook_path::unsafe_impl_reference_type!(in #quest_hook_path for #path_ident => #cs_namespace.#cs_name_str #generics_names);
-        };
+        let impl_ref = self.implement_reference_type();
 
         let feature = self.self_feature.as_ref().map(|f| {
             let name = &f.name;
@@ -1268,8 +1277,7 @@ impl RustType {
                 #(#fields),*
             }
 
-            #feature
-            #macro_invoke
+            #impl_ref
 
         };
 
@@ -1309,6 +1317,169 @@ impl RustType {
             "<{} as quest_hook::libil2cpp::Type>::class()",
             self.rs_name()
         )
+    }
+
+    fn implement_reference_type(&self) -> syn::ItemImpl {
+        let namespace = self.cs_name_components.namespace.as_deref().unwrap_or("");
+        let class_name = &self.cs_name_components.name;
+
+        let self_item = self.rs_name_components.to_type_path_token();
+
+        let generics = self.get_generics(0);
+        let generic_names = self.get_generics_names_args(0);
+
+        let class_fn_override: Option<syn::ImplItemFn> = generic_names.map(|names| {
+            parse_quote! {
+                fn class() ->  &'static quest_hook::libil2cpp::Il2CppClass {
+                    static CLASS: ::std::sync::OnceLock< &'static quest_hook::libil2cpp::Il2CppClass>  =  ::std::sync::OnceLock::new();
+                    CLASS.get_or_init(||{
+                        quest_hook::libil2cpp::Il2CppClass::find(#namespace, #class_name).unwrap().make_generic:: <(#(#names),*)> ().unwrap().unwrap()
+                    })
+                }
+        }});
+
+        let feature = self.self_feature.as_ref().map(|f| {
+            let name = &f.name;
+            quote! {
+                #[cfg(feature = #name)]
+            }
+        });
+
+        parse_quote! {
+            // let quest_hook_path: syn::Path = parse_quote!(quest_hook::libil2cpp);
+            // #quest_hook_path::unsafe_impl_reference_type!(in #quest_hook_path for #path_ident => #cs_namespace.#cs_name_str #generics_names);
+            #feature
+            unsafe impl #generics quest_hook::libil2cpp::Type for #self_item {
+                type Held<'a> = ::std::option::Option<&'a mut Self>;
+                type HeldRaw = *mut Self;
+                const NAMESPACE: &'static str = #namespace;
+                const CLASS_NAME: &'static str = #class_name;
+
+                #class_fn_override
+
+                fn matches_reference_argument(ty: &quest_hook::libil2cpp::Il2CppType) -> bool {
+                    ty.class()
+                        .is_assignable_from(<Self as quest_hook::libil2cpp::Type>::class())
+                }
+                fn matches_value_argument(_: &quest_hook::libil2cpp::Il2CppType) -> bool {
+                    false
+                }
+                fn matches_reference_parameter(ty: &quest_hook::libil2cpp::Il2CppType) -> bool {
+                    <Self as quest_hook::libil2cpp::Type>::class().is_assignable_from(ty.class())
+                }
+                fn matches_value_parameter(_: &quest_hook::libil2cpp::Il2CppType) -> bool {
+                    false
+                }
+            }
+        }
+    }
+
+    fn implement_value_type(&self) -> TokenStream {
+        let namespace = self.cs_name_components.namespace.as_deref().unwrap_or("");
+        let class_name = &self.cs_name_components.name;
+
+        let generics = self.get_generics(0);
+        let generic_names = self.get_generics_names_args(0);
+
+        let self_item = self.rs_name_components.to_type_path_token();
+
+        let class_fn_override: Option<syn::ImplItemFn> = generic_names.clone().map(|names| {
+            parse_quote! {
+                fn class() ->  &'static quest_hook::libil2cpp::Il2CppClass {
+                    static CLASS: ::std::sync::OnceLock< &'static quest_hook::libil2cpp::Il2CppClass>  =  ::std::sync::OnceLock::new();
+                    CLASS.get_or_init(||{
+                        quest_hook::libil2cpp::Il2CppClass::find(#namespace, #class_name).unwrap().make_generic:: <(#(#names),*)> ().unwrap().unwrap()
+                    })
+                }
+        }});
+
+        let feature = self.self_feature.as_ref().map(|f| {
+            let name = &f.name;
+            quote! {
+                #[cfg(feature = #name)]
+            }
+        });
+
+        parse_quote! {
+
+            // #quest_hook_path::unsafe_impl_value_type!(in #quest_hook_path for #path_ident => #cs_namespace.#cs_name_str #generic_names);
+            #feature
+            unsafe impl #generics quest_hook::libil2cpp::Type for #self_item {
+                type Held<'a>  = Self;
+                type HeldRaw = Self;
+                const NAMESPACE: &'static str = #namespace;
+                const CLASS_NAME: &'static str = #class_name;
+
+                #class_fn_override
+
+                fn matches_value_argument(ty: &quest_hook::libil2cpp::Il2CppType) -> bool {
+                    !ty.is_ref()&&ty.class().is_assignable_from(<Self as quest_hook::libil2cpp::Type> ::class())
+                }
+                fn matches_reference_argument(ty: &quest_hook::libil2cpp::Il2CppType) -> bool {
+                    ty.is_ref()&&ty.class().is_assignable_from(<Self as quest_hook::libil2cpp::Type> ::class())
+                }
+                fn matches_value_parameter(ty: &quest_hook::libil2cpp::Il2CppType) -> bool {
+                    !ty.is_ref()&& <Self as quest_hook::libil2cpp::Type> ::class().is_assignable_from(ty.class())
+                }
+                fn matches_reference_parameter(ty: &quest_hook::libil2cpp::Il2CppType) -> bool {
+                    ty.is_ref()&& <Self as quest_hook::libil2cpp::Type> ::class().is_assignable_from(ty.class())
+                }
+
+            }
+            #feature
+            unsafe impl #generics quest_hook::libil2cpp::Argument for #self_item{
+                type Type = Self;
+                fn matches(ty: &quest_hook::libil2cpp::Il2CppType) -> bool {
+                    <Self as quest_hook::libil2cpp::Type> ::matches_value_argument(ty)
+                }
+                fn invokable(&mut self) ->  *mut ::std::ffi::c_void {
+                    self as *mut Self as *mut ::std::ffi::c_void
+                }
+
+            }
+            #feature
+            unsafe impl #generics quest_hook::libil2cpp::Parameter for #self_item{
+                type Actual = Self;
+                fn matches(ty: &quest_hook::libil2cpp::Il2CppType) -> bool {
+                    <Self as quest_hook::libil2cpp::Type> ::matches_value_parameter(ty)
+                }
+                fn from_actual(actual:Self::Actual) -> Self {
+                    actual
+                }
+                fn into_actual(self) -> Self::Actual {
+                    self
+                }
+
+            }
+            #feature
+            unsafe impl #generics quest_hook::libil2cpp::Returned for #self_item{
+                type Type = Self;
+                fn matches(ty: &quest_hook::libil2cpp::Il2CppType) -> bool {
+                    <Self as quest_hook::libil2cpp::Type> ::matches_returned(ty)
+                }
+                fn from_object(object:Option< &mut quest_hook::libil2cpp::Il2CppObject>) -> Self {
+                    unsafe {
+                        quest_hook::libil2cpp::raw::unbox(quest_hook::libil2cpp::WrapRaw::raw(object.unwrap()))
+                    }
+                }
+
+            }
+            #feature
+            unsafe impl #generics quest_hook::libil2cpp::Return for #self_item {
+                type Actual = Self;
+                fn matches(ty: &quest_hook::libil2cpp::Il2CppType) -> bool {
+                    <Self as quest_hook::libil2cpp::Type> ::matches_return(ty)
+                }
+                fn into_actual(self) -> Self::Actual {
+                    self
+                }
+                fn from_actual(actual:Self::Actual) -> Self {
+                    actual
+                }
+
+            }
+
+        }
     }
 }
 
