@@ -2138,7 +2138,7 @@ impl ToString for CsValue {
                 }
                 // make it include at least one decimal place
 
-                format!("static_cast<float_t>({f:.1}f)")
+                format!("static_cast<float_t>({f:?}f)")
             }
             CsValue::F64(f) => {
                 if *f == f64::INFINITY {
