@@ -12,6 +12,7 @@ impl<R: ReadBytesExt> ReadBytesExtensions for R {
         let mut val: u32;
         let read = self.read_u8()?;
 
+        // 10000000 <=> 0x80
         if (read & 0x80) == 0 {
             // 1 byte written
             val = read as u32;

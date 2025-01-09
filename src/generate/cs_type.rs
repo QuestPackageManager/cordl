@@ -849,7 +849,7 @@ impl CsType {
             }
             Il2CppTypeEnum::U1 => CsValue::U8(cursor.read_u8().unwrap()),
             Il2CppTypeEnum::U2 => CsValue::U16(cursor.read_u16::<Endian>().unwrap()),
-            Il2CppTypeEnum::U4 => CsValue::U32(cursor.read_u32::<Endian>().unwrap()),
+            Il2CppTypeEnum::U4 => CsValue::U32(cursor.read_compressed_u32::<Endian>().unwrap()),
             // TODO: We assume 64 bit
             Il2CppTypeEnum::U | Il2CppTypeEnum::U8 => {
                 CsValue::U64(cursor.read_u64::<Endian>().unwrap())
