@@ -1321,7 +1321,7 @@ impl RustType {
 
     fn implement_reference_type(&self) -> syn::ItemImpl {
         let namespace = self.cs_name_components.namespace.as_deref().unwrap_or("");
-        let class_name = &self.cs_name_components.name;
+        let class_name = self.cs_name_components.clone().remove_namespace().remove_generics().combine_all();
 
         let self_item = self.rs_name_components.to_type_path_token();
 
@@ -1376,7 +1376,7 @@ impl RustType {
 
     fn implement_value_type(&self) -> TokenStream {
         let namespace = self.cs_name_components.namespace.as_deref().unwrap_or("");
-        let class_name = &self.cs_name_components.name;
+        let class_name = self.cs_name_components.clone().remove_namespace().remove_generics().combine_all();
 
         let generics = self.get_generics(0);
         let generic_names = self.get_generics_names_args(0);
