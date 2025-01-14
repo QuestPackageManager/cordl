@@ -7,8 +7,6 @@ pub struct NameComponents {
 }
 
 impl NameComponents {
-    // TODO: Add setting for adding :: prefix
-    // however, this cannot be allowed in all cases
     pub fn combine_all(&self) -> String {
         let mut completed = self.name.clone();
 

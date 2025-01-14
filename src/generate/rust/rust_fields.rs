@@ -259,8 +259,8 @@ pub fn handle_static_fields(
         };
 
         // only push accessors if declaring ref type, or if static field
-        cpp_type.methods.push(getter_decl);
-        cpp_type.methods.push(setter_decl);
+        cpp_type.methods.push(getter_decl.into());
+        cpp_type.methods.push(setter_decl.into());
     }
 }
 
@@ -363,11 +363,11 @@ pub(crate) fn handle_const_fields(
             .into_iter()
             .unique_by(|f| f.1.value.as_ref().unwrap().to_string())
         {
-            cpp_type.constants.push(f.0);
+            cpp_type.constants.push(f.0.into());
         }
     } else {
         for f in fields {
-            cpp_type.constants.push(f.0);
+            cpp_type.constants.push(f.0.into());
         }
     }
 }
@@ -412,7 +412,7 @@ fn handle_instance_fields(
                 offset: 0,
             };
 
-            cpp_type.fields.push(size_field);
+            cpp_type.fields.push(size_field.into());
         }
 
         // let u = pack_fields_into_single_union(fields);
@@ -426,7 +426,7 @@ fn handle_instance_fields(
         fields
             .iter()
             .cloned()
-            .for_each(|member| cpp_type.fields.push(member));
+            .for_each(|member| cpp_type.fields.push(member.into()));
     };
 }
 

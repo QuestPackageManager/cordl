@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, ops::Deref, sync::Arc};
 
 use color_eyre::eyre::{Context, ContextCompat, Result};
 use itertools::Itertools;
@@ -82,11 +82,11 @@ impl RustTypeRequirements {
 #[derive(Clone)]
 pub struct RustType {
     // TODO: union
-    pub fields: Vec<RustField>,
-    pub constants: Vec<ConstRustField>,
-    pub methods: Vec<RustFunction>,
-    pub traits: Vec<RustTraitImpl>,
-    pub nested_types: Vec<syn::ItemType>,
+    pub fields: Vec<CustomArc<RustField>>,
+    pub constants: Vec<CustomArc<ConstRustField>>,
+    pub methods: Vec<CustomArc<RustFunction>>,
+    pub traits: Vec<CustomArc<RustTraitImpl>>,
+    pub nested_types: Vec<CustomArc<syn::ItemType>>,
 
     pub is_value_type: bool,
     pub is_enum_type: bool,
@@ -94,7 +94,7 @@ pub struct RustType {
     pub is_interface: bool,
 
     pub self_tag: CsTypeTag,
-    pub self_feature: Option<RustFeature>,
+    pub self_feature: Option<CustomArc<RustFeature>>,
 
     pub parent: Option<RustNameComponents>,
     pub backing_type_enum: Option<RustNameComponents>,
@@ -127,7 +127,7 @@ impl RustType {
         });
 
         let rs_name_components = RustNameComponents {
-            generics: generics,
+            generics,
             name: config.name_rs(&cs_name_components.name),
             namespace: Some(
                 config.namespace_rs(&cs_name_components.namespace.clone().unwrap_or_default()),
@@ -157,7 +157,7 @@ impl RustType {
             backing_type_enum: Default::default(),
 
             requirements: RustTypeRequirements::default(),
-            self_feature: Some(RustFeature { name: feature_name }),
+            self_feature: Some(RustFeature { name: feature_name }.into()),
             self_tag: tag,
 
             rs_name_components,
@@ -212,7 +212,7 @@ impl RustType {
                 }],
                 return_type: Some(parse_quote!(*mut Self)),
                 visibility: Visibility::Public,
-            });
+            }.into());
         }
 
         // check if any method name matches more than once
@@ -271,7 +271,7 @@ impl RustType {
             offset: 0,
         };
 
-        self.fields.insert(0, parent_field);
+        self.fields.insert(0, parent_field.into());
         self.parent = Some(parent);
     }
     fn make_object_parent(&mut self) {
@@ -297,7 +297,7 @@ impl RustType {
             offset: 0,
         };
 
-        self.fields.insert(0, parent_field);
+        self.fields.insert(0, parent_field.into());
         self.parent = Some(parent);
     }
 
@@ -350,7 +350,8 @@ impl RustType {
                     #feature
                     #visibility type #name_ident #target_generics = #target;
                 }
-            });
+            })
+            .map(CustomArc::from);
 
         self.nested_types = nested_types.collect();
     }
@@ -405,7 +406,7 @@ impl RustType {
                 field_type: parse_quote!(std::marker::PhantomData<#name>),
                 visibility: Visibility::Private,
                 offset: 0,
-            });
+            }.into());
         }
     }
 
@@ -453,8 +454,8 @@ impl RustType {
                     }
                 },
             };
-            self.traits.push(as_ref);
-            self.traits.push(as_mut);
+            self.traits.push(as_ref.into());
+            self.traits.push(as_mut.into());
         }
     }
 
@@ -546,7 +547,7 @@ impl RustType {
                 )),
                 visibility: (Visibility::Public),
             };
-            self.methods.push(rust_func);
+            self.methods.push(rust_func.into());
         }
     }
 
@@ -707,7 +708,7 @@ impl RustType {
                     return_type: Some(m_result_ty),
                     visibility: (Visibility::Public),
                 };
-                self.methods.push(rust_func);
+                self.methods.push(rust_func.into());
             }
         }
     }
@@ -1151,11 +1152,17 @@ impl RustType {
             .iter()
             .sorted_by(|a, b| a.name.cmp(&b.name))
             .cloned()
-            .map(|mut f| {
-                f.body = f.body.or(Some(parse_quote! {
+            .map(|f| {
+                if f.body.is_some() {
+                    return f;
+                }
+
+                let mut f = Arc::unwrap_or_clone(f.0);
+
+                f.body = f.body.clone().or(Some(parse_quote! {
                     todo!()
                 }));
-                f
+                f.into()
             })
             .map(|f| f.to_token_stream())
             .map(|f| -> syn::ImplItemFn { parse_quote!(#f) });
@@ -1321,7 +1328,12 @@ impl RustType {
 
     fn implement_reference_type(&self) -> syn::ItemImpl {
         let namespace = self.cs_name_components.namespace.as_deref().unwrap_or("");
-        let class_name = self.cs_name_components.clone().remove_namespace().remove_generics().combine_all();
+        let class_name = self
+            .cs_name_components
+            .clone()
+            .remove_namespace()
+            .remove_generics()
+            .combine_all();
 
         let self_item = self.rs_name_components.to_type_path_token();
 
@@ -1376,7 +1388,12 @@ impl RustType {
 
     fn implement_value_type(&self) -> TokenStream {
         let namespace = self.cs_name_components.namespace.as_deref().unwrap_or("");
-        let class_name = self.cs_name_components.clone().remove_namespace().remove_generics().combine_all();
+        let class_name = self
+            .cs_name_components
+            .clone()
+            .remove_namespace()
+            .remove_generics()
+            .combine_all();
 
         let generics = self.get_generics(0);
         let generic_names = self.get_generics_names_args(0);
@@ -1490,5 +1507,34 @@ impl Writer {
 
         self.stream.write_all(formatted.as_bytes())?;
         Ok(())
+    }
+}
+
+#[derive(Debug, PartialEq, PartialOrd, Hash)]
+pub struct CustomArc<T>(pub Arc<T>);
+impl<T> Clone for CustomArc<T> {
+    fn clone(&self) -> Self {
+        CustomArc(Arc::clone(&self.0))
+    }
+}
+
+impl<T> From<T> for CustomArc<T> {
+    fn from(t: T) -> Self {
+        CustomArc(Arc::new(t))
+    }
+}
+
+impl<T> Deref for CustomArc<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        self.0.as_ref()
+    }
+}
+
+
+impl<T: ToTokens> ToTokens for CustomArc<T> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        self.0.as_ref().to_tokens(tokens)
     }
 }
