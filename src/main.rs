@@ -411,7 +411,7 @@ fn main() -> color_eyre::Result<()> {
         TargetLang::SingleJSON => {
             use generate::json;
 
-            let json = Path::new("./json");
+            let json = Path::new("./cordl.json");
             println!("Writing json file {json:?}");
             json::make_json(&metadata, &cs_context_collection, json, cli.format)?;
             Ok(())
