@@ -7,7 +7,7 @@ use std::{
 
 use itertools::Itertools;
 use json_data::JsonTypeTag;
-use json_gen::{make_type, JsonType};
+use json_gen::{make_type, JsonTable, JsonType};
 
 use super::{
     cs_context_collection::TypeContextCollection,
@@ -30,20 +30,30 @@ pub fn make_json(
     // we could use a map here but sorting
     // wouldn't be guaranteed
     // we want sorting so diffs are more readable
-    let json_objects: HashMap<JsonTypeTag, JsonType> = collection
+    let json_objects: HashMap<usize, JsonType> = collection
         .get()
         .values()
         .flat_map(|c| c.get_types().values())
         // skip compiler generated types
         .filter(|t| is_real_declaring_type(t, metadata))
-        .map(|td| (td.self_tag.into(), make_type(td, metadata, collection)))
+        .enumerate()
+        .map(|(i, td)| (i, make_type(td, metadata, collection)))
         .sorted_by(|a, b| a.1.full_name.cmp(&b.1.full_name))
         .collect();
+
+    let table = JsonTable {
+        types_table: json_objects
+            .iter()
+            .sorted_by(|a, b| a.0.cmp(b.0))
+            .map(|t| t.1.tag.clone())
+            .collect(),
+        types: json_objects,
+    };
 
     let file = File::create(file)?;
     let mut buf_writer = BufWriter::new(file);
 
-    serde_json::to_writer_pretty(&mut buf_writer, &json_objects)?;
+    serde_json::to_writer_pretty(&mut buf_writer, &table)?;
 
     Ok(())
 }

@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use itertools::Itertools;
 
 use serde::{Deserialize, Serialize};
@@ -14,6 +16,13 @@ use super::{
     json_data::{JsonResolvedTypeData, JsonTypeTag},
     json_name_resolver::JsonNameResolver,
 };
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct JsonTable {
+    /// associated with types by their index in types_table
+    pub types: HashMap<usize, JsonType>,
+    pub types_table: Vec<JsonTypeTag>,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum JsonFieldRef {
