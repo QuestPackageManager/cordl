@@ -652,10 +652,9 @@ impl RustType {
                     .collect_vec();
 
                 let param_names = params.iter().map(|p| &p.name);
+                let param_types = params.iter().map(|p| &p.param_type);
 
-                let body = self.make_method_body(m, m_name, param_names, m_ret_ty_ident);
-
-                let generics = m
+                let method_generics = m
                     .template
                     .as_ref()
                     .map(|t| {
@@ -670,13 +669,22 @@ impl RustType {
                     })
                     .unwrap_or_default();
 
+                let body = self.make_method_body(
+                    m,
+                    m_name,
+                    param_types,
+                    param_names,
+                    m_ret_ty_ident,
+                    None,
+                );
+
                 let combined_generics = self
                     .rs_name_components
                     .generics
                     .clone()
                     .unwrap_or_default()
                     .into_iter()
-                    .chain(generics.clone().into_iter())
+                    .chain(method_generics.clone().into_iter())
                     .map(|mut g| {
                         // TODO: Add these bounds on demand
                         let bounds = vec![
@@ -698,7 +706,7 @@ impl RustType {
                 let rust_func = RustFunction {
                     name: format_ident!("{m_name_rs}"),
                     body: Some(body),
-                    generics,
+                    generics: method_generics,
                     is_mut: m.instance,
                     is_ref: m.instance,
                     is_self: m.instance,
@@ -717,30 +725,75 @@ impl RustType {
         &self,
         m: &CsMethod,
         m_name: &String,
+        param_types: impl Iterator<Item = &'a syn::Type>,
         param_names: impl Iterator<Item = &'a syn::Ident>,
         m_ret_ty: syn::Type,
+        generic_args: Option<Vec<syn::GenericArgument>>,
     ) -> Vec<syn::Stmt> {
-        let is_value_type = self.is_value_type || self.is_enum_type;
+        let param_types = param_types.collect_vec();
+        let n = param_types.len();
 
-        let invoke_call: Vec<syn::Stmt> = match (m.instance, is_value_type) {
-            // instance, value type
-            (true, true) => parse_quote! {
+        let define_method: Vec<syn::Stmt> = match m.instance {
+            // instance
+            true => parse_quote! {
+            static method: &'static quest_hook::libil2cpp::MethodInfo = <Self as quest_hook::libil2cpp::Type>::class()
+                .find_method::<(#(#param_types),*), #m_ret_ty, #n>(#m_name)
+                .unwrap_or_else(|e| {
+                    panic!(
+                        "no matching methods found for non-void {}.{}({}) Cause: {e:?}",
+                        Self::class(),
+                        #m_name,
+                        #n
+                    )
+                });
+            },
+            // static
+            false => parse_quote! {
+            static method: &'static quest_hook::libil2cpp::MethodInfo = <Self as quest_hook::libil2cpp::Type>::class()
+                .find_static_method::<(#(#param_types),*), #m_ret_ty, #n>(#m_name)
+                .unwrap_or_else(|e| {
+                    panic!(
+                        "no matching methods found for non-void {}.{}({}) Cause: {e:?}",
+                        Self::class(),
+                        #m_name,
+                        #n
+                    )
+                });
+            },
+        };
 
-                let __cordl_ret: #m_ret_ty = quest_hook::libil2cpp::ValueTypeExt::invoke(self, #m_name, ( #(#param_names),* ))?;
+        let invoke_call: Vec<syn::Stmt> = match (m.instance, generic_args) {
+            // instance, not generic
+            (true, None) => parse_quote! {
+                #(#define_method);*
+
+                let __cordl_ret: #m_ret_ty = unsafe { method.invoke_unchecked(self, ( #(#param_names),* ))? };
 
                 Ok(__cordl_ret.into())
             },
-            // instance, ref type
-            (true, false) => parse_quote! {
+            // instance, generic
+            (true, Some(args)) => parse_quote! {
+                #(#define_method);*
+
                 let __cordl_object: &mut quest_hook::libil2cpp::Il2CppObject = quest_hook::libil2cpp::ObjectType::as_object_mut(self);
 
                 let __cordl_ret: #m_ret_ty = __cordl_object.invoke(#m_name, ( #(#param_names),* ))?;
 
                 Ok(__cordl_ret.into())
             },
-            // static
-            (false, _) => parse_quote! {
-                let __cordl_ret: #m_ret_ty = <Self as quest_hook::libil2cpp::Type>::class().invoke(#m_name, ( #(#param_names),* ) )?;
+            // static not generic
+            (false, None) => parse_quote! {
+                #(#define_method);*
+
+                let __cordl_ret: #m_ret_ty = unsafe { method.invoke_unchecked((), ( #(#param_names),* ))? };
+
+                Ok(__cordl_ret.into())
+            },
+            // static generic
+            (false, Some(args)) => parse_quote! {
+                #(#define_method);*
+
+                let __cordl_ret: #m_ret_ty = <Self as quest_hook::libil2cpp::Type>::class().invoke_generic(#m_name, ( #(#param_names),* ), (#(#args),*))?;
 
                 Ok(__cordl_ret.into())
             },
