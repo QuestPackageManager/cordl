@@ -26,6 +26,7 @@ pub fn make_json(
     metadata: &CordlMetadata,
     collection: &TypeContextCollection,
     file: &Path,
+    format: bool,
 ) -> Result<()> {
     // we could use a map here but sorting
     // wouldn't be guaranteed
@@ -53,7 +54,10 @@ pub fn make_json(
     let file = File::create(file)?;
     let mut buf_writer = BufWriter::new(file);
 
-    serde_json::to_writer_pretty(&mut buf_writer, &table)?;
+    match format {
+        true => serde_json::to_writer_pretty(&mut buf_writer, &table)?,
+        false => serde_json::to_writer(&mut buf_writer, &table)?,
+    };
 
     Ok(())
 }
