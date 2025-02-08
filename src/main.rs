@@ -413,7 +413,7 @@ fn main() -> color_eyre::Result<()> {
 
             let json = Path::new("./json");
             println!("Writing json file {json:?}");
-            json::make_json(&metadata, &cs_context_collection, json)?;
+            json::make_json(&metadata, &cs_context_collection, json, cli.format)?;
             Ok(())
         }
         #[cfg(feature = "json")]
