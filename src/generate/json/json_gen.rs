@@ -53,6 +53,7 @@ pub struct JsonField {
     pub name: String,
     pub ty_name: String,
     pub ty_tag: JsonResolvedTypeData,
+    pub instance: bool,
     pub offset: Option<u32>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -60,6 +61,7 @@ pub struct JsonProperty {
     pub name: String,
     pub ty_name: String,
     pub ty_tag: JsonResolvedTypeData,
+    pub instance: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub getter: Option<(u32, String)>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -72,6 +74,7 @@ pub struct JsonMethod {
     pub ret: String,
     pub ret_ty_tag: JsonResolvedTypeData,
     pub parameters: Vec<JsonParam>,
+    pub instance: bool,
     pub method_info: JsonMethodInfo,
 }
 
@@ -99,10 +102,10 @@ fn make_field(field: &CsField, name_resolver: &JsonNameResolver) -> JsonField {
 
     JsonField {
         name: field.name.to_string(),
-
         ty_name,
         offset,
         ty_tag: ty,
+        instance: field.instance
     }
 }
 fn make_property(property: &CsProperty, name_resolver: &JsonNameResolver) -> JsonProperty {
@@ -122,6 +125,7 @@ fn make_property(property: &CsProperty, name_resolver: &JsonNameResolver) -> Jso
         name: property.name.to_string(),
         ty_tag: p_type,
         ty_name,
+        instance: property.instance,
         setter: p_setter,
         getter: p_getter,
     }
@@ -168,6 +172,7 @@ fn make_method(method: &CsMethod, name_resolver: &JsonNameResolver) -> JsonMetho
     JsonMethod {
         name: method.name.to_string(),
         parameters: params,
+        instance: method.instance,
         ret: ret_ty_name,
         ret_ty_tag: ret_ty,
         method_info: json_method_info,
