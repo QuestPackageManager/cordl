@@ -54,6 +54,8 @@ pub struct JsonField {
     pub ty_name: String,
     pub ty_tag: JsonResolvedTypeData,
     pub instance: bool,
+    pub is_const: bool,
+    pub readonly: bool,
     pub offset: Option<u32>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -105,7 +107,9 @@ fn make_field(field: &CsField, name_resolver: &JsonNameResolver) -> JsonField {
         ty_name,
         offset,
         ty_tag: ty,
-        instance: field.instance
+        instance: field.instance,
+        is_const: field.is_const,
+        readonly: field.readonly
     }
 }
 fn make_property(property: &CsProperty, name_resolver: &JsonNameResolver) -> JsonProperty {
