@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::generate::{
     cs_context_collection::TypeContextCollection,
-    cs_members::{CsField, CsMethod, CsParam, CsParamFlags, CsProperty},
+    cs_members::{CsField, CsMethod, CsParam, CsParamFlags, CsProperty, CsGenericTemplateType, CsGenericTemplate},
     cs_type::CsType,
     metadata::CordlMetadata,
     type_extensions::TypeDefinitionExtensions,
@@ -43,6 +43,8 @@ pub struct JsonType {
     pub children: Vec<JsonType>,
     pub tag: JsonTypeTag,
     pub parent: Option<JsonResolvedTypeData>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub template: Option<JsonTemplate>,
 
     pub size: u32,
     pub packing: Option<u8>,
@@ -71,6 +73,14 @@ pub struct JsonProperty {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum JsonGenericArgumentType {
+    AnyType,
+    ReferenceType
+}
+
+type JsonTemplate = Vec<(JsonGenericArgumentType, String)>;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JsonMethod {
     pub name: String,
     pub ret: String,
@@ -78,6 +88,8 @@ pub struct JsonMethod {
     pub parameters: Vec<JsonParam>,
     pub instance: bool,
     pub method_info: JsonMethodInfo,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub template: Option<JsonTemplate>
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -155,6 +167,18 @@ fn make_param(param: &CsParam, name_resolver: &JsonNameResolver) -> JsonParam {
         ref_mode,
     }
 }
+
+fn make_template(template: &CsGenericTemplate) -> JsonTemplate {
+    // note: I'm not good at rust so there may be a better way to do this - zip
+    // (feel free to remove this comment if this is fine)
+    return template.names
+        .iter()
+        .map(|p| (match(p.0) {
+            CsGenericTemplateType::AnyType => JsonGenericArgumentType::AnyType,
+            CsGenericTemplateType::ReferenceType => JsonGenericArgumentType::ReferenceType
+        }, p.1.clone())).collect_vec();
+}
+
 fn make_method(method: &CsMethod, name_resolver: &JsonNameResolver) -> JsonMethod {
     let ret_ty_name = name_resolver
         .resolve_name(&method.return_type)
@@ -180,6 +204,10 @@ fn make_method(method: &CsMethod, name_resolver: &JsonNameResolver) -> JsonMetho
         ret: ret_ty_name,
         ret_ty_tag: ret_ty,
         method_info: json_method_info,
+        template: match&(method.template) {
+            Some(t) => Some(make_template(t)),
+            None => None
+        }
     }
 }
 
@@ -239,6 +267,10 @@ pub fn make_type(
         properties,
         methods,
         children,
+        template: match&(td.generic_template) {
+            Some(t) => Some(make_template(t)),
+            None => None
+        },
         packing,
         size,
         tag: td.self_tag.into(),
