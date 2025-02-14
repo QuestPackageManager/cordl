@@ -66,6 +66,7 @@ pub struct JsonProperty {
     pub ty_name: String,
     pub ty_tag: JsonResolvedTypeData,
     pub instance: bool,
+    pub indexable: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub getter: Option<(u32, String)>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -142,6 +143,7 @@ fn make_property(property: &CsProperty, name_resolver: &JsonNameResolver) -> Jso
         ty_tag: p_type,
         ty_name,
         instance: property.instance,
+        indexable: property.indexable,
         setter: p_setter,
         getter: p_getter,
     }
