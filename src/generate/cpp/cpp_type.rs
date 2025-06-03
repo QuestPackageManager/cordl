@@ -976,13 +976,50 @@ impl CppType {
         let params_types_count = method_decl.parameters.len();
 
         let resolve_instance_slot_lines = if let Some(slot) = method.method_data.slot {
-            vec![format!(
-                "auto* {METHOD_INFO_VAR_NAME} = THROW_UNLESS((::il2cpp_utils::ResolveVtableSlot(
-                    {extract_self_class},
-                    {declaring_classof_call},
-                    {slot}
-                )));"
-            )]
+            match &template {
+                Some(template) => {
+                    // generic
+                    let template_names = template
+                        .just_names()
+                        .map(|t| {
+                            format!(
+                                "::il2cpp_utils::il2cpp_type_check::il2cpp_no_arg_class<{t}>::get()"
+                            )
+                        })
+                        .join(", ");
+                    let template_count = template.names.len();
+
+                    // if no template params, just empty span
+                    // avoid allocs
+                    let template_classes_array_cpp = match template_count {
+                        0 => "std::span<const Il2CppClass* const, 0>()".to_string(),
+                        _ => format!(
+                            "std::array<const Il2CppClass*, {template_count}>{{{template_names}}}"
+                        ),
+                    };
+
+                    vec![
+                    format!("auto* ___internal_method_base = THROW_UNLESS((::il2cpp_utils::ResolveVtableSlot(
+                        {extract_self_class},
+                        {declaring_classof_call},
+                        {slot}
+                    )));"),
+                    format!("auto* {METHOD_INFO_VAR_NAME} = THROW_UNLESS(::il2cpp_utils::MakeGenericMethod(
+                        ___internal_method_base,
+                        {template_classes_array_cpp}
+                    ));"),
+                    ]
+                }
+                None => {
+                    vec![
+                        format!("auto* {METHOD_INFO_VAR_NAME} = THROW_UNLESS((::il2cpp_utils::ResolveVtableSlot(
+                            {extract_self_class},
+                            {declaring_classof_call},
+                            {slot}
+                        )));")
+                    ]
+                }
+            }
         } else {
             vec![]
         };
