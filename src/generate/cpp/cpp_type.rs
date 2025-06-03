@@ -999,12 +999,12 @@ impl CppType {
                     };
 
                     vec![
-                    format!("static auto* ___internal_method_base = THROW_UNLESS((::il2cpp_utils::ResolveVtableSlot(
+                    format!("auto* ___internal_method_base = THROW_UNLESS((::il2cpp_utils::ResolveVtableSlot(
                         {extract_self_class},
                         {declaring_classof_call},
                         {slot}
                     )));"),
-                    format!("static auto* {METHOD_INFO_VAR_NAME} = THROW_UNLESS(::il2cpp_utils::MakeGenericMethod(
+                    format!("auto* {METHOD_INFO_VAR_NAME} = THROW_UNLESS(::il2cpp_utils::MakeGenericMethod(
                         ___internal_method_base,
                         {template_classes_array_cpp}
                     ));"),
@@ -1056,7 +1056,7 @@ impl CppType {
                 };
 
                 vec![
-                format!("static auto* ___internal_method_base = THROW_UNLESS((::il2cpp_utils::FindMethod(
+                format!("auto* ___internal_method_base = THROW_UNLESS((::il2cpp_utils::FindMethod(
                     {declaring_classof_call},
                     \"{m_name}\",
                     {template_classes_array_cpp},
