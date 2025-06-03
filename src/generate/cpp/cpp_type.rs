@@ -1056,7 +1056,7 @@ impl CppType {
                 };
 
                 vec![
-                format!("auto* ___internal_method_base = THROW_UNLESS((::il2cpp_utils::FindMethod(
+                format!("static auto* ___internal_method_base = THROW_UNLESS((::il2cpp_utils::FindMethod(
                     {declaring_classof_call},
                     \"{m_name}\",
                     {template_classes_array_cpp},
