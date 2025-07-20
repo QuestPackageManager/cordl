@@ -38,24 +38,24 @@ impl RustContextCollection {
         metadata: &CordlMetadata,
         config: &RustGenerationConfig,
     ) -> RustContextCollection {
-        let mut cpp_collection = RustContextCollection::default();
+        let mut rs_collection = RustContextCollection::default();
 
-        info!("Making CppContextCollection from TypeContextCollection");
+        info!("Making RustContextCollection from TypeContextCollection");
         for (tag, context) in collection.get() {
-            cpp_collection
+            rs_collection
                 .all_contexts
                 .insert(*tag, RustContext::make(*tag, context, metadata, config));
         }
-        cpp_collection.alias_context = collection.alias_context;
+        rs_collection.alias_context = collection.alias_context;
 
-        info!("Filling typedefs in CppContextCollection");
+        info!("Filling typedefs in RustContextCollection");
         for (_, context) in collection.all_contexts {
             for (tag, cs_type) in context.typedef_types {
-                cpp_collection.fill(tag, cs_type, metadata, config);
+                rs_collection.fill(tag, cs_type, metadata, config);
             }
         }
 
-        cpp_collection
+        rs_collection
     }
 
     fn do_fill_rust_type(
@@ -107,27 +107,27 @@ impl RustContextCollection {
         }
 
         // Move ownership to local
-        let cpp_type_entry = self
+        let rs_type_entry = self
             .all_contexts
             .get_mut(&context_tag)
-            .expect("No cpp context")
+            .expect("No rs context")
             .typedef_types
             .remove_entry(&type_tag);
 
-        // In some occasions, the CppContext can be empty
-        if let Some((_t, mut cpp_type)) = cpp_type_entry {
-            self.do_fill_rust_type(&mut cpp_type, cs_type, metadata, config);
+        // In some occasions, the rsContext can be empty
+        if let Some((_t, mut rs_type)) = rs_type_entry {
+            self.do_fill_rust_type(&mut rs_type, cs_type, metadata, config);
 
             // Move ownership back up
             self.all_contexts
                 .get_mut(&context_tag)
-                .expect("No cpp context")
-                .insert_rust_type(cpp_type);
+                .expect("No rs context")
+                .insert_rust_type(rs_type);
         }
     }
 
     ///
-    /// By default will only look for nested types of the context, ignoring other CppTypes
+    /// By default will only look for nested types of the context, ignoring other rsTypes
     ///
     pub fn get_rust_type(&self, ty: CsTypeTag) -> Option<&RustType> {
         let context_root_tag = self.get_context_root_tag(ty);
@@ -137,16 +137,16 @@ impl RustContextCollection {
     }
 
     ///
-    /// By default will only look for nested types of the context, ignoring other CppTypes
+    /// By default will only look for nested types of the context, ignoring other rsTypes
     ///
-    pub fn get_cpp_type_mut(&mut self, ty: CsTypeTag) -> Option<&mut RustType> {
+    pub fn get_rs_type_mut(&mut self, ty: CsTypeTag) -> Option<&mut RustType> {
         let context_root_tag = self.get_context_root_tag(ty);
 
         self.get_context_mut(context_root_tag)
             .and_then(|c| c.get_types_mut().get_mut(&ty))
     }
 
-    pub fn borrow_cpp_type<F>(&mut self, ty: CsTypeTag, func: F)
+    pub fn borrow_rs_type<F>(&mut self, ty: CsTypeTag, func: F)
     where
         F: Fn(&mut Self, RustType) -> RustType,
     {
@@ -161,16 +161,16 @@ impl RustContextCollection {
         // self.borrowing_types.insert(context_ty);
 
         // search in root
-        // clone to avoid failing il2cpp_name
-        let Some(declaring_cpp_type) = context.typedef_types.get(&ty).cloned() else {
+        // clone to avoid failing il2rs_name
+        let Some(declaring_rs_type) = context.typedef_types.get(&ty).cloned() else {
             panic!("No type {context_ty:#?} found!")
         };
-        let _old_tag = declaring_cpp_type.self_tag;
-        let new_cpp_ty = func(self, declaring_cpp_type);
+        let _old_tag = declaring_rs_type.self_tag;
+        let new_rs_ty = func(self, declaring_rs_type);
 
         let context = self.all_contexts.get_mut(&context_ty).unwrap();
 
-        context.insert_rust_type(new_cpp_ty);
+        context.insert_rust_type(new_rs_ty);
 
         self.borrowing_types.remove(&context_ty);
     }
