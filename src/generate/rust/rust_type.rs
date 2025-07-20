@@ -1366,14 +1366,14 @@ impl RustType {
             impl #generics std::ops::Deref for #path_ident {
                 type Target = #parent_name;
 
-                fn deref(&self) -> &Self::Target {
+                fn deref(&self) -> &<Self as std::ops::Deref>::Target {
                     unsafe {&self.#parent_field_ident}
                 }
             }
 
             #feature
             impl #generics std::ops::DerefMut for #path_ident {
-                fn deref_mut(&mut self) -> &mut Self::Target {
+                fn deref_mut(&mut self) -> &mut <Self as std::ops::Deref>::Target {
                     unsafe{ &mut self.#parent_field_ident }
                 }
             }
@@ -1529,10 +1529,10 @@ impl RustType {
                 fn matches(ty: &quest_hook::libil2cpp::Il2CppType) -> bool {
                     <Self as quest_hook::libil2cpp::Type> ::matches_value_parameter(ty)
                 }
-                fn from_actual(actual:Self::Actual) -> Self {
+                fn from_actual(actual: <Self as quest_hook::libil2cpp::Parameter>::Actual) -> Self {
                     actual
                 }
-                fn into_actual(self) -> Self::Actual {
+                fn into_actual(self) -> <Self as quest_hook::libil2cpp::Parameter>::Actual {
                     self
                 }
 
@@ -1556,10 +1556,10 @@ impl RustType {
                 fn matches(ty: &quest_hook::libil2cpp::Il2CppType) -> bool {
                     <Self as quest_hook::libil2cpp::Type> ::matches_return(ty)
                 }
-                fn into_actual(self) -> Self::Actual {
+                fn into_actual(self) -> <Self as quest_hook::libil2cpp::Return>::Actual {
                     self
                 }
-                fn from_actual(actual:Self::Actual) -> Self {
+                fn from_actual(actual: <Self as quest_hook::libil2cpp::Return>::Actual) -> Self {
                     actual
                 }
 
