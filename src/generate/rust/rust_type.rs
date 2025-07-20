@@ -733,15 +733,18 @@ impl RustType {
         let param_types = param_types.collect_vec();
         let n = param_types.len();
 
-        let define_method: Vec<syn::Stmt> = match m.instance {
+        let self_class = self.rs_name_components.to_type_path_token();
+
+        let define_method_info: Vec<syn::Stmt> = match m.instance {
+            // can't use Self in a static let, very sad
             // instance
             true => parse_quote! {
-            static method: &'static quest_hook::libil2cpp::MethodInfo = <Self as quest_hook::libil2cpp::Type>::class()
+            static method: &'static quest_hook::libil2cpp::MethodInfo = <#self_class as quest_hook::libil2cpp::Type>::class()
                 .find_method::<(#(#param_types),*), #m_ret_ty, #n>(#m_name)
                 .unwrap_or_else(|e| {
                     panic!(
                         "no matching methods found for non-void {}.{}({}) Cause: {e:?}",
-                        Self::class(),
+                        <#self_class as quest_hook::libil2cpp::Type>::class(),
                         #m_name,
                         #n
                     )
@@ -749,12 +752,12 @@ impl RustType {
             },
             // static
             false => parse_quote! {
-            static method: &'static quest_hook::libil2cpp::MethodInfo = <Self as quest_hook::libil2cpp::Type>::class()
+            static method: &'static quest_hook::libil2cpp::MethodInfo = <#self_class as quest_hook::libil2cpp::Type>::class()
                 .find_static_method::<(#(#param_types),*), #m_ret_ty, #n>(#m_name)
                 .unwrap_or_else(|e| {
                     panic!(
                         "no matching methods found for non-void {}.{}({}) Cause: {e:?}",
-                        Self::class(),
+                        <#self_class as quest_hook::libil2cpp::Type>::class(),
                         #m_name,
                         #n
                     )
@@ -765,7 +768,7 @@ impl RustType {
         let invoke_call: Vec<syn::Stmt> = match (m.instance, generic_args) {
             // instance, not generic
             (true, None) => parse_quote! {
-                #(#define_method);*
+                #(#define_method_info);*
 
                 let __cordl_ret: #m_ret_ty = unsafe { method.invoke_unchecked(self, ( #(#param_names),* ))? };
 
@@ -773,7 +776,7 @@ impl RustType {
             },
             // instance, generic
             (true, Some(args)) => parse_quote! {
-                #(#define_method);*
+                #(#define_method_info);*
 
                 let __cordl_object: &mut quest_hook::libil2cpp::Il2CppObject = quest_hook::libil2cpp::ObjectType::as_object_mut(self);
 
@@ -783,7 +786,7 @@ impl RustType {
             },
             // static not generic
             (false, None) => parse_quote! {
-                #(#define_method);*
+                #(#define_method_info);*
 
                 let __cordl_ret: #m_ret_ty = unsafe { method.invoke_unchecked((), ( #(#param_names),* ))? };
 
@@ -791,7 +794,7 @@ impl RustType {
             },
             // static generic
             (false, Some(args)) => parse_quote! {
-                #(#define_method);*
+                #(#define_method_info);*
 
                 let __cordl_ret: #m_ret_ty = <Self as quest_hook::libil2cpp::Type>::class().invoke_generic(#m_name, ( #(#param_names),* ), (#(#args),*))?;
 
