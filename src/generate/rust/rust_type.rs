@@ -988,14 +988,14 @@ impl RustType {
             impl #generics std::ops::Deref for #path_ident {
                 type Target = #parent_name;
 
-                fn deref(&self) -> &Self::Target {
+                fn deref(&self) -> &<Self as std::ops::Deref>::Target {
                     unsafe {&self.#parent_field_ident}
                 }
             }
 
             #feature
             impl #generics std::ops::DerefMut for #path_ident {
-                fn deref_mut(&mut self) -> &mut Self::Target {
+                fn deref_mut(&mut self) -> &mut <Self as std::ops::Deref>::Target {
                     unsafe{ &mut self.#parent_field_ident }
                 }
             }
