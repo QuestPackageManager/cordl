@@ -1,9 +1,9 @@
 use core::mem;
 
+use crate::TypeDefinitionIndex;
 use crate::generate::metadata::CordlMetadata;
 use crate::generate::metadata::PointerSize;
 use crate::generate::type_extensions::TypeDefinitionExtensions;
-use crate::TypeDefinitionIndex;
 
 use brocolib::global_metadata::Il2CppTypeDefinition;
 use brocolib::runtime_metadata::Il2CppTypeDefinitionSizes;
@@ -140,7 +140,10 @@ pub fn get_sizeof_type<'a>(
 
         // If we are still 0, todo!
         if metadata_size == 0 {
-            todo!("We do not yet support cases where the instance type would be a 0 AFTER we have done computation! type: {}", t.full_name(metadata.metadata, true));
+            todo!(
+                "We do not yet support cases where the instance type would be a 0 AFTER we have done computation! type: {}",
+                t.full_name(metadata.metadata, true)
+            );
         }
     }
 

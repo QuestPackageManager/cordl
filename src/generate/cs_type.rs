@@ -16,6 +16,7 @@ use itertools::Itertools;
 use log::{debug, info, warn};
 
 use crate::{
+    Endian,
     data::{
         name_components::NameComponents,
         type_resolver::{ResolvedType, TypeResolver, TypeUsage},
@@ -25,7 +26,6 @@ use crate::{
         type_extensions::{ParameterDefinitionExtensions, TypeExtentions},
     },
     helpers::cursor::ReadBytesExtensions,
-    Endian,
 };
 
 use super::{
@@ -272,7 +272,10 @@ impl CsType {
 
         if t.parent_index == u32::MAX {
             if !t.is_interface() && t.full_name(metadata.metadata, true) != "System.Object" {
-                info!("Skipping type: {ns}::{name} because it has parent index: {} and is not an interface!", t.parent_index);
+                info!(
+                    "Skipping type: {ns}::{name} because it has parent index: {} and is not an interface!",
+                    t.parent_index
+                );
                 return None;
             }
         } else if metadata
@@ -449,7 +452,8 @@ impl CsType {
                     };
 
                     if offset < metadata.object_size() as u32 {
-                        warn!("Field {f_name} ({offset:x}) of {} is smaller than object size {:x} is value type {}",
+                        warn!(
+                            "Field {f_name} ({offset:x}) of {} is smaller than object size {:x} is value type {}",
                             t.full_name(metadata.metadata, true),
                             metadata.object_size(),
                             t.is_value_type() || t.is_enum_type()
@@ -548,7 +552,10 @@ impl CsType {
                     // self.inherit.push(INTERFACE_WRAPPER_TYPE.to_string());
                 }
                 false => {
-                    info!("Skipping type: {ns}::{name} because it has parent index: {} and is not an interface!", t.parent_index);
+                    info!(
+                        "Skipping type: {ns}::{name} because it has parent index: {} and is not an interface!",
+                        t.parent_index
+                    );
                 }
             }
             return;

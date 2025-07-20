@@ -2,7 +2,7 @@ use std::cmp::Ordering;
 use std::io::{BufWriter, Write};
 use std::{
     collections::{HashMap, HashSet},
-    fs::{create_dir_all, remove_file, File},
+    fs::{File, create_dir_all, remove_file},
     path::PathBuf,
 };
 
@@ -148,14 +148,12 @@ impl CppContext {
                 };
 
                 if !t.is_value_type() {
-                    x.typealias_types.insert((
-                        cpp_ty.cpp_namespace(),
-                        CppUsingAlias {
+                    x.typealias_types
+                        .insert((cpp_ty.cpp_namespace(), CppUsingAlias {
                             alias: cpp_ty.name().to_string(),
                             result,
                             template: Default::default(),
-                        },
-                    ));
+                        }));
                     continue;
                 }
             }

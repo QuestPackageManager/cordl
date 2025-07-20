@@ -6,8 +6,7 @@ use std::{
 };
 
 use itertools::Itertools;
-use json_data::JsonTypeTag;
-use json_gen::{make_type, JsonTable, JsonType};
+use json_gen::{JsonTable, JsonType, make_type};
 
 use super::{
     cs_context_collection::TypeContextCollection,

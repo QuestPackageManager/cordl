@@ -65,7 +65,11 @@ pub fn run_rust(
         };
 
         types()
-            .find(|(_, c)| c.get_types().iter().any(|(_, t)| t.rs_name_components.generics.is_some()))
+            .find(|(_, c)| {
+                c.get_types()
+                    .iter()
+                    .any(|(_, t)| t.rs_name_components.generics.is_some())
+            })
             .unwrap()
             .1
             .write(&STATIC_CONFIG)?;

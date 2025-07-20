@@ -20,7 +20,7 @@ use generate::metadata::CordlMetadata;
 use itertools::Itertools;
 extern crate pretty_env_logger;
 
-use include_dir::{include_dir, Dir};
+use include_dir::{Dir, include_dir};
 use log::{info, trace, warn};
 use rayon::prelude::*;
 
@@ -182,23 +182,23 @@ fn main() -> color_eyre::Result<()> {
         blacklist_type("UnityEngine.XR.XRMeshSubsystemDescriptor");
         blacklist_type("UnityEngine.XR.XRDisplaySubsystem");
         blacklist_type("UIToolkitUtilities.Controls.Table"); // TODO: Make System.Enum work properly
-                                                             // blacklist_type("NetworkPacketSerializer`2::<>c__DisplayClass4_0`1");
-                                                             // blacklist_type("NetworkPacketSerializer`2::<>c__DisplayClass8_0`1");
-                                                             // blacklist_type("NetworkPacketSerializer`2::<>c__DisplayClass7_0`1");
-                                                             // blacklist_type("NetworkPacketSerializer`2::<>c__DisplayClass5_0`1");
-                                                             // blacklist_type("NetworkPacketSerializer`2::<>c__DisplayClass10_0");
-                                                             // blacklist_type("NetworkPacketSerializer`2::<>c__6`1");
-                                                             // blacklist_type("RpcHandler`1::<>c__DisplayClass14_0`5");
-                                                             // blacklist_type("RpcHandler`1::<>c__DisplayClass10_0`1");
-                                                             // blacklist_type("RpcHandler`1::<>c__DisplayClass11_0`2");
-                                                             // blacklist_type("RpcHandler`1::<>c__DisplayClass12_0`3");
-                                                             // blacklist_type("RpcHandler`1::<>c__DisplayClass13_0`4");
-                                                             // blacklist_type("RpcHandler`1::<>c__DisplayClass14_0`5");
-                                                             // blacklist_type("RpcHandler`1::<>c__DisplayClass15_0`1");
-                                                             // blacklist_type("RpcHandler`1::<>c__DisplayClass16_0`2");
-                                                             // blacklist_type("RpcHandler`1::<>c__DisplayClass17_0`3");
-                                                             // blacklist_type("RpcHandler`1::<>c__DisplayClass18_0`4");
-                                                             // blacklist_type("RpcHandler`1::<>c__DisplayClass19_0`5");
+        // blacklist_type("NetworkPacketSerializer`2::<>c__DisplayClass4_0`1");
+        // blacklist_type("NetworkPacketSerializer`2::<>c__DisplayClass8_0`1");
+        // blacklist_type("NetworkPacketSerializer`2::<>c__DisplayClass7_0`1");
+        // blacklist_type("NetworkPacketSerializer`2::<>c__DisplayClass5_0`1");
+        // blacklist_type("NetworkPacketSerializer`2::<>c__DisplayClass10_0");
+        // blacklist_type("NetworkPacketSerializer`2::<>c__6`1");
+        // blacklist_type("RpcHandler`1::<>c__DisplayClass14_0`5");
+        // blacklist_type("RpcHandler`1::<>c__DisplayClass10_0`1");
+        // blacklist_type("RpcHandler`1::<>c__DisplayClass11_0`2");
+        // blacklist_type("RpcHandler`1::<>c__DisplayClass12_0`3");
+        // blacklist_type("RpcHandler`1::<>c__DisplayClass13_0`4");
+        // blacklist_type("RpcHandler`1::<>c__DisplayClass14_0`5");
+        // blacklist_type("RpcHandler`1::<>c__DisplayClass15_0`1");
+        // blacklist_type("RpcHandler`1::<>c__DisplayClass16_0`2");
+        // blacklist_type("RpcHandler`1::<>c__DisplayClass17_0`3");
+        // blacklist_type("RpcHandler`1::<>c__DisplayClass18_0`4");
+        // blacklist_type("RpcHandler`1::<>c__DisplayClass19_0`5");
 
         // Incorrect offsets / sizes due to il2cpp bug
         blacklist_type("UnityEngine.InputSystem.InputInteractionContext");

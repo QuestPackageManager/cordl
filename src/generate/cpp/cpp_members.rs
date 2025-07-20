@@ -18,7 +18,7 @@ use std::{
 use super::{
     config::STATIC_CONFIG,
     cpp_context::CppContext,
-    cpp_type::{CppType, CORDL_REFERENCE_TYPE_CONSTRAINT},
+    cpp_type::{CORDL_REFERENCE_TYPE_CONSTRAINT, CppType},
 };
 
 #[derive(Debug, Eq, Hash, PartialEq, Clone, Default, PartialOrd, Ord)]

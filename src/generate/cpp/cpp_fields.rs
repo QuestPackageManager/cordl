@@ -26,7 +26,7 @@ use super::cpp_members::{
     CppLine, CppMember, CppMethodDecl, CppMethodImpl, CppParam, CppPropertyDecl,
 };
 use super::cpp_name_resolver::CppNameResolver;
-use super::cpp_type::{CppType, CORDL_METHOD_HELPER_NAMESPACE};
+use super::cpp_type::{CORDL_METHOD_HELPER_NAMESPACE, CppType};
 
 pub fn handle_static_fields(
     cpp_type: &mut CppType,
@@ -63,12 +63,14 @@ pub fn handle_static_fields(
 
         let klass_resolver = cpp_type.classof_cpp_name();
 
-        let getter_call =
-                format!("return {CORDL_METHOD_HELPER_NAMESPACE}::getStaticField<{field_ty_cpp_name}, \"{f_name}\", {klass_resolver}>();");
+        let getter_call = format!(
+            "return {CORDL_METHOD_HELPER_NAMESPACE}::getStaticField<{field_ty_cpp_name}, \"{f_name}\", {klass_resolver}>();"
+        );
 
         let setter_var_name = "value";
-        let setter_call =
-                format!("{CORDL_METHOD_HELPER_NAMESPACE}::setStaticField<{field_ty_cpp_name}, \"{f_name}\", {klass_resolver}>(std::forward<{field_ty_cpp_name}>({setter_var_name}));");
+        let setter_call = format!(
+            "{CORDL_METHOD_HELPER_NAMESPACE}::setStaticField<{field_ty_cpp_name}, \"{f_name}\", {klass_resolver}>(std::forward<{field_ty_cpp_name}>({setter_var_name}));"
+        );
 
         // don't get a template that has no names
         let useful_template =
@@ -568,7 +570,9 @@ pub(crate) fn prop_methods_from_fieldinfo(
         }
         // ref type field write on a ref type
         true => {
-            format!("il2cpp_functions::gc_wbarrier_set_field(this, static_cast<void**>(static_cast<void*>(&{field_access})), cordl_internals::convert(std::forward<decltype({setter_var_name})>({setter_var_name})));")
+            format!(
+                "il2cpp_functions::gc_wbarrier_set_field(this, static_cast<void**>(static_cast<void*>(&{field_access})), cordl_internals::convert(std::forward<decltype({setter_var_name})>({setter_var_name})));"
+            )
         }
         false => {
             format!("{field_access} = {setter_var_name};")
@@ -693,10 +697,11 @@ pub(crate) fn prop_methods_from_fieldinfo(
         ..setter_decl.clone().into()
     };
 
-    (
-        vec![getter_decl, const_getter_decl, setter_decl],
-        vec![getter_impl, const_getter_impl, setter_impl],
-    )
+    (vec![getter_decl, const_getter_decl, setter_decl], vec![
+        getter_impl,
+        const_getter_impl,
+        setter_impl,
+    ])
 }
 
 pub(crate) fn handle_referencetype_fields(

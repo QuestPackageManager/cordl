@@ -18,8 +18,8 @@ use crate::generate::{
 };
 
 use super::{
-    config::RustGenerationConfig, rust_context::RustContext,
-    rust_name_resolver::RustNameResolver, rust_type::RustType,
+    config::RustGenerationConfig, rust_context::RustContext, rust_name_resolver::RustNameResolver,
+    rust_type::RustType,
 };
 
 #[derive(Default)]

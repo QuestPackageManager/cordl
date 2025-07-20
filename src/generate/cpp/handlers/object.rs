@@ -1,4 +1,4 @@
-use color_eyre::{eyre::ContextCompat, Result};
+use color_eyre::{Result, eyre::ContextCompat};
 use log::info;
 
 use crate::generate::{

@@ -1,9 +1,9 @@
 use core::panic;
 
 use brocolib::{
+    Metadata,
     global_metadata::{Il2CppMethodDefinition, Il2CppTypeDefinition, TypeDefinitionIndex},
     runtime_metadata::{Il2CppType, Il2CppTypeEnum, TypeData},
-    Metadata,
 };
 use itertools::Itertools;
 

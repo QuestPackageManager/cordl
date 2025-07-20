@@ -3,7 +3,7 @@ use std::{collections::HashSet, ops::Deref, sync::Arc};
 use color_eyre::eyre::{Context, ContextCompat, Result};
 use itertools::Itertools;
 use proc_macro2::TokenStream;
-use quote::{format_ident, quote, ToTokens};
+use quote::{ToTokens, format_ident, quote};
 use syn::parse_quote;
 
 use crate::{
@@ -196,23 +196,26 @@ impl RustType {
         }
 
         if self.is_interface {
-            self.methods.push(RustFunction {
-                name: format_ident!("from_object_mut"),
-                body: Some(parse_quote! {
-                    unsafe{ (object_param as *mut Self) }
-                }),
-                generics: Default::default(),
-                is_mut: false,
-                is_ref: false,
-                is_self: false,
-                where_clause: None,
-                params: vec![RustParam {
-                    name: format_ident!("object_param"),
-                    param_type: parse_quote!(*mut quest_hook::libil2cpp::Il2CppObject),
-                }],
-                return_type: Some(parse_quote!(*mut Self)),
-                visibility: Visibility::Public,
-            }.into());
+            self.methods.push(
+                RustFunction {
+                    name: format_ident!("from_object_mut"),
+                    body: Some(parse_quote! {
+                        unsafe{ (object_param as *mut Self) }
+                    }),
+                    generics: Default::default(),
+                    is_mut: false,
+                    is_ref: false,
+                    is_self: false,
+                    where_clause: None,
+                    params: vec![RustParam {
+                        name: format_ident!("object_param"),
+                        param_type: parse_quote!(*mut quest_hook::libil2cpp::Il2CppObject),
+                    }],
+                    return_type: Some(parse_quote!(*mut Self)),
+                    visibility: Visibility::Public,
+                }
+                .into(),
+            );
         }
 
         // check if any method name matches more than once
@@ -401,12 +404,15 @@ impl RustType {
         for g in generic.iter() {
             let name = format_ident!("{}", g.name);
 
-            self.fields.push(RustField {
-                name: format_ident!("__cordl_phantom_{name}"),
-                field_type: parse_quote!(std::marker::PhantomData<#name>),
-                visibility: Visibility::Private,
-                offset: 0,
-            }.into());
+            self.fields.push(
+                RustField {
+                    name: format_ident!("__cordl_phantom_{name}"),
+                    field_type: parse_quote!(std::marker::PhantomData<#name>),
+                    visibility: Visibility::Private,
+                    offset: 0,
+                }
+                .into(),
+            );
         }
     }
 
@@ -1587,7 +1593,6 @@ impl<T> Deref for CustomArc<T> {
         self.0.as_ref()
     }
 }
-
 
 impl<T: ToTokens> ToTokens for CustomArc<T> {
     fn to_tokens(&self, tokens: &mut TokenStream) {

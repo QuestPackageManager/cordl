@@ -1,6 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
-    fs::{create_dir_all, File},
+    fs::{File, create_dir_all},
     io::BufWriter,
     path::{self, PathBuf},
 };

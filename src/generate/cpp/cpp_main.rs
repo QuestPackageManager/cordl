@@ -1,7 +1,7 @@
 use std::process::Command;
 
 use brocolib::{global_metadata::TypeDefinitionIndex, runtime_metadata::TypeData};
-use color_eyre::{eyre::Result, Section};
+use color_eyre::{Section, eyre::Result};
 use filesize::PathExt;
 use itertools::Itertools;
 use log::{error, info, warn};
@@ -9,6 +9,7 @@ use rayon::iter::{ParallelBridge, ParallelIterator};
 use walkdir::DirEntry;
 
 use crate::{
+    INTERNALS_DIR,
     generate::{
         cpp::{
             config::STATIC_CONFIG,
@@ -19,7 +20,6 @@ use crate::{
         cs_context_collection::TypeContextCollection,
         metadata::CordlMetadata,
     },
-    INTERNALS_DIR,
 };
 
 pub fn run_cpp(

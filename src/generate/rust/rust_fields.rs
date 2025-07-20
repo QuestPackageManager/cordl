@@ -213,8 +213,9 @@ pub fn handle_static_fields(
             quote!("return getStaticField<{field_ty_ast}, \"{f_name}\", {klass_resolver}>();");
 
         let setter_var_name = format_ident!("value");
-        let setter_call =
-                quote!("setStaticField<{field_ty_ast}, \"{f_name}\", {klass_resolver}>(std::forward<{field_ty_ast}>({setter_var_name}));");
+        let setter_call = quote!(
+            "setStaticField<{field_ty_ast}, \"{f_name}\", {klass_resolver}>(std::forward<{field_ty_ast}>({setter_var_name}));"
+        );
 
         let getter_name = format_ident!("getStaticF_{}", f_cpp_name);
         let setter_name = format_ident!("setStaticF_{}", f_cpp_name);
