@@ -50,6 +50,26 @@
       "request": "launch",
       "name": "Debug executable 'cordl' rust",
       "cargo": {
+        "args": ["build", "--bin=cordl", "--package=cordl", "--release"],
+        "filter": {
+          "name": "cordl",
+          "kind": "bin"
+        }
+      },
+      "args": [
+        "--metadata",
+        "./stuff/bs1.40/global-metadata.dat",
+        "--libil2cpp",
+        "./stuff/bs1.40/libil2cpp.so",
+        "rust"
+      ],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug executable 'cordl' cpp",
+      "cargo": {
         "args": ["build", "--bin=cordl", "--package=cordl"],
         "filter": {
           "name": "cordl",
@@ -58,10 +78,11 @@
       },
       "args": [
         "--metadata",
-        "./stuff/unity2022.3/global-metadata.dat",
+        "./stuff/bs1.40/global-metadata.dat",
         "--libil2cpp",
-        "./stuff/unity2022.3/libil2cpp.so",
-        "rust"
+        "./stuff/bs1.40/libil2cpp.so",
+        "cpp",
+        "--format"
       ],
       "cwd": "${workspaceFolder}"
     },
