@@ -42,7 +42,7 @@ impl From<CsTypeTag> for TypeData {
     fn from(value: CsTypeTag) -> Self {
         match value {
             CsTypeTag::TypeDefinitionIndex(i) => TypeData::TypeDefinitionIndex(i),
-            CsTypeTag::GenericInstantiation(gen) => TypeData::GenericClassIndex(gen.inst), // TODO:?
+            CsTypeTag::GenericInstantiation(g) => TypeData::GenericClassIndex(g.inst), // TODO:?
             _ => panic!("Can't go from {value:?} to TypeData"),
         }
     }

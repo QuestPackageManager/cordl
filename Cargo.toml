@@ -2,7 +2,7 @@
 name = "cordl"
 author = "Sc2ad"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 
 [features]
@@ -31,7 +31,7 @@ package = "brocolib"
 clap = { version = "4", features = ["derive"] }
 indent_write = { version = "*" }
 color-eyre = "0.6"
-itertools = "0.13"
+itertools = "0.14"
 bytes = "*"
 byteorder = "1"
 topological-sort = "0.2"
@@ -47,7 +47,7 @@ rayon = "1.8"
 filesize = "0.2.0"
 serde = { version = "1.0", features = ["derive"], optional = true }
 serde_json = {version = "1.0", optional = true }
-bitflags = "2.6.0"
+bitflags = "2"
 
 # Rust syntax generation
 quote = {version = "1", optional = true}
