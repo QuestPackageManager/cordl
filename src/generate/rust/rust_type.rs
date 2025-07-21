@@ -739,13 +739,15 @@ impl RustType {
         let param_types = param_types.collect_vec();
         let n = param_types.len();
 
+        let method_name = format_ident!("cordl_method_info");
+
         // Use OnceLock for thread safety
         // TODO: Can we make this more optimal?
         let define_method_info: Vec<syn::Stmt> = match m.instance {
             // instance
             true => parse_quote! {
                 static METHOD: std::sync::OnceLock<&'static quest_hook::libil2cpp::MethodInfo> = std::sync::OnceLock::new();
-                let method: &'static quest_hook::libil2cpp::MethodInfo = METHOD.get_or_init(|| {
+                let #method_name: &'static quest_hook::libil2cpp::MethodInfo = METHOD.get_or_init(|| {
                     <Self as quest_hook::libil2cpp::Type>::class()
                     .find_method::<(#(#param_types),*), #m_ret_ty, #n>(#m_name)
                     .unwrap_or_else(|e| {
@@ -761,7 +763,7 @@ impl RustType {
             // static
             false => parse_quote! {
                 static METHOD: std::sync::OnceLock<&'static quest_hook::libil2cpp::MethodInfo> = std::sync::OnceLock::new();
-                let method: &'static quest_hook::libil2cpp::MethodInfo = METHOD.get_or_init(|| {
+                let #method_name: &'static quest_hook::libil2cpp::MethodInfo = METHOD.get_or_init(|| {
                     <Self as quest_hook::libil2cpp::Type>::class()
                     .find_static_method::<(#(#param_types),*), #m_ret_ty, #n>(#m_name)
                     .unwrap_or_else(|e| {
@@ -776,12 +778,16 @@ impl RustType {
             },
         };
 
+        // TODO: Generic method info
+        // for now we take the hit and use invoke_unchecked for generic methods
+        // which has lookup costs
+
         let invoke_call: Vec<syn::Stmt> = match (m.instance, generic_args) {
             // instance, not generic
             (true, None) => parse_quote! {
                 #(#define_method_info);*
 
-                let __cordl_ret: #m_ret_ty = unsafe { method.invoke_unchecked(self, ( #(#param_names),* ))? };
+                let __cordl_ret: #m_ret_ty = unsafe { #method_name.invoke_unchecked(self, ( #(#param_names),* ))? };
 
                 Ok(__cordl_ret.into())
             },
@@ -799,7 +805,7 @@ impl RustType {
             (false, None) => parse_quote! {
                 #(#define_method_info);*
 
-                let __cordl_ret: #m_ret_ty = unsafe { method.invoke_unchecked((), ( #(#param_names),* ))? };
+                let __cordl_ret: #m_ret_ty = unsafe { #method_name.invoke_unchecked((), ( #(#param_names),* ))? };
 
                 Ok(__cordl_ret.into())
             },
