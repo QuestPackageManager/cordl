@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::generate::{
     cs_context_collection::TypeContextCollection,
-    cs_members::{CsField, CsMethod, CsParam, CsParamFlags, CsProperty},
+    cs_members::{CsField, CsMethod, CsParam, CsParamFlags, CsProperty, CsGenericTemplateType, CsGenericTemplate},
     cs_type::CsType,
     metadata::CordlMetadata,
     type_extensions::TypeDefinitionExtensions,
@@ -43,6 +43,8 @@ pub struct JsonType {
     pub children: Vec<JsonType>,
     pub tag: JsonTypeTag,
     pub parent: Option<JsonResolvedTypeData>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub template: Option<JsonTemplate>,
 
     pub size: u32,
     pub packing: Option<u8>,
@@ -53,6 +55,9 @@ pub struct JsonField {
     pub name: String,
     pub ty_name: String,
     pub ty_tag: JsonResolvedTypeData,
+    pub instance: bool,
+    pub is_const: bool,
+    pub readonly: bool,
     pub offset: Option<u32>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -60,6 +65,8 @@ pub struct JsonProperty {
     pub name: String,
     pub ty_name: String,
     pub ty_tag: JsonResolvedTypeData,
+    pub instance: bool,
+    pub indexable: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub getter: Option<(u32, String)>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -67,12 +74,23 @@ pub struct JsonProperty {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum JsonGenericArgumentType {
+    AnyType,
+    ReferenceType
+}
+
+type JsonTemplate = Vec<(JsonGenericArgumentType, String)>;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JsonMethod {
     pub name: String,
     pub ret: String,
     pub ret_ty_tag: JsonResolvedTypeData,
     pub parameters: Vec<JsonParam>,
+    pub instance: bool,
     pub method_info: JsonMethodInfo,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub template: Option<JsonTemplate>
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -99,10 +117,12 @@ fn make_field(field: &CsField, name_resolver: &JsonNameResolver) -> JsonField {
 
     JsonField {
         name: field.name.to_string(),
-
         ty_name,
         offset,
         ty_tag: ty,
+        instance: field.instance,
+        is_const: field.is_const,
+        readonly: field.readonly
     }
 }
 fn make_property(property: &CsProperty, name_resolver: &JsonNameResolver) -> JsonProperty {
@@ -122,6 +142,8 @@ fn make_property(property: &CsProperty, name_resolver: &JsonNameResolver) -> Jso
         name: property.name.to_string(),
         ty_tag: p_type,
         ty_name,
+        instance: property.instance,
+        indexable: property.indexable,
         setter: p_setter,
         getter: p_getter,
     }
@@ -147,6 +169,18 @@ fn make_param(param: &CsParam, name_resolver: &JsonNameResolver) -> JsonParam {
         ref_mode,
     }
 }
+
+fn make_template(template: &CsGenericTemplate) -> JsonTemplate {
+    // note: I'm not good at rust so there may be a better way to do this - zip
+    // (feel free to remove this comment if this is fine)
+    return template.names
+        .iter()
+        .map(|p| (match(p.0) {
+            CsGenericTemplateType::AnyType => JsonGenericArgumentType::AnyType,
+            CsGenericTemplateType::ReferenceType => JsonGenericArgumentType::ReferenceType
+        }, p.1.clone())).collect_vec();
+}
+
 fn make_method(method: &CsMethod, name_resolver: &JsonNameResolver) -> JsonMethod {
     let ret_ty_name = name_resolver
         .resolve_name(&method.return_type)
@@ -168,9 +202,14 @@ fn make_method(method: &CsMethod, name_resolver: &JsonNameResolver) -> JsonMetho
     JsonMethod {
         name: method.name.to_string(),
         parameters: params,
+        instance: method.instance,
         ret: ret_ty_name,
         ret_ty_tag: ret_ty,
         method_info: json_method_info,
+        template: match&(method.template) {
+            Some(t) => Some(make_template(t)),
+            None => None
+        }
     }
 }
 
@@ -230,6 +269,10 @@ pub fn make_type(
         properties,
         methods,
         children,
+        template: match&(td.generic_template) {
+            Some(t) => Some(make_template(t)),
+            None => None
+        },
         packing,
         size,
         tag: td.self_tag.into(),

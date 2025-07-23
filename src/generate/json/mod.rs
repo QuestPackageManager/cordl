@@ -112,7 +112,8 @@ pub fn is_real_declaring_type(ty: &CsType, metadata: &CordlMetadata) -> bool {
         .contains("<PrivateImplementationDetails>");
     let condition3 = ty.parent.is_some()
         || ty.is_interface
-        || ty.cs_name_components.combine_all() == "System.Object";
+        || ty.cs_name_components.combine_all() == "System.Object"
+        || ty.is_value_type;
     let condition4 = !ty.namespace().contains("$$struct");
 
     // -1 if no declaring type, meaning root
