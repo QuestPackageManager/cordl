@@ -23,13 +23,13 @@ impl<'b> RustNameResolver<'_, 'b> {
         declaring_cpp_type: &mut RustType,
         ty: &ResolvedType,
         type_usage: TypeUsage,
-        hard_include: bool,
+        impl_include: bool,
     ) -> RustNameComponents {
         let metadata = self.cordl_metadata;
         match &ty.data {
             ResolvedTypeData::Array(array_type) => {
                 let generic = self
-                    .resolve_name(declaring_cpp_type, array_type, type_usage, hard_include)
+                    .resolve_name(declaring_cpp_type, array_type, type_usage, impl_include)
                     .wrap_by_gc();
                 let generic_formatted = generic.combine_all();
 
@@ -47,11 +47,11 @@ impl<'b> RustNameResolver<'_, 'b> {
             }
             ResolvedTypeData::GenericInst(resolved_type, vec) => {
                 let type_def_name_components =
-                    self.resolve_name(declaring_cpp_type, resolved_type, type_usage, hard_include);
+                    self.resolve_name(declaring_cpp_type, resolved_type, type_usage, impl_include);
                 let generic_types_formatted = vec
                     .iter()
                     .map(|(r, inc)| {
-                        self.resolve_name(declaring_cpp_type, r, type_usage, *inc && hard_include)
+                        self.resolve_name(declaring_cpp_type, r, type_usage, *inc && impl_include)
                             .wrap_by_gc()
                     })
                     .map(|n| n.combine_all())
@@ -83,7 +83,7 @@ impl<'b> RustNameResolver<'_, 'b> {
             }
             ResolvedTypeData::Ptr(resolved_type) => {
                 let generic_formatted = self
-                    .resolve_name(declaring_cpp_type, resolved_type, type_usage, hard_include)
+                    .resolve_name(declaring_cpp_type, resolved_type, type_usage, impl_include)
                     .wrap_by_gc();
                 // RustNameComponents {
                 //     namespace: Some("cordl_internals".into()),
@@ -103,7 +103,7 @@ impl<'b> RustNameResolver<'_, 'b> {
                 }
             }
             ResolvedTypeData::Type(resolved_tag) => {
-                self.get_type_from_tag(*resolved_tag, declaring_cpp_type, metadata, hard_include)
+                self.get_type_from_tag(*resolved_tag, declaring_cpp_type, metadata, impl_include)
             }
             ResolvedTypeData::Primitive(s) if *s == Il2CppTypeEnum::String => {
                 RustNameComponents {
@@ -140,7 +140,7 @@ impl<'b> RustNameResolver<'_, 'b> {
             }
             ResolvedTypeData::ByRef(resolved_type) => {
                 let generic = self
-                    .resolve_name(declaring_cpp_type, resolved_type, type_usage, hard_include)
+                    .resolve_name(declaring_cpp_type, resolved_type, type_usage, impl_include)
                     .wrap_by_gc();
                 let generic_formatted = generic.combine_all();
 
@@ -156,7 +156,7 @@ impl<'b> RustNameResolver<'_, 'b> {
             }
             ResolvedTypeData::ByRefConst(resolved_type) => {
                 let generic = self
-                    .resolve_name(declaring_cpp_type, resolved_type, type_usage, hard_include)
+                    .resolve_name(declaring_cpp_type, resolved_type, type_usage, impl_include)
                     .wrap_by_gc();
                 let generic_formatted = generic.combine_all();
 
@@ -176,22 +176,22 @@ impl<'b> RustNameResolver<'_, 'b> {
     /// Resolves a type from a tag, returning the Rust name components.
     /// If the tag is a self tag, it returns the Rust name components of the declaring type.
     /// If the tag is not found, it returns a blacklisted type.
-    /// If hard_include is true, it means it requires the implementation
+    /// If hard_include is true, it means it is only required in the implementation
     fn get_type_from_tag(
         &self,
         resolved_tag: CsTypeTag,
-        declaring_cpp_type: &mut RustType,
+        declaring_rust_type: &mut RustType,
         metadata: &CordlMetadata<'b>,
-        hard_include: bool
+        impl_include: bool
     ) -> RustNameComponents {
-        if resolved_tag == declaring_cpp_type.self_tag {
-            return declaring_cpp_type.rs_name_components.clone();
+        if resolved_tag == declaring_rust_type.self_tag {
+            return declaring_rust_type.rs_name_components.clone();
         }
 
         let resolved_context_root_tag = self.collection.get_context_root_tag(resolved_tag);
         let self_context_root_tag = self
             .collection
-            .get_context_root_tag(declaring_cpp_type.self_tag);
+            .get_context_root_tag(declaring_rust_type.self_tag);
 
         let incl_context = self
             .collection
@@ -234,12 +234,12 @@ impl<'b> RustNameResolver<'_, 'b> {
         }
 
         // add dependency
-        if incl_ty.self_tag != declaring_cpp_type.self_tag {
-            match hard_include {
-                true => declaring_cpp_type
+        if incl_ty.self_tag != declaring_rust_type.self_tag {
+            match impl_include {
+                true => declaring_rust_type
                     .requirements
                     .add_impl_dependency(incl_ty.self_tag),
-                false => declaring_cpp_type
+                false => declaring_rust_type
                     .requirements
                     .add_def_dependency(incl_ty.self_tag),
             }

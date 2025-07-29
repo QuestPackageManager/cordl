@@ -292,7 +292,7 @@ impl RustType {
 
         let Some(parent) = parent else { return };
         let parent = name_resolver
-            .resolve_name(self, parent, TypeUsage::TypeName, true)
+            .resolve_name(self, parent, TypeUsage::TypeName, false)
             .with_no_prefix();
         let parent_field = RustField {
             name: format_ident!("{}", PARENT_FIELD),
