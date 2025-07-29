@@ -5,11 +5,8 @@ use std::{
     io::{BufWriter, Write},
 };
 
-use rayon::prelude::*;
-
 use itertools::Itertools;
 use log::{info, trace};
-use rayon::iter::ParallelIterator;
 use walkdir::WalkDir;
 
 use crate::generate::{

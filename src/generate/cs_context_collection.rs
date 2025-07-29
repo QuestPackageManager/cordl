@@ -5,7 +5,6 @@ use brocolib::{
     global_metadata::TypeDefinitionIndex,
     runtime_metadata::{Il2CppMethodSpec, TypeData},
 };
-use itertools::Itertools;
 use log::{info, warn};
 
 use crate::{data::type_resolver::TypeResolver, generate::cs_type::CsType};

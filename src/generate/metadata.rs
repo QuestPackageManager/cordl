@@ -24,7 +24,7 @@ pub struct TypeDefinitionPair<'a> {
 }
 
 impl<'a> TypeDefinitionPair<'a> {
-    fn new(ty: &'a Il2CppTypeDefinition, tdi: TypeDefinitionIndex) -> TypeDefinitionPair {
+    fn new(ty: &'a Il2CppTypeDefinition, tdi: TypeDefinitionIndex) -> TypeDefinitionPair<'a> {
         TypeDefinitionPair { ty, tdi }
     }
 }

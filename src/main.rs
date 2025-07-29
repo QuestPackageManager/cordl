@@ -1,9 +1,7 @@
-#![feature(entry_insert)]
 #![feature(let_chains)]
 #![feature(slice_as_chunks)]
 #![feature(read_buf)]
 #![feature(map_try_insert)]
-#![feature(lazy_cell)]
 #![feature(exit_status_error)]
 #![feature(iterator_try_collect)]
 
@@ -22,7 +20,6 @@ extern crate pretty_env_logger;
 
 use include_dir::{Dir, include_dir};
 use log::{info, trace, warn};
-use rayon::prelude::*;
 
 use std::{
     fs,
@@ -364,7 +361,7 @@ fn main() -> color_eyre::Result<()> {
                 .get(generic_class.generic_method_index as usize)
                 .unwrap();
 
-            cs_context_collection.fill_generic_method_inst(method_spec, &mut metadata);
+            cs_context_collection.fill_generic_method_inst(method_spec, &metadata);
         }
     }
 

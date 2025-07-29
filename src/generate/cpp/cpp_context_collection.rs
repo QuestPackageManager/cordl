@@ -5,13 +5,10 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use rayon::prelude::*;
-
 use color_eyre::eyre::bail;
 use itertools::Itertools;
 use log::{info, trace};
 use pathdiff::diff_paths;
-use rayon::iter::ParallelIterator;
 
 use crate::generate::{
     cpp::config::STATIC_CONFIG, cs_context_collection::TypeContextCollection, cs_type::CsType,

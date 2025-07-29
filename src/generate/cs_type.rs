@@ -121,9 +121,6 @@ impl CsType {
         }
     }
 
-    ////
-    ///
-    ///
     pub fn add_method_generic_inst(
         &mut self,
         method_spec: &Il2CppMethodSpec,

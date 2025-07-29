@@ -1,7 +1,6 @@
 use bitflags::bitflags;
 use brocolib::global_metadata::MethodIndex;
 use bytes::Bytes;
-use itertools::Itertools;
 
 use crate::data::type_resolver::ResolvedType;
 

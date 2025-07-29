@@ -2,7 +2,6 @@ use std::{
     collections::{HashMap, HashSet},
     rc::Rc,
     sync::Arc,
-    usize,
 };
 
 use brocolib::global_metadata::{FieldIndex, MethodIndex, TypeDefinitionIndex};
@@ -2145,54 +2144,47 @@ impl CppType {
     }
 }
 
-impl ToString for CsValue {
-    fn to_string(&self) -> String {
+use std::fmt;
+
+impl fmt::Display for CsValue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            CsValue::String(s) => format!("u\"{s}\""),
-            CsValue::Char(s) => format!("u'{s}'"),
-            CsValue::Bool(v) => match v {
-                true => "true",
-                false => "false",
+            CsValue::String(s) => write!(f, "u\"{}\"", s),
+            CsValue::Char(s) => write!(f, "u'{}'", s),
+            CsValue::Bool(v) => write!(f, "{}", if *v { "true" } else { "false" }),
+            CsValue::U8(x) => write!(f, "static_cast<uint8_t>(0x{:x}u)", x),
+            CsValue::U16(x) => write!(f, "static_cast<uint16_t>(0x{:x}u)", x),
+            CsValue::U32(x) => write!(f, "static_cast<uint32_t>(0x{:x}u)", x),
+            CsValue::U64(x) => write!(f, "static_cast<uint64_t>(0x{:x}u)", x),
+            CsValue::I8(x) => write!(f, "static_cast<int8_t>(0x{:x})", x),
+            CsValue::I16(x) => write!(f, "static_cast<int16_t>(0x{:x})", x),
+            CsValue::I32(x) => write!(f, "static_cast<int32_t>(0x{:x})", x),
+            CsValue::I64(x) => write!(f, "static_cast<int64_t>(0x{:x})", x),
+            CsValue::F32(fl) => {
+                if *fl == f32::INFINITY {
+                    write!(f, "INFINITY")
+                } else if *fl == f32::NEG_INFINITY {
+                    write!(f, "-INFINITY")
+                } else if fl.is_nan() {
+                    write!(f, "NAN")
+                } else {
+                    write!(f, "static_cast<float_t>({:?}f)", fl)
+                }
             }
-            .to_string(),
-            CsValue::U8(x) => format!("static_cast<uint8_t>(0x{x:x}u)"),
-            CsValue::U16(x) => format!("static_cast<uint16_t>(0x{x:x}u)"),
-            CsValue::U32(x) => format!("static_cast<uint32_t>(0x{x:x}u)"),
-            CsValue::U64(x) => format!("static_cast<uint64_t>(0x{x:x}u)"),
-            CsValue::I8(x) => format!("static_cast<int8_t>(0x{x:x})"),
-            CsValue::I16(x) => format!("static_cast<int16_t>(0x{x:x})"),
-            CsValue::I32(x) => format!("static_cast<int32_t>(0x{x:x})"),
-            CsValue::I64(x) => format!("static_cast<int64_t>(0x{x:x})"),
-            CsValue::F32(f) => {
-                if *f == f32::INFINITY {
-                    return "INFINITY".to_owned();
+            CsValue::F64(fl) => {
+                if *fl == f64::INFINITY {
+                    write!(f, "INFINITY")
+                } else if *fl == f64::NEG_INFINITY {
+                    write!(f, "-INFINITY")
+                } else if fl.is_nan() {
+                    write!(f, "NAN")
+                } else {
+                    write!(f, "static_cast<double_t>({:.1})", fl)
                 }
-                if *f == f32::NEG_INFINITY {
-                    return "-INFINITY".to_owned();
-                }
-                if f.is_nan() {
-                    return "NAN".to_owned();
-                }
-                // make it include at least one decimal place
-
-                format!("static_cast<float_t>({f:?}f)")
-            }
-            CsValue::F64(f) => {
-                if *f == f64::INFINITY {
-                    return "INFINITY".to_owned();
-                }
-                if *f == f64::NEG_INFINITY {
-                    return "-INFINITY".to_owned();
-                }
-                if f.is_nan() {
-                    return "NAN".to_owned();
-                }
-
-                format!("static_cast<double_t>({f:.1})")
             }
             CsValue::Object(_bytes) => todo!(),
             CsValue::ValueType(_bytes) => todo!(),
-            CsValue::Null => "{}".to_string(),
+            CsValue::Null => write!(f, "{{}}"),
         }
     }
 }
