@@ -605,7 +605,7 @@ impl RustType {
                     .iter()
                     .map(|p| {
                         name_resolver
-                            .resolve_name(self, &p.il2cpp_ty, TypeUsage::Parameter, false)
+                            .resolve_name(self, &p.il2cpp_ty, TypeUsage::Parameter, true)
                             .name
                     })
                     .map(|s| config.name_rs(&s))
@@ -618,7 +618,7 @@ impl RustType {
             .iter()
             .map(|p| {
                 name_resolver
-                    .resolve_name(self, &p.il2cpp_ty, TypeUsage::Parameter, false)
+                    .resolve_name(self, &p.il2cpp_ty, TypeUsage::Parameter, true)
                     .name
             })
             .map(|s| config.name_rs(&s))
@@ -673,7 +673,7 @@ impl RustType {
                 );
 
                 let m_ret_ty = name_resolver
-                    .resolve_name(self, &m.return_type, TypeUsage::ReturnType, false)
+                    .resolve_name(self, &m.return_type, TypeUsage::ReturnType, true)
                     .wrap_by_gc();
                 let m_ret_ty_ident = m_ret_ty.to_type_token();
                 let m_result_ty: syn::Type =
@@ -861,7 +861,7 @@ impl RustType {
         config: &RustGenerationConfig,
     ) -> RustParam {
         let p_ty = name_resolver
-            .resolve_name(self, &p.il2cpp_ty, TypeUsage::Parameter, false)
+            .resolve_name(self, &p.il2cpp_ty, TypeUsage::Parameter, true)
             .wrap_by_gc();
         // let p_il2cpp_ty = p.il2cpp_ty.get_type(name_resolver.cordl_metadata);
 
@@ -994,10 +994,11 @@ impl RustType {
 
         let impl_ref = self.implement_reference_type();
 
-        let feature = self.self_def_feature.as_ref().map(|f| f.to_token_stream());
+        let def_feature = self.self_def_feature.as_ref().map(|f| f.to_token_stream());
+        let impl_feature = self.self_impl_feature.as_ref().map(|f| f.to_token_stream());
 
         let mut tokens = quote! {
-            #feature
+            #def_feature
             #[repr(C)]
             #[derive(Debug)]
             pub struct #name_ident {
@@ -1014,7 +1015,7 @@ impl RustType {
             let parent_field_ident = format_ident!(r#"{}"#, PARENT_FIELD);
 
             tokens.extend(quote! {
-            #feature
+            #impl_feature
             impl #generics std::ops::Deref for #path_ident {
                 type Target = #parent_name;
 
@@ -1023,7 +1024,7 @@ impl RustType {
                 }
             }
 
-            #feature
+            #impl_feature
             impl #generics std::ops::DerefMut for #path_ident {
                 fn deref_mut(&mut self) -> &mut <Self as std::ops::Deref>::Target {
                     unsafe{ &mut self.#parent_field_ident }
@@ -1354,10 +1355,11 @@ impl RustType {
         let quest_hook_path: syn::Path = parse_quote!(quest_hook::libil2cpp);
         let impl_ref = self.implement_reference_type();
 
-        let feature = self.self_def_feature.as_ref().map(|f| f.to_token_stream());
+        let def_feature = self.self_def_feature.as_ref().map(|f| f.to_token_stream());
+        let impl_feature = self.self_impl_feature.as_ref().map(|f| f.to_token_stream());
 
         let mut tokens = quote! {
-            #feature
+            #def_feature
             #[repr(C)]
             #[derive(Debug)]
             pub struct #name_ident {
@@ -1373,7 +1375,7 @@ impl RustType {
             let parent_field_ident = format_ident!(r#"{}"#, PARENT_FIELD);
 
             tokens.extend(quote! {
-            #feature
+            #impl_feature
             impl #generics std::ops::Deref for #path_ident {
                 type Target = #parent_name;
 
@@ -1382,7 +1384,7 @@ impl RustType {
                 }
             }
 
-            #feature
+            #impl_feature
             impl #generics std::ops::DerefMut for #path_ident {
                 fn deref_mut(&mut self) -> &mut <Self as std::ops::Deref>::Target {
                     unsafe{ &mut self.#parent_field_ident }
