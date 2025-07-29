@@ -40,15 +40,19 @@ const PARENT_FIELD: &str = "__cordl_parent";
 #[derive(Clone, Debug, Default)]
 pub struct RustTypeRequirements {
     required_modules: HashSet<String>,
-    required_types: HashSet<CsTypeTag>,
+    required_def_types: HashSet<CsTypeTag>,
+    required_impl_types: HashSet<CsTypeTag>,
 }
 
 impl RustTypeRequirements {
     pub fn add_module(&mut self, module: &str) {
         self.required_modules.insert(module.to_string());
     }
-    pub fn add_dependency(&mut self, cs_type_tag: CsTypeTag) {
-        self.required_types.insert(cs_type_tag);
+    pub fn add_def_dependency(&mut self, cs_type_tag: CsTypeTag) {
+        self.required_def_types.insert(cs_type_tag);
+    }
+    pub fn add_impl_dependency(&mut self, cs_type_tag: CsTypeTag) {
+        self.required_impl_types.insert(cs_type_tag);
     }
 
     pub(crate) fn needs_object_include(&mut self) {
@@ -74,8 +78,11 @@ impl RustTypeRequirements {
     pub(crate) fn get_modules(&self) -> &HashSet<String> {
         &self.required_modules
     }
-    pub fn get_dependencies(&self) -> &HashSet<CsTypeTag> {
-        &self.required_types
+    pub fn get_def_dependencies(&self) -> &HashSet<CsTypeTag> {
+        &self.required_def_types
+    }
+    pub fn get_impl_dependencies(&self) -> &HashSet<CsTypeTag> {
+        &self.required_impl_types
     }
 }
 
@@ -94,7 +101,12 @@ pub struct RustType {
     pub is_interface: bool,
 
     pub self_tag: CsTypeTag,
-    pub self_feature: Option<CustomArc<RustFeature>>,
+
+    /// Unlocks the entire class, its dependencies and its methods.
+    pub self_impl_feature: Option<CustomArc<RustFeature>>,
+
+    /// Unlocks only the class definition and traits
+    pub self_def_feature: Option<CustomArc<RustFeature>>,
 
     pub parent: Option<RustNameComponents>,
     pub backing_type_enum: Option<RustNameComponents>,
@@ -139,8 +151,10 @@ impl RustType {
             ..Default::default()
         };
 
-        let feature_name =
-            config.feature_name(&cs_name_components.clone().remove_generics().combine_all());
+        let feature_impl_class =
+            config.feature_impl_class(&cs_name_components.clone().remove_generics().combine_all());
+
+        let feature_def_class = config.feature_def_class(&feature_impl_class);
 
         RustType {
             fields: Default::default(),
@@ -157,7 +171,19 @@ impl RustType {
             backing_type_enum: Default::default(),
 
             requirements: RustTypeRequirements::default(),
-            self_feature: Some(RustFeature { name: feature_name }.into()),
+            self_impl_feature: Some(
+                RustFeature {
+                    name: feature_impl_class,
+                }
+                .into(),
+            ),
+            self_def_feature: Some(
+                RustFeature {
+                    name: feature_def_class,
+                }
+                .into(),
+            ),
+
             self_tag: tag,
 
             rs_name_components,
@@ -207,6 +233,7 @@ impl RustType {
                     is_ref: false,
                     is_self: false,
                     where_clause: None,
+                    feature: self.self_impl_feature.as_deref().cloned(),
                     params: vec![RustParam {
                         name: format_ident!("object_param"),
                         param_type: parse_quote!(*mut quest_hook::libil2cpp::Il2CppObject),
@@ -342,12 +369,10 @@ impl RustType {
                 }
                 .to_token_stream();
 
-                let feature = rust_type.self_feature.as_ref().map(|f| {
-                    let name = &f.name;
-                    quote! {
-                        #[cfg(feature = #name)]
-                    }
-                });
+                let feature = rust_type
+                    .self_impl_feature
+                    .as_ref()
+                    .map(|f| f.to_token_stream());
 
                 parse_quote! {
                     #feature
@@ -548,6 +573,8 @@ impl RustType {
                 params,
                 where_clause: Some(where_clause),
 
+                feature: self.self_impl_feature.as_deref().cloned(),
+
                 return_type: Some(parse_quote!(
                     quest_hook::libil2cpp::Result<quest_hook::libil2cpp::Gc<Self>>
                 )),
@@ -578,7 +605,7 @@ impl RustType {
                     .iter()
                     .map(|p| {
                         name_resolver
-                            .resolve_name(self, &p.il2cpp_ty, TypeUsage::Parameter, true)
+                            .resolve_name(self, &p.il2cpp_ty, TypeUsage::Parameter, false)
                             .name
                     })
                     .map(|s| config.name_rs(&s))
@@ -586,11 +613,12 @@ impl RustType {
             })
             .collect();
 
+        // current name
         let current_param_types = m_params
             .iter()
             .map(|p| {
                 name_resolver
-                    .resolve_name(self, &p.il2cpp_ty, TypeUsage::Parameter, true)
+                    .resolve_name(self, &p.il2cpp_ty, TypeUsage::Parameter, false)
                     .name
             })
             .map(|s| config.name_rs(&s))
@@ -645,7 +673,7 @@ impl RustType {
                 );
 
                 let m_ret_ty = name_resolver
-                    .resolve_name(self, &m.return_type, TypeUsage::ReturnType, true)
+                    .resolve_name(self, &m.return_type, TypeUsage::ReturnType, false)
                     .wrap_by_gc();
                 let m_ret_ty_ident = m_ret_ty.to_type_token();
                 let m_result_ty: syn::Type =
@@ -718,6 +746,8 @@ impl RustType {
                     is_self: m.instance,
                     params,
                     where_clause: Some(where_clause),
+
+                    feature: self.self_impl_feature.as_deref().cloned(),
 
                     return_type: Some(m_result_ty),
                     visibility: (Visibility::Public),
@@ -831,7 +861,7 @@ impl RustType {
         config: &RustGenerationConfig,
     ) -> RustParam {
         let p_ty = name_resolver
-            .resolve_name(self, &p.il2cpp_ty, TypeUsage::Parameter, true)
+            .resolve_name(self, &p.il2cpp_ty, TypeUsage::Parameter, false)
             .wrap_by_gc();
         // let p_il2cpp_ty = p.il2cpp_ty.get_type(name_resolver.cordl_metadata);
 
@@ -964,12 +994,7 @@ impl RustType {
 
         let impl_ref = self.implement_reference_type();
 
-        let feature = self.self_feature.as_ref().map(|f| {
-            let name = &f.name;
-            quote! {
-                #[cfg(feature = #name)]
-            }
-        });
+        let feature = self.self_def_feature.as_ref().map(|f| f.to_token_stream());
 
         let mut tokens = quote! {
             #feature
@@ -983,6 +1008,7 @@ impl RustType {
 
         };
 
+        // add Deref for parent
         if let Some(parent) = &self.parent {
             let parent_name = parent.clone().to_type_path_token();
             let parent_field_ident = format_ident!(r#"{}"#, PARENT_FIELD);
@@ -1057,12 +1083,7 @@ impl RustType {
         let quest_hook_path: syn::Path = parse_quote!(quest_hook::libil2cpp);
         let impl_value = self.implement_value_type();
 
-        let feature = self.self_feature.as_ref().map(|f| {
-            let name = &f.name;
-            quote! {
-                #[cfg(feature = #name)]
-            }
-        });
+        let feature = self.self_def_feature.as_ref().map(|f| f.to_token_stream());
 
         let tokens = quote! {
             #feature
@@ -1118,12 +1139,7 @@ impl RustType {
         let quest_hook_path: syn::Path = parse_quote!(quest_hook::libil2cpp);
         let impl_value = self.implement_value_type();
 
-        let feature = self.self_feature.as_ref().map(|f| {
-            let name = &f.name;
-            quote! {
-                #[cfg(feature = #name)]
-            }
-        });
+        let feature = self.self_def_feature.as_ref().map(|f| f.to_token_stream());
 
         let tokens = quote! {
             #feature
@@ -1240,12 +1256,8 @@ impl RustType {
             .map(|f| f.to_token_stream())
             .map(|f| -> syn::ImplItemFn { parse_quote!(#f) });
 
-        let feature = self.self_feature.as_ref().map(|f| {
-            let name = &f.name;
-            quote! {
-                #[cfg(feature = #name)]
-            }
-        });
+        let def_feature = self.self_def_feature.as_ref().map(|f| f.to_token_stream());
+        let impl_feature = self.self_impl_feature.as_ref().map(|f| f.to_token_stream());
 
         let nested_types = &self
             .nested_types
@@ -1261,7 +1273,7 @@ impl RustType {
                 let impl_data = &t.impl_data;
 
                 parse_quote! {
-                    #feature
+                    #impl_feature
                     #impl_data
                 }
             })
@@ -1279,7 +1291,7 @@ impl RustType {
             let parent_field_ident = format_ident!(r#"{}"#, PARENT_FIELD);
 
             parse_quote! {
-                #feature
+                #def_feature
                 impl #generics quest_hook::libil2cpp::ObjectType for #path_ident {
                     fn as_object(&self) -> &quest_hook::libil2cpp::Il2CppObject {
                         quest_hook::libil2cpp::ObjectType::as_object(&self.#parent_field_ident)
@@ -1293,7 +1305,7 @@ impl RustType {
         });
 
         let tokens = quote! {
-            #feature
+            #impl_feature
             #impl_tokens
 
 
@@ -1342,12 +1354,7 @@ impl RustType {
         let quest_hook_path: syn::Path = parse_quote!(quest_hook::libil2cpp);
         let impl_ref = self.implement_reference_type();
 
-        let feature = self.self_feature.as_ref().map(|f| {
-            let name = &f.name;
-            quote! {
-                #[cfg(feature = #name)]
-            }
-        });
+        let feature = self.self_def_feature.as_ref().map(|f| f.to_token_stream());
 
         let mut tokens = quote! {
             #feature
@@ -1423,12 +1430,7 @@ impl RustType {
                 }
         }});
 
-        let feature = self.self_feature.as_ref().map(|f| {
-            let name = &f.name;
-            quote! {
-                #[cfg(feature = #name)]
-            }
-        });
+        let feature = self.self_def_feature.as_ref().map(|f| f.to_token_stream());
 
         parse_quote! {
             // let quest_hook_path: syn::Path = parse_quote!(quest_hook::libil2cpp);
@@ -1483,12 +1485,7 @@ impl RustType {
                 }
         }});
 
-        let feature = self.self_feature.as_ref().map(|f| {
-            let name = &f.name;
-            quote! {
-                #[cfg(feature = #name)]
-            }
-        });
+        let feature = self.self_def_feature.as_ref().map(|f| f.to_token_stream());
 
         parse_quote! {
 

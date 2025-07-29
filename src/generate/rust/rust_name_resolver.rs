@@ -103,7 +103,7 @@ impl<'b> RustNameResolver<'_, 'b> {
                 }
             }
             ResolvedTypeData::Type(resolved_tag) => {
-                self.get_type_from_tag(*resolved_tag, declaring_cpp_type, metadata)
+                self.get_type_from_tag(*resolved_tag, declaring_cpp_type, metadata, hard_include)
             }
             ResolvedTypeData::Primitive(s) if *s == Il2CppTypeEnum::String => {
                 RustNameComponents {
@@ -173,11 +173,16 @@ impl<'b> RustNameResolver<'_, 'b> {
         }
     }
 
+    /// Resolves a type from a tag, returning the Rust name components.
+    /// If the tag is a self tag, it returns the Rust name components of the declaring type.
+    /// If the tag is not found, it returns a blacklisted type.
+    /// If hard_include is true, it means it requires the implementation
     fn get_type_from_tag(
         &self,
         resolved_tag: CsTypeTag,
         declaring_cpp_type: &mut RustType,
         metadata: &CordlMetadata<'b>,
+        hard_include: bool
     ) -> RustNameComponents {
         if resolved_tag == declaring_cpp_type.self_tag {
             return declaring_cpp_type.rs_name_components.clone();
@@ -230,9 +235,14 @@ impl<'b> RustNameResolver<'_, 'b> {
 
         // add dependency
         if incl_ty.self_tag != declaring_cpp_type.self_tag {
-            declaring_cpp_type
-                .requirements
-                .add_dependency(incl_ty.self_tag);
+            match hard_include {
+                true => declaring_cpp_type
+                    .requirements
+                    .add_impl_dependency(incl_ty.self_tag),
+                false => declaring_cpp_type
+                    .requirements
+                    .add_def_dependency(incl_ty.self_tag),
+            }
         }
 
         incl_ty.rs_name_components.clone()

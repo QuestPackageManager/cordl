@@ -115,8 +115,12 @@ impl RustGenerationConfig {
         string.replace(['<', '>', '`', '/'], "_").replace('.', "/")
     }
 
-    pub(crate) fn feature_name(&self, s: &str) -> String {
+    pub(crate) fn feature_impl_class(&self, s: &str) -> String {
         s.replace([':', '`', '<', '>', '$', '=', ',', '|'], "_")
             .replace(['.', '/'], "+")
+    }
+    /// Represents a feature class name, which is used to generate the feature name in Rust.
+    pub(crate) fn feature_def_class(&self, s: &str) -> String {
+        format!("cordl_class_{}", self.feature_impl_class(s))
     }
 }

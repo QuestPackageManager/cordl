@@ -175,14 +175,14 @@ pub(crate) fn handle_referencetype_fields(
 }
 
 pub fn handle_static_fields(
-    cpp_type: &mut RustType,
+    rust_type: &mut RustType,
     fields: &[CsField],
     name_resolver: &RustNameResolver,
     config: &RustGenerationConfig,
 ) {
     let metadata = name_resolver.cordl_metadata;
 
-    let tdi = cpp_type.self_tag.get_tdi();
+    let tdi = rust_type.self_tag.get_tdi();
     let t = tdi.get_type_definition(metadata.metadata);
 
     // if no fields, skip
@@ -199,7 +199,7 @@ pub fn handle_static_fields(
         let f_name = &field_info.name;
 
         let field_ty_cpp_name =
-            name_resolver.resolve_name(cpp_type, &field_info.field_ty, TypeUsage::Field, true);
+            name_resolver.resolve_name(rust_type, &field_info.field_ty, TypeUsage::Field, false);
         let field_ty_ast = field_ty_cpp_name.to_type_token();
 
         // non const field
@@ -207,7 +207,7 @@ pub fn handle_static_fields(
         // ref type instance fields are specially named because the field getters are supposed to be used
         let f_cpp_name = config.name_rs(f_name);
 
-        let klass_resolver = cpp_type.classof_name();
+        let klass_resolver = rust_type.classof_name();
 
         let getter_call =
             quote!("return getStaticField<{field_ty_ast}, \"{f_name}\", {klass_resolver}>();");
@@ -229,13 +229,14 @@ pub fn handle_static_fields(
             is_self: false,
             generics: Default::default(),
 
+            feature: rust_type.self_impl_feature.as_deref().cloned(),
+
             return_type: Some(get_return_type.to_type_token()),
             params: vec![],
             visibility: (Visibility::Public),
             body: Some(parse_quote! {
-                            #getter_call
-            ,
-                        }),
+                #getter_call
+            }),
             where_clause: None,
         };
 
@@ -246,6 +247,8 @@ pub fn handle_static_fields(
             is_ref: false,
             is_mut: false,
             is_self: false,
+
+            feature: rust_type.self_impl_feature.as_deref().cloned(),
 
             return_type: None,
             params: vec![RustParam {
@@ -260,8 +263,8 @@ pub fn handle_static_fields(
         };
 
         // only push accessors if declaring ref type, or if static field
-        cpp_type.methods.push(getter_decl.into());
-        cpp_type.methods.push(setter_decl.into());
+        rust_type.methods.push(getter_decl.into());
+        rust_type.methods.push(setter_decl.into());
     }
 }
 
@@ -284,7 +287,7 @@ pub(crate) fn handle_const_fields(
         .filter_map(|field_info| {
             let f_resolved_type = &field_info.field_ty;
             let mut f_type = name_resolver
-                .resolve_name(cpp_type, f_resolved_type, TypeUsage::Field, true)
+                .resolve_name(cpp_type, f_resolved_type, TypeUsage::Field, false)
                 .to_type_token();
             let f_name = format_ident!("{}", config.name_rs(&field_info.name));
 
@@ -542,7 +545,7 @@ fn make_rust_field(
     name_resolver: &RustNameResolver<'_, '_>,
     config: &RustGenerationConfig,
 ) -> RustField {
-    let field_type = name_resolver.resolve_name(cpp_type, &f.field_ty, TypeUsage::Field, true);
+    let field_type = name_resolver.resolve_name(cpp_type, &f.field_ty, TypeUsage::Field, false);
 
     assert!(f.instance && !f.is_const, "Static field not allowed!");
 

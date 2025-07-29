@@ -106,6 +106,8 @@ pub struct RustFunction {
     pub generics: Vec<RustGeneric>,
     pub where_clause: Option<syn::WhereClause>,
 
+    pub feature: Option<RustFeature>,
+
     pub is_self: bool,
     pub is_ref: bool,
     pub is_mut: bool,
@@ -140,6 +142,10 @@ type Lifetime = String;
 
 impl RustFunction {
     pub fn to_token_stream(&self) -> TokenStream {
+        let feature  = self.feature.as_ref().map(|f| {
+            f.to_token_stream()
+        });
+
         let name: syn::Ident = format_ident!("{}", self.name);
         let generics: Option<syn::Generics> = match self.generics.is_empty() {
             true => None,
@@ -176,11 +182,13 @@ impl RustFunction {
         let mut tokens = match self_param {
             Some(self_param) => {
                 quote! {
+                    #feature
                     #visibility fn #name #generics (#self_param, #(#params),*) #return_type #where_clause
                 }
             }
             None => {
                 quote! {
+                    #feature
                     #visibility fn #name #generics (#(#params),*) #return_type #where_clause
                 }
             }
@@ -199,6 +207,13 @@ impl RustFunction {
         }
 
         tokens
+    }
+}
+
+impl RustFeature {
+    pub fn to_token_stream(&self) -> TokenStream {
+        let name = &self.name;
+        quote!(#[cfg(feature = #name)])
     }
 }
 

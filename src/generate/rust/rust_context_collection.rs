@@ -13,8 +13,11 @@ use rayon::iter::ParallelIterator;
 use walkdir::WalkDir;
 
 use crate::generate::{
-    cs_context_collection::TypeContextCollection, cs_type::CsType, cs_type_tag::CsTypeTag,
+    cs_context_collection::TypeContextCollection,
+    cs_type::CsType,
+    cs_type_tag::CsTypeTag,
     metadata::CordlMetadata,
+    rust::{rust_members::RustFeature, rust_type::CustomArc},
 };
 
 use super::{
@@ -223,38 +226,55 @@ impl RustContextCollection {
             })
     }
 
+    /// Writes the Cargo.toml file with all features
     pub fn write_feature_block(&self, config: &RustGenerationConfig) -> color_eyre::Result<()> {
-        let dependency_graph: Vec<(&RustType, Vec<_>)> = self
+        // Group each rust type to its list of dependencies
+        let dependency_graph: Vec<(&RustType, (Vec<_>, Vec<_>))> = self
             .all_contexts
             .values()
+            // each context has types
             .flat_map(|c| c.typedef_types.values())
-            .filter(|t| t.self_feature.is_some())
+            // filter out types that have no feature
+            .filter(|t| t.self_impl_feature.is_some())
             .map(|t| {
-                let dependencies = t
+                let def_dependencies = t
                     .requirements
-                    .get_dependencies()
+                    .get_def_dependencies()
                     .iter()
                     .filter(|o| **o != t.self_tag)
                     .filter_map(|o| self.get_rust_type(*o))
-                    .filter_map(|o| o.self_feature.as_ref())
+                    // get all def and impl features
+                    .filter_map(|o| o.self_def_feature.clone())
                     .collect_vec();
-                (t, dependencies)
+                let impl_dependencies = t
+                    .requirements
+                    .get_impl_dependencies()
+                    .iter()
+                    .filter(|o| **o != t.self_tag)
+                    .filter_map(|o| self.get_rust_type(*o))
+                    // get all def and impl features
+                    .filter_map(|o| o.self_impl_feature.clone())
+                    .collect_vec();
+
+                (t, (def_dependencies, impl_dependencies))
             })
             .collect();
 
-        let feature_block = dependency_graph
+        // get def features
+        // def features depend on def requirements
+        let def_feature_block = dependency_graph
             // combine all features with same name that somehow exist
+            .iter()
+            // make the feature definition
+            .into_group_map_by(|(t, _)| t.self_def_feature.as_ref().unwrap().name.clone())
             .into_iter()
-            .into_group_map_by(|(t, _)| t.self_feature.as_ref().unwrap().name.clone())
-            .into_iter()
-            .map(|(feature_name, features)| {
-                (
-                    feature_name,
-                    features.into_iter().fold(Vec::new(), |mut a, b| {
-                        a.extend(b.1);
-                        a
-                    }),
-                )
+            .map(|(feature_name, rust_types)| {
+                // rust_types: Vec<(&RustType, (Vec<CustomArc<RustFeature>>, Vec<CustomArc<RustFeature>>))>
+                let def_features = rust_types
+                    .iter()
+                    .flat_map(|(_, (def_features, _))| def_features.clone())
+                    .collect_vec();
+                (feature_name, def_features)
             })
             // make feature block
             .map(|(feature_name, features)| {
@@ -269,6 +289,34 @@ impl RustContextCollection {
 
                 feature
             })
+            .collect_vec();
+
+        // make each impl feature depend on its def feature and its impl features
+        // impl features depend on def of itself and its impl requirements
+        let impl_feature_block = dependency_graph
+            .into_iter()
+            .map(|(t, (_, impl_features))| {
+                // add the def feature as a dependency
+                let impl_features = std::iter::once(t.self_def_feature.as_ref().unwrap())
+                    .chain(impl_features.iter())
+                    .map(|s| format!("\"{}\"", s.name))
+                    // Sort so things don't break git diffs
+                    .sorted()
+                    .join(", ");
+
+                let feature = format!(
+                    "\"{}\" = [{impl_features}]",
+                    t.self_impl_feature.as_ref().unwrap().name
+                );
+
+                feature
+            })
+            .collect_vec();
+
+        // combine
+        let feature_blocks = def_feature_block
+            .into_iter()
+            .chain(impl_feature_block)
             .unique()
             // Sort so things don't break git diffs
             .sorted()
@@ -283,7 +331,7 @@ impl RustContextCollection {
                 }
             };
 
-        cargo_config = cargo_config.replace("#cordl_features", &feature_block);
+        cargo_config = cargo_config.replace("#cordl_features", &feature_blocks);
 
         let mut file = File::create(&config.cargo_config)?;
         file.write_all(cargo_config.as_bytes())?;
