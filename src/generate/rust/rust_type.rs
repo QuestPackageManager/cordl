@@ -233,7 +233,7 @@ impl RustType {
                     is_ref: false,
                     is_self: false,
                     where_clause: None,
-                    feature: self.self_impl_feature.as_deref().cloned(),
+                    feature: None,
                     params: vec![RustParam {
                         name: format_ident!("object_param"),
                         param_type: parse_quote!(*mut quest_hook::libil2cpp::Il2CppObject),
@@ -573,7 +573,7 @@ impl RustType {
                 params,
                 where_clause: Some(where_clause),
 
-                feature: self.self_impl_feature.as_deref().cloned(),
+                feature: None,
 
                 return_type: Some(parse_quote!(
                     quest_hook::libil2cpp::Result<quest_hook::libil2cpp::Gc<Self>>
@@ -747,7 +747,7 @@ impl RustType {
                     params,
                     where_clause: Some(where_clause),
 
-                    feature: self.self_impl_feature.as_deref().cloned(),
+                    feature: None,
 
                     return_type: Some(m_result_ty),
                     visibility: (Visibility::Public),

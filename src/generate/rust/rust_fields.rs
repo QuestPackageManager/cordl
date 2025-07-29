@@ -229,7 +229,7 @@ pub fn handle_static_fields(
             is_self: false,
             generics: Default::default(),
 
-            feature: rust_type.self_impl_feature.as_deref().cloned(),
+            feature: None,
 
             return_type: Some(get_return_type.to_type_token()),
             params: vec![],
@@ -248,7 +248,7 @@ pub fn handle_static_fields(
             is_mut: false,
             is_self: false,
 
-            feature: rust_type.self_impl_feature.as_deref().cloned(),
+            feature: None,
 
             return_type: None,
             params: vec![RustParam {
