@@ -3,7 +3,7 @@ use itertools::Itertools;
 
 use crate::{
     data::type_resolver::{ResolvedType, ResolvedTypeData, TypeUsage},
-    generate::{cs_type_tag::CsTypeTag, metadata::CordlMetadata},
+    generate::{cs_type_tag::CsTypeTag, metadata::CordlMetadata, rust::rust_type::RustTypeRequirement},
 };
 
 use super::{
@@ -23,13 +23,14 @@ impl<'b> RustNameResolver<'_, 'b> {
         declaring_cpp_type: &mut RustType,
         ty: &ResolvedType,
         type_usage: TypeUsage,
-        impl_include: bool,
+        add_to_impl: bool,
+        require_impl: bool,
     ) -> RustNameComponents {
         let metadata = self.cordl_metadata;
         match &ty.data {
             ResolvedTypeData::Array(array_type) => {
                 let generic = self
-                    .resolve_name(declaring_cpp_type, array_type, type_usage, impl_include)
+                    .resolve_name(declaring_cpp_type, array_type, type_usage, add_to_impl, require_impl)
                     .wrap_by_gc();
                 let generic_formatted = generic.combine_all();
 
@@ -47,11 +48,12 @@ impl<'b> RustNameResolver<'_, 'b> {
             }
             ResolvedTypeData::GenericInst(resolved_type, vec) => {
                 let type_def_name_components =
-                    self.resolve_name(declaring_cpp_type, resolved_type, type_usage, impl_include);
+                    self.resolve_name(declaring_cpp_type, resolved_type, type_usage, add_to_impl, require_impl)
+                        .wrap_by_gc();
                 let generic_types_formatted = vec
                     .iter()
                     .map(|(r, inc)| {
-                        self.resolve_name(declaring_cpp_type, r, type_usage, *inc && impl_include)
+                        self.resolve_name(declaring_cpp_type, r, type_usage, add_to_impl, *inc && require_impl)
                             .wrap_by_gc()
                     })
                     .map(|n| n.combine_all())
@@ -83,7 +85,7 @@ impl<'b> RustNameResolver<'_, 'b> {
             }
             ResolvedTypeData::Ptr(resolved_type) => {
                 let generic_formatted = self
-                    .resolve_name(declaring_cpp_type, resolved_type, type_usage, impl_include)
+                    .resolve_name(declaring_cpp_type, resolved_type, type_usage, add_to_impl, require_impl)
                     .wrap_by_gc();
                 // RustNameComponents {
                 //     namespace: Some("cordl_internals".into()),
@@ -103,7 +105,7 @@ impl<'b> RustNameResolver<'_, 'b> {
                 }
             }
             ResolvedTypeData::Type(resolved_tag) => {
-                self.get_type_from_tag(*resolved_tag, declaring_cpp_type, metadata, impl_include)
+                self.get_type_from_tag(*resolved_tag, declaring_cpp_type, metadata, add_to_impl, require_impl)
             }
             ResolvedTypeData::Primitive(s) if *s == Il2CppTypeEnum::String => {
                 RustNameComponents {
@@ -140,7 +142,7 @@ impl<'b> RustNameResolver<'_, 'b> {
             }
             ResolvedTypeData::ByRef(resolved_type) => {
                 let generic = self
-                    .resolve_name(declaring_cpp_type, resolved_type, type_usage, impl_include)
+                    .resolve_name(declaring_cpp_type, resolved_type, type_usage, add_to_impl, require_impl)
                     .wrap_by_gc();
                 let generic_formatted = generic.combine_all();
 
@@ -156,7 +158,7 @@ impl<'b> RustNameResolver<'_, 'b> {
             }
             ResolvedTypeData::ByRefConst(resolved_type) => {
                 let generic = self
-                    .resolve_name(declaring_cpp_type, resolved_type, type_usage, impl_include)
+                    .resolve_name(declaring_cpp_type, resolved_type, type_usage, add_to_impl, require_impl)
                     .wrap_by_gc();
                 let generic_formatted = generic.combine_all();
 
@@ -182,7 +184,8 @@ impl<'b> RustNameResolver<'_, 'b> {
         resolved_tag: CsTypeTag,
         declaring_rust_type: &mut RustType,
         metadata: &CordlMetadata<'b>,
-        impl_include: bool
+        add_to_impl: bool,
+        require_impl: bool,
     ) -> RustNameComponents {
         if resolved_tag == declaring_rust_type.self_tag {
             return declaring_rust_type.rs_name_components.clone();
@@ -233,15 +236,20 @@ impl<'b> RustNameResolver<'_, 'b> {
             //     .add_module(&incl_context.get_module_path(self.config));
         }
 
+        let include = match require_impl {
+            true => RustTypeRequirement::Implementation(incl_ty.self_tag),
+            false => RustTypeRequirement::Definition(incl_ty.self_tag),
+        };
+
         // add dependency
         if incl_ty.self_tag != declaring_rust_type.self_tag {
-            match impl_include {
+            match add_to_impl {
                 true => declaring_rust_type
                     .requirements
-                    .add_impl_dependency(incl_ty.self_tag),
+                    .add_impl_dependency(include),
                 false => declaring_rust_type
                     .requirements
-                    .add_def_dependency(incl_ty.self_tag),
+                    .add_def_dependency(include),
             }
         }
 

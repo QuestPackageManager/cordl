@@ -199,7 +199,7 @@ pub fn handle_static_fields(
         let f_name = &field_info.name;
 
         let field_ty_cpp_name =
-            name_resolver.resolve_name(rust_type, &field_info.field_ty, TypeUsage::Field, false);
+            name_resolver.resolve_name(rust_type, &field_info.field_ty, TypeUsage::Field, false, false);
         let field_ty_ast = field_ty_cpp_name.to_type_token();
 
         // non const field
@@ -287,7 +287,7 @@ pub(crate) fn handle_const_fields(
         .filter_map(|field_info| {
             let f_resolved_type = &field_info.field_ty;
             let mut f_type = name_resolver
-                .resolve_name(cpp_type, f_resolved_type, TypeUsage::Field, false)
+                .resolve_name(cpp_type, f_resolved_type, TypeUsage::Field, false, false)
                 .to_type_token();
             let f_name = format_ident!("{}", config.name_rs(&field_info.name));
 
@@ -545,7 +545,7 @@ fn make_rust_field(
     name_resolver: &RustNameResolver<'_, '_>,
     config: &RustGenerationConfig,
 ) -> RustField {
-    let field_type = name_resolver.resolve_name(cpp_type, &f.field_ty, TypeUsage::Field, false);
+    let field_type = name_resolver.resolve_name(cpp_type, &f.field_ty, TypeUsage::Field, false, false);
 
     assert!(f.instance && !f.is_const, "Static field not allowed!");
 

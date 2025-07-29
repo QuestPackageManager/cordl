@@ -17,7 +17,10 @@ use crate::generate::{
     cs_type::CsType,
     cs_type_tag::CsTypeTag,
     metadata::CordlMetadata,
-    rust::{rust_members::RustFeature, rust_type::CustomArc},
+    rust::{
+        rust_members::RustFeature,
+        rust_type::{CustomArc, RustTypeRequirement},
+    },
 };
 
 use super::{
@@ -228,6 +231,22 @@ impl RustContextCollection {
 
     /// Writes the Cargo.toml file with all features
     pub fn write_feature_block(&self, config: &RustGenerationConfig) -> color_eyre::Result<()> {
+        fn get_dependencies<'a>(
+            iter: impl Iterator<Item = &'a RustTypeRequirement>,
+            this: &RustContextCollection,
+            t_self_tag: &CsTypeTag,
+        ) -> Vec<CustomArc<RustFeature>> {
+            iter.filter(|o| ***o != *t_self_tag)
+                .filter_map(|req| {
+                    let t = this.get_rust_type(**req)?;
+                    match req {
+                        RustTypeRequirement::Definition(_) => t.self_def_feature.clone(),
+                        RustTypeRequirement::Implementation(_) => t.self_impl_feature.clone(),
+                    }
+                })
+                .collect_vec()
+        }
+
         // Group each rust type to its list of dependencies
         let dependency_graph: Vec<(&RustType, (Vec<_>, Vec<_>))> = self
             .all_contexts
@@ -235,26 +254,18 @@ impl RustContextCollection {
             // each context has types
             .flat_map(|c| c.typedef_types.values())
             // filter out types that have no feature
-            .filter(|t| t.self_impl_feature.is_some())
+            .filter(|t| t.self_def_feature.is_some() && t.self_impl_feature.is_some())
             .map(|t| {
-                let def_dependencies = t
-                    .requirements
-                    .get_def_dependencies()
-                    .iter()
-                    .filter(|o| **o != t.self_tag)
-                    .filter_map(|o| self.get_rust_type(*o))
-                    // get all def and impl features
-                    .filter_map(|o| o.self_def_feature.clone())
-                    .collect_vec();
-                let impl_dependencies = t
-                    .requirements
-                    .get_impl_dependencies()
-                    .iter()
-                    .filter(|o| **o != t.self_tag)
-                    .filter_map(|o| self.get_rust_type(*o))
-                    // get all def and impl features
-                    .filter_map(|o| o.self_impl_feature.clone())
-                    .collect_vec();
+                let def_dependencies = get_dependencies(
+                    t.requirements.get_def_dependencies().iter(),
+                    self,
+                    &t.self_tag,
+                );
+                let impl_dependencies = get_dependencies(
+                    t.requirements.get_impl_dependencies().iter(),
+                    self,
+                    &t.self_tag,
+                );
 
                 (t, (def_dependencies, impl_dependencies))
             })
@@ -265,29 +276,9 @@ impl RustContextCollection {
         let def_feature_block = dependency_graph
             // combine all features with same name that somehow exist
             .iter()
-            // make the feature definition
-            .into_group_map_by(|(t, _)| t.self_def_feature.as_ref().unwrap().name.clone())
-            .into_iter()
-            .map(|(feature_name, rust_types)| {
-                // rust_types: Vec<(&RustType, (Vec<CustomArc<RustFeature>>, Vec<CustomArc<RustFeature>>))>
-                let def_features = rust_types
-                    .iter()
-                    .flat_map(|(_, (def_features, _))| def_features.clone())
-                    .collect_vec();
-                (feature_name, def_features)
-            })
-            // make feature block
-            .map(|(feature_name, features)| {
-                let dependencies = features
-                    .iter()
-                    .map(|s| format!("\"{}\"", s.name))
-                    // Sort so things don't break git diffs
-                    .sorted()
-                    .join(", ");
-
-                let feature = format!("\"{feature_name}\" = [{dependencies}]",);
-
-                feature
+            .map(|(t, (def_features, _))| {
+                let feature_name = t.self_def_feature.as_ref().unwrap().name.clone();
+                (feature_name, def_features.clone())
             })
             .collect_vec();
 
@@ -295,21 +286,15 @@ impl RustContextCollection {
         // impl features depend on def of itself and its impl requirements
         let impl_feature_block = dependency_graph
             .into_iter()
-            .map(|(t, (_, impl_features))| {
+            .filter_map(|(t, (_, impl_features))| -> Option<_> {
                 // add the def feature as a dependency
-                let impl_features = std::iter::once(t.self_def_feature.as_ref().unwrap())
-                    .chain(impl_features.iter())
-                    .map(|s| format!("\"{}\"", s.name))
-                    // Sort so things don't break git diffs
-                    .sorted()
-                    .join(", ");
+                let impl_features = std::iter::once(t.self_def_feature.clone()?)
+                    .chain(impl_features)
+                    .collect_vec();
 
-                let feature = format!(
-                    "\"{}\" = [{impl_features}]",
-                    t.self_impl_feature.as_ref().unwrap().name
-                );
+                let name = t.self_impl_feature.as_ref()?.name.clone();
 
-                feature
+                Some((name, impl_features))
             })
             .collect_vec();
 
@@ -317,6 +302,17 @@ impl RustContextCollection {
         let feature_blocks = def_feature_block
             .into_iter()
             .chain(impl_feature_block)
+            .unique_by(|(name, _)| name.clone())
+            .map(|(name, dependencies)| {
+                let formatted_dependencies = dependencies
+                    .into_iter()
+                    .map(|s| format!("\"{}\"", s.name))
+                    .unique()
+                    // Sort so things don't break git diffs
+                    .sorted()
+                    .join(", ");
+                format!("\"{}\" = [{}]", name, formatted_dependencies)
+            })
             .unique()
             // Sort so things don't break git diffs
             .sorted()

@@ -37,21 +37,39 @@ use std::io::Write;
 
 const PARENT_FIELD: &str = "__cordl_parent";
 
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+
+pub enum RustTypeRequirement {
+    Implementation(CsTypeTag),
+    Definition(CsTypeTag),
+}
+
+impl Deref for RustTypeRequirement {
+    type Target = CsTypeTag;
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            RustTypeRequirement::Implementation(tag) => tag,
+            RustTypeRequirement::Definition(tag) => tag,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct RustTypeRequirements {
     required_modules: HashSet<String>,
-    required_def_types: HashSet<CsTypeTag>,
-    required_impl_types: HashSet<CsTypeTag>,
+    required_def_types: HashSet<RustTypeRequirement>,
+    required_impl_types: HashSet<RustTypeRequirement>,
 }
 
 impl RustTypeRequirements {
     pub fn add_module(&mut self, module: &str) {
         self.required_modules.insert(module.to_string());
     }
-    pub fn add_def_dependency(&mut self, cs_type_tag: CsTypeTag) {
+    pub fn add_def_dependency(&mut self, cs_type_tag: RustTypeRequirement) {
         self.required_def_types.insert(cs_type_tag);
     }
-    pub fn add_impl_dependency(&mut self, cs_type_tag: CsTypeTag) {
+    pub fn add_impl_dependency(&mut self, cs_type_tag: RustTypeRequirement) {
         self.required_impl_types.insert(cs_type_tag);
     }
 
@@ -78,10 +96,10 @@ impl RustTypeRequirements {
     pub(crate) fn get_modules(&self) -> &HashSet<String> {
         &self.required_modules
     }
-    pub fn get_def_dependencies(&self) -> &HashSet<CsTypeTag> {
+    pub fn get_def_dependencies(&self) -> &HashSet<RustTypeRequirement> {
         &self.required_def_types
     }
-    pub fn get_impl_dependencies(&self) -> &HashSet<CsTypeTag> {
+    pub fn get_impl_dependencies(&self) -> &HashSet<RustTypeRequirement> {
         &self.required_impl_types
     }
 }
@@ -292,7 +310,7 @@ impl RustType {
 
         let Some(parent) = parent else { return };
         let parent = name_resolver
-            .resolve_name(self, parent, TypeUsage::TypeName, false)
+            .resolve_name(self, parent, TypeUsage::TypeName, false, true)
             .with_no_prefix();
         let parent_field = RustField {
             name: format_ident!("{}", PARENT_FIELD),
@@ -453,7 +471,7 @@ impl RustType {
 
             let generics = self.get_generics(0);
 
-            let interface = name_resolver.resolve_name(self, i, TypeUsage::TypeName, true);
+            let interface = name_resolver.resolve_name(self, i, TypeUsage::TypeName, true, false);
             let interface_ident = interface.to_type_path_token();
 
             let impl_data: Vec<syn::Stmt> = match self.is_reference_type {
@@ -605,7 +623,7 @@ impl RustType {
                     .iter()
                     .map(|p| {
                         name_resolver
-                            .resolve_name(self, &p.il2cpp_ty, TypeUsage::Parameter, true)
+                            .resolve_name(self, &p.il2cpp_ty, TypeUsage::Parameter, true, false)
                             .name
                     })
                     .map(|s| config.name_rs(&s))
@@ -618,7 +636,7 @@ impl RustType {
             .iter()
             .map(|p| {
                 name_resolver
-                    .resolve_name(self, &p.il2cpp_ty, TypeUsage::Parameter, true)
+                    .resolve_name(self, &p.il2cpp_ty, TypeUsage::Parameter, true, true)
                     .name
             })
             .map(|s| config.name_rs(&s))
@@ -673,7 +691,7 @@ impl RustType {
                 );
 
                 let m_ret_ty = name_resolver
-                    .resolve_name(self, &m.return_type, TypeUsage::ReturnType, true)
+                    .resolve_name(self, &m.return_type, TypeUsage::ReturnType, true, true)
                     .wrap_by_gc();
                 let m_ret_ty_ident = m_ret_ty.to_type_token();
                 let m_result_ty: syn::Type =
@@ -861,7 +879,7 @@ impl RustType {
         config: &RustGenerationConfig,
     ) -> RustParam {
         let p_ty = name_resolver
-            .resolve_name(self, &p.il2cpp_ty, TypeUsage::Parameter, true)
+            .resolve_name(self, &p.il2cpp_ty, TypeUsage::Parameter, true, false)
             .wrap_by_gc();
         // let p_il2cpp_ty = p.il2cpp_ty.get_type(name_resolver.cordl_metadata);
 
