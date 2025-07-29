@@ -212,12 +212,12 @@ impl Visibility {
     }
 }
 
-impl ToString for Visibility {
-    fn to_string(&self) -> String {
+impl std::fmt::Display for Visibility {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Visibility::Public => "pub".to_string(),
-            Visibility::PublicCrate => "pub(crate)".to_string(),
-            Visibility::Private => "".to_string(),
+            Visibility::Public => write!(f, "pub"),
+            Visibility::PublicCrate => write!(f, "pub(crate)"),
+            Visibility::Private => write!(f, ""),
         }
     }
 }
