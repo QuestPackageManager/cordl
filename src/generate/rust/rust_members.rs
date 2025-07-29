@@ -142,9 +142,7 @@ type Lifetime = String;
 
 impl RustFunction {
     pub fn to_token_stream(&self) -> TokenStream {
-        let feature  = self.feature.as_ref().map(|f| {
-            f.to_token_stream()
-        });
+        let feature = self.feature.as_ref().map(|f| f.to_token_stream());
 
         let name: syn::Ident = format_ident!("{}", self.name);
         let generics: Option<syn::Generics> = match self.generics.is_empty() {
