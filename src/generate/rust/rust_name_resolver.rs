@@ -48,8 +48,7 @@ impl<'b> RustNameResolver<'_, 'b> {
             }
             ResolvedTypeData::GenericInst(resolved_type, vec) => {
                 let type_def_name_components =
-                    self.resolve_name(declaring_cpp_type, resolved_type, type_usage, add_to_impl, require_impl)
-                        .wrap_by_gc();
+                    self.resolve_name(declaring_cpp_type, resolved_type, type_usage, add_to_impl, require_impl);
                 let generic_types_formatted = vec
                     .iter()
                     .map(|(r, inc)| {
