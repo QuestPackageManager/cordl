@@ -148,12 +148,14 @@ impl CppContext {
                 };
 
                 if !t.is_value_type() {
-                    x.typealias_types
-                        .insert((cpp_ty.cpp_namespace(), CppUsingAlias {
+                    x.typealias_types.insert((
+                        cpp_ty.cpp_namespace(),
+                        CppUsingAlias {
                             alias: cpp_ty.name().to_string(),
                             result,
                             template: Default::default(),
-                        }));
+                        },
+                    ));
                     continue;
                 }
             }

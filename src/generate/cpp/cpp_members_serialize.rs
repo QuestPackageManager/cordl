@@ -49,10 +49,14 @@ impl Writable for CppForwardDeclare {
             None => self.cpp_name.clone(),
         };
 
-        writeln!(writer, "{} {name};", match self.is_struct {
-            true => "struct",
-            false => "class",
-        })?;
+        writeln!(
+            writer,
+            "{} {name};",
+            match self.is_struct {
+                true => "struct",
+                false => "class",
+            }
+        )?;
 
         if self.cpp_namespace.is_some() {
             writeln!(writer, "}}")?;

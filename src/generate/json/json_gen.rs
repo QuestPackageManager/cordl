@@ -6,7 +6,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::generate::{
     cs_context_collection::TypeContextCollection,
-    cs_members::{CsField, CsMethod, CsParam, CsParamFlags, CsProperty, CsGenericTemplateType, CsGenericTemplate},
+    cs_members::{
+        CsField, CsGenericTemplate, CsGenericTemplateType, CsMethod, CsParam, CsParamFlags,
+        CsProperty,
+    },
     cs_type::CsType,
     metadata::CordlMetadata,
     type_extensions::TypeDefinitionExtensions,
@@ -76,7 +79,7 @@ pub struct JsonProperty {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum JsonGenericArgumentType {
     AnyType,
-    ReferenceType
+    ReferenceType,
 }
 
 type JsonTemplate = Vec<(JsonGenericArgumentType, String)>;
@@ -90,7 +93,7 @@ pub struct JsonMethod {
     pub instance: bool,
     pub method_info: JsonMethodInfo,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub template: Option<JsonTemplate>
+    pub template: Option<JsonTemplate>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -122,7 +125,7 @@ fn make_field(field: &CsField, name_resolver: &JsonNameResolver) -> JsonField {
         ty_tag: ty,
         instance: field.instance,
         is_const: field.is_const,
-        readonly: field.readonly
+        readonly: field.readonly,
     }
 }
 fn make_property(property: &CsProperty, name_resolver: &JsonNameResolver) -> JsonProperty {
@@ -173,12 +176,19 @@ fn make_param(param: &CsParam, name_resolver: &JsonNameResolver) -> JsonParam {
 fn make_template(template: &CsGenericTemplate) -> JsonTemplate {
     // note: I'm not good at rust so there may be a better way to do this - zip
     // (feel free to remove this comment if this is fine)
-    return template.names
+    return template
+        .names
         .iter()
-        .map(|p| (match(p.0) {
-            CsGenericTemplateType::AnyType => JsonGenericArgumentType::AnyType,
-            CsGenericTemplateType::ReferenceType => JsonGenericArgumentType::ReferenceType
-        }, p.1.clone())).collect_vec();
+        .map(|p| {
+            (
+                match (p.0) {
+                    CsGenericTemplateType::AnyType => JsonGenericArgumentType::AnyType,
+                    CsGenericTemplateType::ReferenceType => JsonGenericArgumentType::ReferenceType,
+                },
+                p.1.clone(),
+            )
+        })
+        .collect_vec();
 }
 
 fn make_method(method: &CsMethod, name_resolver: &JsonNameResolver) -> JsonMethod {
@@ -206,10 +216,10 @@ fn make_method(method: &CsMethod, name_resolver: &JsonNameResolver) -> JsonMetho
         ret: ret_ty_name,
         ret_ty_tag: ret_ty,
         method_info: json_method_info,
-        template: match&(method.template) {
+        template: match &(method.template) {
             Some(t) => Some(make_template(t)),
-            None => None
-        }
+            None => None,
+        },
     }
 }
 
@@ -269,9 +279,9 @@ pub fn make_type(
         properties,
         methods,
         children,
-        template: match&(td.generic_template) {
+        template: match &(td.generic_template) {
             Some(t) => Some(make_template(t)),
-            None => None
+            None => None,
         },
         packing,
         size,

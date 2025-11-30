@@ -193,10 +193,13 @@ impl<'a> CordlMetadata<'a> {
                                     method_pointer.abs_diff(next_method_pointer) as usize
                                 };
 
-                            (method_index, MethodCalculations {
-                                estimated_size,
-                                addrs: method_pointer,
-                            })
+                            (
+                                method_index,
+                                MethodCalculations {
+                                    estimated_size,
+                                    addrs: method_pointer,
+                                },
+                            )
                         })
                         .collect();
 

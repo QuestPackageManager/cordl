@@ -697,11 +697,10 @@ pub(crate) fn prop_methods_from_fieldinfo(
         ..setter_decl.clone().into()
     };
 
-    (vec![getter_decl, const_getter_decl, setter_decl], vec![
-        getter_impl,
-        const_getter_impl,
-        setter_impl,
-    ])
+    (
+        vec![getter_decl, const_getter_decl, setter_decl],
+        vec![getter_impl, const_getter_impl, setter_impl],
+    )
 }
 
 pub(crate) fn handle_referencetype_fields(
