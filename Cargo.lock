@@ -252,7 +252,7 @@ dependencies = [
 [[package]]
 name = "brocolib"
 version = "0.1.0"
-source = "git+https://github.com/Stackdoubleflow/brocolib.git?branch=il2cpp_v31#60763e65b7c4117030a75f918a08a5e759be88aa"
+source = "git+https://github.com/NSGolova/brocolib.git?branch=il2cpp_v31#7f703fedc6fa1a180fd8891a997e42bc88db2564"
 dependencies = [
  "bad64 0.9.0",
  "binde",
@@ -391,7 +391,7 @@ version = "0.1.0"
 dependencies = [
  "bitflags 2.10.0",
  "brocolib 0.1.0 (git+https://github.com/Stackdoubleflow/brocolib.git?branch=il2cpp_v29)",
- "brocolib 0.1.0 (git+https://github.com/Stackdoubleflow/brocolib.git?branch=il2cpp_v31)",
+ "brocolib 0.1.0 (git+https://github.com/NSGolova/brocolib.git?branch=il2cpp_v31)",
  "byteorder",
  "bytes",
  "clap",
