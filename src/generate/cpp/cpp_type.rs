@@ -734,7 +734,7 @@ impl CppType {
         for interface in interfaces {
             // We have an interface, lets do something with it
             let interface_name_il2cpp =
-                name_resolver.resolve_name(self, &interface, TypeUsage::TypeName, true);
+                name_resolver.resolve_name(self, &interface, TypeUsage::TypeName, false);
 
             let interface_cpp_name = interface_name_il2cpp.remove_pointer().combine_all();
             let interface_cpp_pointer = interface_name_il2cpp.as_pointer().combine_all();
