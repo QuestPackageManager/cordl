@@ -3,7 +3,9 @@ use itertools::Itertools;
 
 use crate::{
     data::type_resolver::{ResolvedType, ResolvedTypeData, TypeUsage},
-    generate::{metadata::CordlMetadata, type_extensions::TypeDefinitionExtensions},
+    generate::{
+        cpp::cpp_type::CppTypeRequirements, metadata::CordlMetadata, offsets::get_sizeof_type, type_extensions::TypeDefinitionExtensions
+    },
 };
 
 use super::{
@@ -15,6 +17,7 @@ use super::{
 };
 
 pub const VALUE_WRAPPER_TYPE: &str = "::bs_hook::ValueType";
+pub const VALUE_SIZED_WRAPPER_TYPE: &str = "::bs_hook::ValueTypeWrapper";
 pub const ENUM_WRAPPER_TYPE: &str = "::bs_hook::EnumType";
 pub const INTERFACE_WRAPPER_TYPE: &str = "::cordl_internals::InterfaceW";
 pub const IL2CPP_OBJECT_TYPE: &str = "Il2CppObject";
@@ -25,6 +28,14 @@ pub struct CppNameResolver<'a, 'b> {
 }
 
 impl<'b> CppNameResolver<'_, 'b> {
+    /// Resolves a name for a given ResolvedType
+    /// # Arguments
+    /// * `declaring_cpp_type` - The CppType that is requesting the type resolution
+    /// * `ty` - The ResolvedType to resolve
+    /// * `type_usage` - The usage context for the type
+    /// * `hard_include` - Whether to add a hard include or just a forward declare
+    /// # Returns
+    /// A CppNameComponents representing the resolved type
     pub fn resolve_name(
         &self,
         declaring_cpp_type: &mut CppType,
@@ -92,12 +103,14 @@ impl<'b> CppNameResolver<'_, 'b> {
             ResolvedTypeData::Ptr(resolved_type) => {
                 let generic_formatted =
                     self.resolve_name(declaring_cpp_type, resolved_type, type_usage, hard_include);
-                CppNameComponents {
-                    namespace: Some("cordl_internals".into()),
-                    generics: Some(vec![generic_formatted.combine_all()]),
-                    name: "Ptr".into(),
-                    ..Default::default()
-                }
+
+                generic_formatted.as_pointer()
+                // CppNameComponents {
+                //     namespace: Some("cordl_internals".into()),
+                //     generics: Some(vec![generic_formatted.combine_all()]),
+                //     name: "Ptr".into(),
+                //     ..Default::default()
+                // }
             }
             ResolvedTypeData::Type(resolved_tag) => self.resolve_type(
                 resolved_tag,
@@ -168,7 +181,18 @@ impl<'b> CppNameResolver<'_, 'b> {
             ResolvedTypeData::Blacklisted(cs_type_tag) => {
                 let td = &metadata.metadata.global_metadata.type_definitions[cs_type_tag.get_tdi()];
 
-                Self::wrapper_type_for_tdi(td)
+                let size = get_sizeof_type(
+                    td,
+                    cs_type_tag.get_tdi(),
+                    cs_type_tag.get_generic_inst(metadata.metadata).map(|g| g.types.as_slice()),
+                    metadata,
+                );
+
+                Self::wrapper_type_for_tdi(
+                    td,
+                    size,
+                    &mut declaring_cpp_type.requirements
+                )
             }
             ResolvedTypeData::ByRef(resolved_type) => {
                 let generic =
@@ -199,7 +223,14 @@ impl<'b> CppNameResolver<'_, 'b> {
         }
     }
 
-    fn resolve_type(
+    /// Resolves a type, adding includes/forward declares as necessary
+    /// # Arguments
+    /// * `resolved_tag` - The type tag to resolve
+    /// * `declaring_cpp_type` - The CppType that is requesting the type resolution
+    /// * `metadata` - The CordlMetadata for the current generation
+    /// * `hard_include` - Whether to add a hard include or just a forward declare
+    /// * `type_usage` - The usage context for the type
+    pub fn resolve_type(
         &self,
         resolved_tag: &crate::generate::cs_type_tag::CsTypeTag,
         declaring_cpp_type: &mut CppType,
@@ -264,6 +295,12 @@ impl<'b> CppNameResolver<'_, 'b> {
         self.resolve_redirect(incl_ty, type_usage)
     }
 
+    /// Resolves any redirects for special types like UnityEngine.Object
+    /// # Arguments
+    /// * `incl_ty` - The CppType to resolve redirects for
+    /// * `type_usage` - The usage context for the type
+    /// # Returns
+    /// A CppNameComponents representing the resolved type
     fn resolve_redirect(&self, incl_ty: &CppType, type_usage: TypeUsage) -> CppNameComponents {
         let mut name_components = incl_ty.cpp_name_components.clone();
         name_components = unity::unity_object_resolve_handler(
@@ -275,13 +312,14 @@ impl<'b> CppNameResolver<'_, 'b> {
         name_components
     }
 
-    fn wrapper_type_for_tdi(td: &Il2CppTypeDefinition) -> CppNameComponents {
+    fn wrapper_type_for_tdi(td: &Il2CppTypeDefinition, size: u32, requirements: &mut CppTypeRequirements) -> CppNameComponents {
         if td.is_enum_type() {
             return ENUM_WRAPPER_TYPE.to_string().into();
         }
 
         if td.is_value_type() {
-            return VALUE_WRAPPER_TYPE.to_string().into();
+            requirements.add_def_include(None, CppInclude::new_exact("beatsaber-hook/shared/utils/value-wrapper-type.hpp"));
+            return format!("{VALUE_SIZED_WRAPPER_TYPE}<{size}>").into();
         }
 
         if td.is_interface() {

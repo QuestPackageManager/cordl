@@ -1,6 +1,6 @@
 use brocolib;
 
-use brocolib::runtime_metadata::TypeData;
+use brocolib::runtime_metadata::{Il2CppGenericInst, TypeData};
 
 use brocolib::global_metadata::TypeDefinitionIndex;
 
@@ -98,6 +98,15 @@ impl CsTypeTag {
         match self {
             CsTypeTag::TypeDefinitionIndex(tdi) => *tdi,
             CsTypeTag::GenericInstantiation(gen_inst) => gen_inst.tdi,
+        }
+    }
+
+    pub fn get_generic_inst<'a>(&self, metadata: &'a brocolib::Metadata<'a, 'a>) -> Option<&'a Il2CppGenericInst> {
+        match self {
+            CsTypeTag::TypeDefinitionIndex(_) => None,
+            CsTypeTag::GenericInstantiation(gen_inst) => {
+                Some(metadata.runtime_metadata.metadata_registration.generic_insts.get(gen_inst.inst)?)
+            },
         }
     }
 }

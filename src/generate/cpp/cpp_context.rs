@@ -373,6 +373,7 @@ impl CppContext {
                     .flat_map(|t| &t.requirements.forward_declares)
             };
 
+            // Write includes for impl
             forward_declare_and_includes()
                 .map(|(_fd, inc)| inc)
                 .unique()
@@ -383,6 +384,7 @@ impl CppContext {
                     Ok(())
                 })?;
 
+            // Write forward declares for typedef
             forward_declare_and_includes()
                 .map(|(fd, _inc)| fd)
                 .unique()

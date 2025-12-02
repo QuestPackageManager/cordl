@@ -179,6 +179,22 @@ fn main() -> color_eyre::Result<()> {
         blacklist_type("UnityEngine.XR.XRMeshSubsystemDescriptor");
         blacklist_type("UnityEngine.XR.XRDisplaySubsystem");
         blacklist_type("UIToolkitUtilities.Controls.Table"); // TODO: Make System.Enum work properly
+        blacklist_type("UnityEngine.Rendering.GlobalDynamicResolutionSettings");
+        blacklist_type("UnityEngine.Rendering.DynamicResolutionHandler");
+        blacklist_type(
+            "UnityEngine.Rendering.RenderGraphModule.NativeRenderPassCompiler.CompilerContextData",
+        );
+        blacklist_type("UnityEngine.TextCore.Text.NativeTextInfo");
+        blacklist_type("UnityEngine.TextCore.Text.TextLib");
+        blacklist_type("UnityEngine.UIElements.MeshGenerationContext");
+        blacklist_type("UnityEngine.UIElements.UIR.MeshGenerator");
+        // blacklist_type("Unity.Collections.LowLevel.Unsafe.UnsafePtrList`1/ParallelWriter<T>");
+        // blacklist_type("Unity.Collections.LowLevel.Unsafe.UnsafePtrList`1");
+        // blacklist_type("Unity.Collections.NativeRingQueueDispose");
+        // blacklist_type("Unity.Collections.NativeQueueDispose");
+
+        // TODO: Fix missing method info
+        blacklist_type("UnityEngine.Rendering.IGPUResidentRenderPipeline");
         // blacklist_type("NetworkPacketSerializer`2::<>c__DisplayClass4_0`1");
         // blacklist_type("NetworkPacketSerializer`2::<>c__DisplayClass8_0`1");
         // blacklist_type("NetworkPacketSerializer`2::<>c__DisplayClass7_0`1");
