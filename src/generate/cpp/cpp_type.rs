@@ -596,6 +596,25 @@ impl CppType {
         }
     }
 
+    /// Make CppParams from CsParams, ensuring no name collisions
+    fn make_params(
+        &mut self,
+        params: Vec<CsParam>,
+        name_resolver: &CppNameResolver,
+        config: &CppGenerationConfig,
+    ) -> Vec<CppParam> {
+        let mut cpp_params: Vec<CppParam> = Vec::with_capacity(params.len());
+
+        for (i, p) in params.into_iter().enumerate() {
+            let mut cpp_param = self.make_param(p, name_resolver, config);
+            while cpp_params.iter().any(|p| *p.name == cpp_param.name) {
+                cpp_param.name = format!("{}_param_{i}", cpp_param.name);
+            }
+            cpp_params.push(cpp_param);
+        }
+        cpp_params
+    }
+
     fn make_param(
         &mut self,
         p: CsParam,
@@ -658,11 +677,7 @@ impl CppType {
 
         self.declarations.reserve(constructors.len());
         for ctor in constructors {
-            let m_params_with_def = ctor
-                .parameters
-                .iter()
-                .map(|p| self.make_param(p.clone(), name_resolver, config))
-                .collect_vec();
+            let m_params_with_def = self.make_params(ctor.parameters, name_resolver, config);
 
             let template: Option<CppTemplate> = ctor.template.clone().map(|t| t.into());
             self.create_ref_constructor(&m_params_with_def, template.as_ref());
@@ -860,11 +875,7 @@ impl CppType {
         // TODO: sanitize method name for c++
         let m_name = &method.name;
 
-        let m_params_with_def = method
-            .parameters
-            .iter()
-            .map(|p| self.make_param(p.clone(), name_resolver, config))
-            .collect_vec();
+        let m_params_with_def = self.make_params(method.parameters.clone(), name_resolver, config);
 
         let m_params_no_def = m_params_with_def
             .iter()
