@@ -92,7 +92,7 @@ template <typename T> struct UnityW {
   }
 
   [[nodiscard]] static constexpr inline void *cached_ptr(T const *ptr) {
-    return ptr->m_CachedPtr.m_value.convert();
+    return ptr->m_CachedPtr.m_value;
   }
 
 
