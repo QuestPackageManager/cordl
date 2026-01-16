@@ -47,7 +47,8 @@ impl RustContext {
         let path_name = match t.declaring_type_index != u32::MAX {
             true => {
                 let name = config.name_rs(name);
-                let base_name = components.declaring_types.unwrap_or_default().join("_");
+                // sanitize declaring types
+                let base_name = config.name_rs(&components.declaring_types.unwrap_or_default().join("_"));
 
                 format!("{base_name}_{name}")
             }
