@@ -973,12 +973,16 @@ impl RustType {
         self.rs_name_components.generics = None;
     }
 
+    /// easy switch to enable optional derive feature
+    pub const OPTIONAL_DERIVE_FEATURE: bool = false;
+
     /// Generate optional derive attribute based on impl feature
+    /// TODO: Fields require this bound too so this doesn't help at the moment
     fn optional_derive(&self, derives: &[&str]) -> TokenStream {
         let derives = derives.iter().map(|d| format_ident!("{}", d));
 
         match &self.self_impl_feature {
-            Some(feature) => {
+            Some(feature) if Self::OPTIONAL_DERIVE_FEATURE => {
                 let name = &feature.name;
                 quote! {
                     #[cfg_attr(feature = #name, derive( #(#derives),* ))]
@@ -1088,10 +1092,20 @@ impl RustType {
                 let name = &f.name;
                 let val = &f.value;
 
+                let default_variant = if self.self_impl_feature.is_some() && Self::OPTIONAL_DERIVE_FEATURE {
+                    quote! {
+                        #[cfg_attr(feature = #name, default)]
+                    }
+                } else {
+                    quote! {
+                        #[default]
+                    }
+                };
+
                 // add default for enum
                 if i == 0 {
                     return parse_quote! {
-                        #[default]
+                        #default_variant
                         #name = #val
                     };
                 }
