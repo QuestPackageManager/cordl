@@ -310,7 +310,10 @@ pub fn run_rust(
     rs_context_collection.write_namespace_modules(&STATIC_CONFIG)?;
     rs_context_collection.write_feature_block(&STATIC_CONFIG)?;
 
-    clippy_files()?;
+    if let Err(e) = clippy_files() {
+        eprintln!("Clippy failed: {}", e);
+    }
+    println!("Formatting files...");
     format_files()?;
 
     Ok(())
