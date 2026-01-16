@@ -1092,15 +1092,16 @@ impl RustType {
                 let name = &f.name;
                 let val = &f.value;
 
-                let default_variant = if self.self_impl_feature.is_some() && Self::OPTIONAL_DERIVE_FEATURE {
-                    quote! {
-                        #[cfg_attr(feature = #name, default)]
-                    }
-                } else {
-                    quote! {
-                        #[default]
-                    }
-                };
+                let default_variant =
+                    if self.self_impl_feature.is_some() && Self::OPTIONAL_DERIVE_FEATURE {
+                        quote! {
+                            #[cfg_attr(feature = #name, default)]
+                        }
+                    } else {
+                        quote! {
+                            #[default]
+                        }
+                    };
 
                 // add default for enum
                 if i == 0 {

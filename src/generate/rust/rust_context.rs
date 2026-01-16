@@ -48,7 +48,8 @@ impl RustContext {
             true => {
                 let name = config.name_rs(name);
                 // sanitize declaring types
-                let base_name = config.name_rs(&components.declaring_types.unwrap_or_default().join("_"));
+                let base_name =
+                    config.name_rs(&components.declaring_types.unwrap_or_default().join("_"));
 
                 format!("{base_name}_{name}")
             }

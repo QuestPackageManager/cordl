@@ -101,12 +101,19 @@ impl CsTypeTag {
         }
     }
 
-    pub fn get_generic_inst<'a>(&self, metadata: &'a brocolib::Metadata<'a, 'a>) -> Option<&'a Il2CppGenericInst> {
+    pub fn get_generic_inst<'a>(
+        &self,
+        metadata: &'a brocolib::Metadata<'a, 'a>,
+    ) -> Option<&'a Il2CppGenericInst> {
         match self {
             CsTypeTag::TypeDefinitionIndex(_) => None,
-            CsTypeTag::GenericInstantiation(gen_inst) => {
-                Some(metadata.runtime_metadata.metadata_registration.generic_insts.get(gen_inst.inst)?)
-            },
+            CsTypeTag::GenericInstantiation(gen_inst) => Some(
+                metadata
+                    .runtime_metadata
+                    .metadata_registration
+                    .generic_insts
+                    .get(gen_inst.inst)?,
+            ),
         }
     }
 }

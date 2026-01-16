@@ -241,7 +241,7 @@ impl RustContextCollection {
                     if t.is_compiler_generated {
                         return None;
                     }
-                    
+
                     match req {
                         RustTypeRequirement::Definition(_) => t.self_def_feature.clone(),
                         RustTypeRequirement::Implementation(_) => t.self_impl_feature.clone(),

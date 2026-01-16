@@ -4,7 +4,8 @@ use itertools::Itertools;
 use crate::{
     data::type_resolver::{ResolvedType, ResolvedTypeData, TypeUsage},
     generate::{
-        cpp::cpp_type::CppTypeRequirements, metadata::CordlMetadata, offsets::get_sizeof_type, type_extensions::TypeDefinitionExtensions
+        cpp::cpp_type::CppTypeRequirements, metadata::CordlMetadata, offsets::get_sizeof_type,
+        type_extensions::TypeDefinitionExtensions,
     },
 };
 
@@ -184,15 +185,13 @@ impl<'b> CppNameResolver<'_, 'b> {
                 let size = get_sizeof_type(
                     td,
                     cs_type_tag.get_tdi(),
-                    cs_type_tag.get_generic_inst(metadata.metadata).map(|g| g.types.as_slice()),
+                    cs_type_tag
+                        .get_generic_inst(metadata.metadata)
+                        .map(|g| g.types.as_slice()),
                     metadata,
                 );
 
-                Self::wrapper_type_for_tdi(
-                    td,
-                    size,
-                    &mut declaring_cpp_type.requirements
-                )
+                Self::wrapper_type_for_tdi(td, size, &mut declaring_cpp_type.requirements)
             }
             ResolvedTypeData::ByRef(resolved_type) => {
                 let generic =
@@ -312,13 +311,20 @@ impl<'b> CppNameResolver<'_, 'b> {
         name_components
     }
 
-    fn wrapper_type_for_tdi(td: &Il2CppTypeDefinition, size: u32, requirements: &mut CppTypeRequirements) -> CppNameComponents {
+    fn wrapper_type_for_tdi(
+        td: &Il2CppTypeDefinition,
+        size: u32,
+        requirements: &mut CppTypeRequirements,
+    ) -> CppNameComponents {
         if td.is_enum_type() {
             return ENUM_WRAPPER_TYPE.to_string().into();
         }
 
         if td.is_value_type() {
-            requirements.add_def_include(None, CppInclude::new_exact("beatsaber-hook/shared/utils/value-wrapper-type.hpp"));
+            requirements.add_def_include(
+                None,
+                CppInclude::new_exact("beatsaber-hook/shared/utils/value-wrapper-type.hpp"),
+            );
             return format!("{VALUE_SIZED_WRAPPER_TYPE}<{size}>").into();
         }
 
