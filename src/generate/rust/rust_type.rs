@@ -973,6 +973,25 @@ impl RustType {
         self.rs_name_components.generics = None;
     }
 
+    /// Generate optional derive attribute based on impl feature
+    fn optional_derive(&self, derives: &[&str]) -> TokenStream {
+        let derives = derives.iter().map(|d| format_ident!("{}", d));
+
+        match &self.self_impl_feature {
+            Some(feature) => {
+                let name = &feature.name;
+                quote! {
+                    #[cfg_attr(feature = #name, derive( #(#derives),* ))]
+                }
+            }
+            _ => {
+                quote! {
+                    #[derive( #(#derives),* )]
+                }
+            }
+        }
+    }
+
     fn write_reference_type(
         &self,
         writer: &mut Writer,
@@ -1015,10 +1034,12 @@ impl RustType {
         let def_feature = self.self_def_feature.as_ref().map(|f| f.to_token_stream());
         let impl_feature = self.self_impl_feature.as_ref().map(|f| f.to_token_stream());
 
+        let derives = self.optional_derive(&["Debug"]);
+
         let mut tokens = quote! {
             #def_feature
             #[repr(C)]
-            #[derive(Debug)]
+            #derives
             pub struct #name_ident {
                 #(#fields),*
             }
@@ -1103,11 +1124,13 @@ impl RustType {
         let impl_value = self.implement_value_type();
 
         let feature = self.self_def_feature.as_ref().map(|f| f.to_token_stream());
+        let mapped_feature_derive =
+            self.optional_derive(&["Debug", "Clone", "Copy", "PartialEq", "Eq", "Default"]);
 
         let tokens = quote! {
             #feature
+            #mapped_feature_derive
             #[repr(#backing_type)]
-            #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
             pub enum #name_ident {
                 #(#fields),*
             }
@@ -1159,11 +1182,13 @@ impl RustType {
         let impl_value = self.implement_value_type();
 
         let feature = self.self_def_feature.as_ref().map(|f| f.to_token_stream());
+        let mapped_feature_derive =
+            self.optional_derive(&["Debug", "Clone", " Default", "PartialEq"]);
 
         let tokens = quote! {
             #feature
+            #mapped_feature_derive
             #[repr(C)]
-            #[derive(Debug, Clone, Default, PartialEq)]
             pub struct #name_ident {
                 #(#fields),*
             }
@@ -1376,10 +1401,11 @@ impl RustType {
         let def_feature = self.self_def_feature.as_ref().map(|f| f.to_token_stream());
         let impl_feature = self.self_impl_feature.as_ref().map(|f| f.to_token_stream());
 
+        let mapped_feature_derive = self.optional_derive(&["Debug"]);
         let mut tokens = quote! {
             #def_feature
+            #mapped_feature_derive
             #[repr(C)]
-            #[derive(Debug)]
             pub struct #name_ident {
                 #(#fields),*
             }
