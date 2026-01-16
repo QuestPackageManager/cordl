@@ -310,9 +310,52 @@ pub fn run_rust(
     rs_context_collection.write_namespace_modules(&STATIC_CONFIG)?;
     rs_context_collection.write_feature_block(&STATIC_CONFIG)?;
 
+    clippy_files()?;
+    format_files()?;
+
     Ok(())
 }
 
 fn format_files() -> color_eyre::Result<()> {
-    todo!();
+    use std::process::Command;
+
+    let status = Command::new("cargo")
+        .arg("fmt")
+        .current_dir(&STATIC_CONFIG.source_path)
+        .status()
+        .expect("Failed to execute cargo fmt");
+
+    if !status.success() {
+        Err(color_eyre::eyre::eyre!(
+            "cargo fmt failed with status: {}",
+            status
+        ))
+    } else {
+        Ok(())
+    }
+}
+
+fn clippy_files() -> color_eyre::Result<()> {
+    use std::process::Command;
+
+    let status = Command::new("cargo")
+        .arg("clippy")
+        .arg("--all-targets")
+        .arg("--all-features")
+        .arg("--fix")
+        .arg("--allow-dirty")
+        .arg("--allow-staged")
+        .arg("--allow-no-vcs")
+        .current_dir(&STATIC_CONFIG.source_path)
+        .status()
+        .expect("Failed to execute cargo clippy");
+
+    if !status.success() {
+        Err(color_eyre::eyre::eyre!(
+            "cargo clippy failed with status: {}",
+            status
+        ))
+    } else {
+        Ok(())
+    }
 }
