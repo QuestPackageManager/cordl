@@ -16,8 +16,7 @@ cpp = []
 
 # Alias a second version of the dependency with a different package name
 [dependencies.brocolib_il2cpp_v31]
-# git = "https://github.com/Stackdoubleflow/brocolib.git"
-git = "https://github.com/NSGolova/brocolib.git" # TODO: Temporary fix until PR is merged
+git = "https://github.com/Stackdoubleflow/brocolib.git"
 branch = "il2cpp_v31"
 optional = true
 package = "brocolib"
