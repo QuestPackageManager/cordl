@@ -236,6 +236,12 @@ impl RustContextCollection {
             iter.filter(|o| ***o != *t_self_tag)
                 .filter_map(|req| {
                     let t = this.get_rust_type(**req)?;
+
+                    // Skip compiler generated types
+                    if t.is_compiler_generated {
+                        return None;
+                    }
+                    
                     match req {
                         RustTypeRequirement::Definition(_) => t.self_def_feature.clone(),
                         RustTypeRequirement::Implementation(_) => t.self_impl_feature.clone(),
@@ -252,6 +258,7 @@ impl RustContextCollection {
             .flat_map(|c| c.typedef_types.values())
             // filter out types that have no feature
             .filter(|t| t.self_def_feature.is_some() && t.self_impl_feature.is_some())
+            .filter(|t| !t.is_compiler_generated)
             .map(|t| {
                 let def_dependencies = get_dependencies(
                     t.requirements.get_def_dependencies().iter(),
