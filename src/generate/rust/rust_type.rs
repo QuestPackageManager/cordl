@@ -986,7 +986,7 @@ impl RustType {
             }
             _ => {
                 quote! {
-                    #[derive( #(#derives),* )]
+                    #[derive(#(#derives),*)]
                 }
             }
         }
@@ -1183,7 +1183,7 @@ impl RustType {
 
         let feature = self.self_def_feature.as_ref().map(|f| f.to_token_stream());
         let mapped_feature_derive =
-            self.optional_derive(&["Debug", "Clone", " Default", "PartialEq"]);
+            self.optional_derive(&["Debug", "Clone", "Default", "PartialEq"]);
 
         let tokens = quote! {
             #feature
