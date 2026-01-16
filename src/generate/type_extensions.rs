@@ -7,7 +7,7 @@ use brocolib::{
 };
 use itertools::Itertools;
 
-use crate::data::name_components::NameComponents;
+use crate::{data::name_components::NameComponents, generate::cs_type_tag::CsTypeTag};
 
 pub const PARAM_ATTRIBUTE_IN: u16 = 0x0001;
 pub const PARAM_ATTRIBUTE_OUT: u16 = 0x0002;
@@ -193,13 +193,28 @@ impl TypeDefinitionExtensions for Il2CppTypeDefinition {
     }
 
     fn is_compiler_generated(&self, metadata: &Metadata) -> bool {
-        self.is_special_name()
+        if self.is_special_name()
             || (self.name(metadata).starts_with('<') && self.name(metadata).contains(">d__"))
             || self.name(metadata).contains("<>c")
             || self
                 .name(metadata)
                 .starts_with("<PrivateImplementationDetails>")
+        {
+            return true;
+        }
+
+        // check recursively if any declaring type is compiler generated
+        if self.declaring_type_index == u32::MAX {
+            return false;
+        }
+        let declaring_ty = metadata.runtime_metadata.metadata_registration.types
+            [self.declaring_type_index as usize];
+        let declaring_td = CsTypeTag::from_type_data(declaring_ty.data, metadata);
+        let declaring_td = declaring_td.get_tdi().get_type_definition(metadata);
+
+        declaring_td.is_compiler_generated(metadata)
     }
+
     fn is_special_name(&self) -> bool {
         self.flags & TYPE_ATTRIBUTE_SPECIAL_NAME != 0
     }
