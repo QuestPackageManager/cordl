@@ -974,7 +974,11 @@ impl RustType {
     }
 
     /// easy switch to enable optional derive feature
-    pub const OPTIONAL_DERIVE_FEATURE: bool = false;
+    pub const OPTIONAL_DERIVE_FEATURE: bool = true;
+
+    fn derive_feature(s: &str) -> String {
+        format!("derive_{}", s)
+    }
 
     /// Generate optional derive attribute based on impl feature
     /// TODO: Fields require this bound too so this doesn't help at the moment
@@ -982,10 +986,25 @@ impl RustType {
         let derives = derives.iter().map(|d| format_ident!("{}", d));
 
         match &self.self_impl_feature {
+            // single feature for all derives
+            // Some(feature) if Self::OPTIONAL_DERIVE_FEATURE => {
+            //     let name = &feature.name;
+            //     quote! {
+            //         #[cfg_attr(feature = #name, derive( #(#derives),* ))]
+            //     }
+            // }
+
+            // format derives individually
             Some(feature) if Self::OPTIONAL_DERIVE_FEATURE => {
-                let name = &feature.name;
+                let cfg_derives = derives.map(|d| {
+                    let feature_name = Self::derive_feature(&d.to_string());
+                    quote! {
+                        #[cfg_attr(feature = #feature_name, derive( #d ))]
+                    }
+                });
+
                 quote! {
-                    #[cfg_attr(feature = #name, derive( #(#derives),* ))]
+                    #(#cfg_derives)*
                 }
             }
             _ => {
@@ -1092,10 +1111,12 @@ impl RustType {
                 let name = &f.name;
                 let val = &f.value;
 
+                let default_feature_name = Self::derive_feature("Default");
+
                 let default_variant =
                     if self.self_impl_feature.is_some() && Self::OPTIONAL_DERIVE_FEATURE {
                         quote! {
-                            #[cfg_attr(feature = #name, default)]
+                            #[cfg_attr(feature = #default_feature_name, default)]
                         }
                     } else {
                         quote! {
@@ -1349,6 +1370,7 @@ impl RustType {
         let impl_object_tokens: Option<syn::ItemImpl> = self.parent.as_ref().map(|_| -> syn::ItemImpl {
             let parent_field_ident = format_ident!(r#"{}"#, PARENT_FIELD);
 
+            // TODO: Figure out if we use def/impl feature here
             parse_quote! {
                 #def_feature
                 impl #generics quest_hook::libil2cpp::ObjectType for #path_ident {

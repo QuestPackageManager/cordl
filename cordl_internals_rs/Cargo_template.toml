@@ -11,5 +11,11 @@ quest_hook = { git = "https://github.com/Fernthedev/quest-hook-rs.git", features
 
 [features]
 default = []
+derive_Debug = []
+derive_Clone = []
+derive_PartialEq = []
+derive_Eq = []
+derive_Default = []
+derive_Copy = []
 
 #cordl_features
