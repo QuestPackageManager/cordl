@@ -412,7 +412,6 @@ impl CsType {
                 .map(|v| v.iter().map(|t| t.ty).collect_vec());
             offsets::layout_fields(
                 metadata,
-                t,
                 tdi,
                 generic_inst_types.as_deref(),
                 Some(&mut offsets),

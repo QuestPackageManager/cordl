@@ -47,7 +47,7 @@ pub fn get_size_info(
     let mut instance_size = size_metadata.instance_size;
     let mut native_size = size_metadata.native_size;
 
-    let sa = layout_fields(metadata, t, tdi, generic_inst_types, None, true);
+    let sa = layout_fields(metadata, tdi, generic_inst_types, None, true);
     let mut calculated_instance_size = sa.size;
 
     let minimum_alignment = sa.alignment;
@@ -93,7 +93,7 @@ pub fn get_size_and_packing<'a>(
     let mut metadata_size = size_metadata.instance_size;
 
     if metadata_size == 0 && !t.is_interface() {
-        let sa = layout_fields(metadata, t, tdi, generic_inst_types, None, true);
+        let sa = layout_fields(metadata, tdi, generic_inst_types, None, true);
         metadata_size = sa.size.try_into().unwrap();
     }
 
@@ -130,7 +130,7 @@ pub fn get_sizeof_type<'a>(
             "Computing instance size by laying out type for tdi: {tdi:?} {}",
             t.full_name(metadata.metadata, true)
         );
-        metadata_size = layout_fields(metadata, t, tdi, generic_inst_types, None, true)
+        metadata_size = layout_fields(metadata,  tdi, generic_inst_types, None, true)
             .size
             .try_into()
             .unwrap();
@@ -229,8 +229,8 @@ fn size_is_default(bitfield: u32, size_is_default_offset: u8) -> bool {
 fn get_size(
     metadata: &CordlMetadata<'_>,
     tdi: TypeDefinitionIndex,
-    ty_def: &Il2CppTypeDefinition,
 ) -> Option<u32> {
+    let ty_def = &metadata.metadata.global_metadata.type_definitions[tdi];
     if size_is_default(ty_def.bitfield, metadata.size_is_default_offset) {
         return None;
     }
@@ -260,12 +260,12 @@ fn is_reference(ty: &Il2CppType) -> bool {
 /// Inspired by libil2cpp Class::LayoutFieldsLocked
 pub fn layout_fields(
     metadata: &CordlMetadata<'_>,
-    declaring_ty_def: &Il2CppTypeDefinition,
     declaring_tdi: TypeDefinitionIndex,
     generic_inst_types: Option<&[usize]>,
     offsets: Option<&mut Vec<u32>>,
     strictly_calculated: bool,
 ) -> SizeAndAlignment {
+    let declaring_ty_def = &metadata.metadata.global_metadata.type_definitions[declaring_tdi];
     let mut instance_size: usize;
     let mut actual_size: usize;
 
@@ -313,7 +313,6 @@ pub fn layout_fields(
         let mut local_offsets: Vec<u32> = vec![];
         let sa = layout_instance_fields(
             metadata,
-            declaring_ty_def,
             declaring_tdi,
             generic_inst_types,
             Some(&mut local_offsets),
@@ -340,7 +339,6 @@ pub fn layout_fields(
         }
 
         instance_size = update_instance_size_for_generic_class(
-            declaring_ty_def,
             declaring_tdi,
             instance_size,
             metadata,
@@ -357,7 +355,6 @@ pub fn layout_fields(
         }
     } else {
         instance_size = update_instance_size_for_generic_class(
-            declaring_ty_def,
             declaring_tdi,
             instance_size,
             metadata,
@@ -387,12 +384,12 @@ pub fn layout_fields(
 /// equivalent to libil2cpp FieldLayout::LayoutFields with the instance field filter
 fn layout_instance_fields(
     metadata: &CordlMetadata<'_>,
-    declaring_ty_def: &Il2CppTypeDefinition,
     declaring_tdi: TypeDefinitionIndex,
     generic_inst_types: Option<&[usize]>,
     offsets: Option<&mut Vec<u32>>,
     parent_sa: SizeAndAlignment,
 ) -> SizeAndAlignment {
+    let declaring_ty_def = &metadata.metadata.global_metadata.type_definitions[declaring_tdi];
     let parent_size = parent_sa.size;
     let actual_parent_size = parent_sa.actual_size;
     let parent_alignment = parent_sa.alignment;
@@ -537,7 +534,6 @@ fn get_parent_sa(
 
     layout_fields(
         metadata,
-        &metadata.metadata.global_metadata.type_definitions[parent_tdi],
         parent_tdi,
         parent_generics.as_deref(),
         None,
@@ -546,11 +542,11 @@ fn get_parent_sa(
 }
 
 fn update_instance_size_for_generic_class(
-    ty_def: &Il2CppTypeDefinition,
     tdi: TypeDefinitionIndex,
     instance_size: usize,
     metadata: &CordlMetadata<'_>,
 ) -> usize {
+    let ty_def = &metadata.metadata.global_metadata.type_definitions[tdi];
     // need to set this in case there are no fields in a generic instance type
     if !ty_def.generic_container_index.is_valid() {
         return instance_size;
@@ -724,7 +720,7 @@ fn get_type_size_and_alignment(
             // The way we compute the instance size is by grabbing the TD and performing a full field walk over that type
             // Specifically, we call: layout_fields_for_type
             // TODO: We should cache this call
-            let res = layout_fields(metadata, value_td, value_tdi, None, None, false);
+            let res = layout_fields(metadata, value_tdi, None, None, false);
             sa.size = res.size - metadata.object_size() as usize;
             sa.actual_size = res.actual_size;
             sa.alignment = res.alignment;
@@ -803,7 +799,6 @@ fn get_type_size_and_alignment(
             // TODO: We should cache this call
             let res = layout_fields(
                 metadata,
-                td,
                 tdi,
                 Some(&new_generic_inst_types),
                 None,

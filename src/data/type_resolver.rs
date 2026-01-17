@@ -5,14 +5,14 @@ use brocolib::{
 
 use itertools::Itertools;
 use log::warn;
-use serde::{Deserialize, Serialize};
 
 use crate::generate::{
     cs_context_collection::TypeContextCollection, cs_type::CsType, cs_type_tag::CsTypeTag,
     metadata::CordlMetadata, type_extensions::ParameterDefinitionExtensions,
 };
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
+#[cfg_attr(feature = "json", derive(serde::Serialize, serde::Deserialize))]
 pub enum TypeUsage {
     // Method usage
     Parameter,
