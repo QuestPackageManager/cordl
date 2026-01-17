@@ -1,6 +1,7 @@
 use core::mem;
 
 use crate::TypeDefinitionIndex;
+use crate::generate::cs_type_tag::CsTypeTag;
 use crate::generate::metadata::CordlMetadata;
 use crate::generate::metadata::PointerSize;
 use crate::generate::type_extensions::TypeDefinitionExtensions;
@@ -29,12 +30,19 @@ pub struct SizeInfo {
     pub specified_packing: Option<u8>,
 }
 
-pub fn get_size_info<'a>(
-    t: &'a Il2CppTypeDefinition,
+pub fn get_size_info_from_tag(tag: CsTypeTag, metadata: &CordlMetadata) -> SizeInfo {
+    let generic_inst = tag
+        .get_generic_inst(metadata.metadata)
+        .map(|s| s.types.as_slice());
+    get_size_info(tag.get_tdi(), generic_inst, metadata)
+}
+
+pub fn get_size_info(
     tdi: TypeDefinitionIndex,
     generic_inst_types: Option<&[usize]>,
-    metadata: &'a CordlMetadata,
+    metadata: &CordlMetadata,
 ) -> SizeInfo {
+    let t = &metadata.metadata.global_metadata.type_definitions[tdi];
     let size_metadata = get_size_of_type_table(metadata, tdi).unwrap();
     let mut instance_size = size_metadata.instance_size;
     let mut native_size = size_metadata.native_size;
@@ -73,12 +81,14 @@ pub fn get_size_info<'a>(
     }
 }
 
+// TODO: is this deprecated now?
+#[deprecated(note = "Use get_size_info instead?")]
 pub fn get_size_and_packing<'a>(
-    t: &'a Il2CppTypeDefinition,
     tdi: TypeDefinitionIndex,
     generic_inst_types: Option<&[usize]>,
     metadata: &'a CordlMetadata,
 ) -> (u32, Option<u8>) {
+    let t = &metadata.metadata.global_metadata.type_definitions[tdi];
     let size_metadata = get_size_of_type_table(metadata, tdi).unwrap();
     let mut metadata_size = size_metadata.instance_size;
 
@@ -107,11 +117,11 @@ pub fn get_il2cpptype_sa(
 }
 
 pub fn get_sizeof_type<'a>(
-    t: &'a Il2CppTypeDefinition,
     tdi: TypeDefinitionIndex,
     generic_inst_types: Option<&[usize]>,
     metadata: &'a CordlMetadata,
 ) -> u32 {
+    let t = &metadata.metadata.global_metadata.type_definitions[tdi];
     let size_metadata = get_size_of_type_table(metadata, tdi).unwrap();
     let mut metadata_size = size_metadata.instance_size;
 

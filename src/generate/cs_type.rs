@@ -159,7 +159,7 @@ impl CsType {
         // We really just want to call it once for a given size and then move on
         // Every type should have a valid metadata size, even if it is 0
 
-        self.size_info = Some(offsets::get_size_info(t, tdi, Some(generic_inst), metadata));
+        self.size_info = Some(offsets::get_size_info(tdi, Some(generic_inst), metadata));
 
         self.generic_instantiations_args_types = Some(
             generic_inst
@@ -228,7 +228,7 @@ impl CsType {
         // TODO: Come up with a way to avoid this extra call to layout the entire type
         // We really just want to call it once for a given size and then move on
         // Every type should have a valid metadata size, even if it is 0
-        let size_info: offsets::SizeInfo = offsets::get_size_info(t, tdi, None, metadata);
+        let size_info: offsets::SizeInfo = offsets::get_size_info(tdi, None, metadata);
 
         // best results of cordl are when specified packing is strictly what is used, but experimentation may be required
         let packing = size_info.specified_packing;

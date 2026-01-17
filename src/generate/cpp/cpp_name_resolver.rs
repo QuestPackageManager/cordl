@@ -183,7 +183,6 @@ impl<'b> CppNameResolver<'_, 'b> {
                 let td = &metadata.metadata.global_metadata.type_definitions[cs_type_tag.get_tdi()];
 
                 let size = get_sizeof_type(
-                    td,
                     cs_type_tag.get_tdi(),
                     cs_type_tag
                         .get_generic_inst(metadata.metadata)

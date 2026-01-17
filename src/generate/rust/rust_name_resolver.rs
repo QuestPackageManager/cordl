@@ -4,7 +4,8 @@ use itertools::Itertools;
 use crate::{
     data::type_resolver::{ResolvedType, ResolvedTypeData, TypeUsage},
     generate::{
-        cs_type_tag::CsTypeTag, metadata::CordlMetadata, rust::rust_type::RustTypeRequirement,
+        cs_type_tag::CsTypeTag, metadata::CordlMetadata, offsets,
+        rust::rust_type::RustTypeRequirement, type_extensions::TypeDefinitionExtensions,
     },
 };
 
@@ -163,11 +164,7 @@ impl<'b> RustNameResolver<'_, 'b> {
                 let s = Self::primitive_to_rust_ty(il2_cpp_type_enum).to_string();
                 RustNameComponents::from(s)
             }
-            ResolvedTypeData::Blacklisted(cs_type_tag) => {
-                let td = &metadata.metadata.global_metadata.type_definitions[cs_type_tag.get_tdi()];
-
-                Self::wrapper_type_for_tdi(td)
-            }
+            ResolvedTypeData::Blacklisted(cs_type_tag) => self.wrapper_type_for_tdi(*cs_type_tag),
             ResolvedTypeData::ByRef(resolved_type) => {
                 let generic = self
                     .resolve_name(
@@ -227,14 +224,10 @@ impl<'b> RustNameResolver<'_, 'b> {
         add_to_impl: bool,
         require_impl: bool,
     ) -> RustNameComponents {
+        // short circuit for self tag
         if resolved_tag == declaring_rust_type.self_tag {
             return declaring_rust_type.rs_name_components.clone();
         }
-
-        let resolved_context_root_tag = self.collection.get_context_root_tag(resolved_tag);
-        let self_context_root_tag = self
-            .collection
-            .get_context_root_tag(declaring_rust_type.self_tag);
 
         let incl_context = self
             .collection
@@ -259,16 +252,22 @@ impl<'b> RustNameResolver<'_, 'b> {
             });
 
         if incl_ty.is_compiler_generated {
-            return if incl_ty.is_reference_type || incl_ty.is_interface {
-                il2cpp_object()
-            } else if incl_ty.is_enum_type {
-                return incl_ty.backing_type_enum.clone().unwrap();
-            } else {
-                // TODO: not correct
-                return il2cpp_object();
-            };
-        }
+            // automatically blacklist
+            return self.wrapper_type_for_tdi(resolved_tag);
 
+            // return if incl_ty.is_reference_type || incl_ty.is_interface {
+            //     il2cpp_object()
+            // } else if incl_ty.is_enum_type {
+            //     return incl_ty.backing_type_enum.clone().unwrap();
+            // } else {
+            //     // TODO: not correct
+            //     return il2cpp_object();
+            // };
+        }
+        let resolved_context_root_tag = self.collection.get_context_root_tag(resolved_tag);
+        let self_context_root_tag = self
+            .collection
+            .get_context_root_tag(declaring_rust_type.self_tag);
         let is_own_context = resolved_context_root_tag == self_context_root_tag;
         if !is_own_context {
             // declaring_cpp_type
@@ -294,8 +293,43 @@ impl<'b> RustNameResolver<'_, 'b> {
         incl_ty.rs_name_components.clone()
     }
 
-    fn wrapper_type_for_tdi(_td: &Il2CppTypeDefinition) -> RustNameComponents {
-        "Blacklisted".to_string().into()
+    fn wrapper_type_for_tdi(&self, tag: CsTypeTag) -> RustNameComponents {
+        let td = &self
+            .cordl_metadata
+            .metadata
+            .global_metadata
+            .type_definitions[tag.get_tdi()];
+
+        if td.is_enum_type() {
+            let ty_idx = td.element_type_index;
+            let ty = &self
+                .cordl_metadata
+                .metadata
+                .runtime_metadata
+                .metadata_registration
+                .types[ty_idx as usize];
+
+            return RustNameComponents {
+                name: Self::primitive_to_rust_ty(&ty.ty).into(),
+                ..Default::default()
+            };
+        }
+
+        if td.is_value_type() {
+            let size_info = offsets::get_size_info_from_tag(tag, self.cordl_metadata);
+            let struct_size = size_info.instance_size;
+
+            // ValueTypePadding<{struct_size}>
+            return RustNameComponents {
+                name: "ValueTypePadding".into(),
+                namespace: Some("quest_hook::libil2cpp".to_string()),
+                generics: Some(vec![format!("{}", struct_size).into()]),
+
+                ..Default::default()
+            };
+        }
+
+        il2cpp_object().wrap_by_gc()
     }
 
     pub fn primitive_to_rust_ty(il2_cpp_type_enum: &Il2CppTypeEnum) -> &str {
