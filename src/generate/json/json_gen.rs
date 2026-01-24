@@ -49,6 +49,10 @@ pub struct JsonType {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub template: Option<JsonTemplate>,
 
+    /// Generic instatiation types if this is a generic instance type
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub generic_instatiation: Option<Vec<JsonResolvedTypeData>>,
+
     pub size: u32,
     pub packing: Option<u8>,
 }
@@ -94,6 +98,8 @@ pub struct JsonMethod {
     pub method_info: JsonMethodInfo,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub template: Option<JsonTemplate>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub generic_instatiation: Option<Vec<JsonResolvedTypeData>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -209,6 +215,11 @@ fn make_method(method: &CsMethod, name_resolver: &JsonNameResolver) -> JsonMetho
         slot: method.method_data.slot,
     };
 
+    let generic_instatiation = method
+        .generic_instatiation
+        .as_ref()
+        .map(|inst_types| inst_types.iter().map(|ty| ty.clone().into()).collect_vec());
+
     JsonMethod {
         name: method.name.to_string(),
         parameters: params,
@@ -216,10 +227,8 @@ fn make_method(method: &CsMethod, name_resolver: &JsonNameResolver) -> JsonMetho
         ret: ret_ty_name,
         ret_ty_tag: ret_ty,
         method_info: json_method_info,
-        template: match &(method.template) {
-            Some(t) => Some(make_template(t)),
-            None => None,
-        },
+        template: method.template.as_ref().map(make_template),
+        generic_instatiation,
     }
 }
 
@@ -270,6 +279,13 @@ pub fn make_type(
     let size = td.size_info.as_ref().unwrap().instance_size;
     let packing = td.packing;
 
+    let generic_instatiation = td.generic_instantiations_args_types.as_ref().map(|inst_types| {
+        inst_types
+            .iter()
+            .map(|ty| ty.clone().into())
+            .collect_vec()
+    });
+
     JsonType {
         full_name: td.cs_name_components.combine_all(),
         namespace,
@@ -279,13 +295,11 @@ pub fn make_type(
         properties,
         methods,
         children,
-        template: match &(td.generic_template) {
-            Some(t) => Some(make_template(t)),
-            None => None,
-        },
+        template: td.generic_template.as_ref().map(make_template),
         packing,
         size,
         tag: td.self_tag.into(),
         parent,
+        generic_instatiation,
     }
 }

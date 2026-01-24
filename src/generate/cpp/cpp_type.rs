@@ -180,7 +180,6 @@ pub struct CppType {
 
     /// contains the array of generic Il2CppType indexes
     pub generic_instantiations_args_types: Option<Vec<ResolvedType>>, // GenericArg -> Instantiation Arg
-    pub method_generic_instantiation_map: HashMap<MethodIndex, Vec<ResolvedType>>, // MethodIndex -> Generic Args
 
     pub cpp_template: Option<CppTemplate>,
     pub cs_name_components: NameComponents,
@@ -397,7 +396,6 @@ impl CppType {
         };
 
         let generic_instantiations_args_types = cs_type.generic_instantiations_args_types.clone();
-        let method_generic_instantiation_map = cs_type.method_generic_instantiation_map.clone();
 
         CppType {
             declarations: vec![],
@@ -421,7 +419,6 @@ impl CppType {
             self_tag: tag,
 
             generic_instantiations_args_types,
-            method_generic_instantiation_map,
 
             cpp_template: cs_type.generic_template.clone().map(|t| t.into()),
             cpp_name_components, // TODO
@@ -1152,16 +1149,12 @@ impl CppType {
         let declaring_td = declaring_tdi.get_type_definition(metadata.metadata);
         let declaring_tag: CsTypeTag = CsTypeTag::TypeDefinitionIndex(*declaring_tdi);
 
-        let resolved_generic_types = self
-            .method_generic_instantiation_map
-            .get(&method.method_index)
-            .cloned()
-            .map(|g| {
-                g.iter()
-                    .map(|t| name_resolver.resolve_name(self, t, TypeUsage::TypeName, false))
-                    .map(|n| n.combine_all())
-                    .collect_vec()
-            });
+        let resolved_generic_types = method.generic_instatiation.clone().map(|g| {
+            g.iter()
+                .map(|t| name_resolver.resolve_name(self, t, TypeUsage::TypeName, false))
+                .map(|n| n.combine_all())
+                .collect_vec()
+        });
 
         let interface_declaring_cpp_type: Option<&CppType> =
             if *declaring_tdi == self.self_tag.get_tdi() {

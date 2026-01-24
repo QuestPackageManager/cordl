@@ -352,8 +352,8 @@ impl TypeContextCollection {
                 cordl_metadata: metadata,
                 collection,
             };
-            cpp_type.add_method_generic_inst(method_spec, &type_resolver);
-            cpp_type.create_method(method_index, &type_resolver, true);
+            let generic_inst = cpp_type.make_generic_inst(method_spec.method_inst_index, &type_resolver);
+            cpp_type.create_method(method_index, &type_resolver, Some(generic_inst));
 
             cpp_type
         });
