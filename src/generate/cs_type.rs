@@ -7,7 +7,7 @@ use byteorder::ReadBytesExt;
 
 use brocolib::{
     global_metadata::{
-        FieldIndex, Il2CppFieldDefinition, Il2CppTypeDefinition, MethodIndex, ParameterIndex,
+        FieldIndex, Il2CppFieldDefinition, Il2CppTypeDefinition, Il2CppGenericContainer, MethodIndex, ParameterIndex,
         TypeDefinitionIndex,
     },
     runtime_metadata::{Il2CppMethodSpec, Il2CppType, Il2CppTypeEnum, TypeData},
@@ -168,6 +168,11 @@ impl CsType {
         self
     }
 
+    fn make_generic_arg_indices(container: &Il2CppGenericContainer) -> impl Iterator<Item = u16> {
+        let start = container.generic_parameter_start.index() as u16;
+        return start..start+(container.type_argc as u16);
+    }
+
     pub fn make_cs_type(
         metadata: &CordlMetadata,
         tdi: TypeDefinitionIndex,
@@ -195,6 +200,7 @@ impl CsType {
         let cpp_template = generics.as_ref().map(|g| {
             CsGenericTemplate::make_typenames(
                 g.iter().map(|g| g.name(metadata.metadata).to_string()),
+                Self::make_generic_arg_indices(t.generic_container(metadata.metadata))
             )
         });
 
@@ -718,16 +724,19 @@ impl CsType {
             .generic_container_index
             .is_valid()
             .then(|| match generic_inst.is_some() {
-                true => Some(CsGenericTemplate { names: vec![] }),
+                true => Some(CsGenericTemplate { names: vec![], indices: vec![] }),
                 false => {
-                    let generics = method
-                        .generic_container(metadata.metadata)
-                        .unwrap()
+                    let container = method.generic_container(metadata.metadata).unwrap();
+                    let generics = container
                         .generic_parameters(metadata.metadata)
                         .iter()
                         .map(|param| param.name(metadata.metadata).to_string());
 
-                    Some(CsGenericTemplate::make_typenames(generics))
+
+                    Some(CsGenericTemplate::make_typenames(
+                        generics,
+                        Self::make_generic_arg_indices(container)
+                    ))
                 }
             })
             .flatten();

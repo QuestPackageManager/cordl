@@ -11,6 +11,7 @@ use super::cs_type_tag::CsTypeTag;
 #[derive(Debug, Eq, Hash, PartialEq, Clone, Default, PartialOrd, Ord)]
 pub struct CsGenericTemplate {
     pub names: Vec<(CsGenericTemplateType, String)>,
+    pub indices: Vec<u16>
 }
 
 #[derive(Debug, Eq, Hash, PartialEq, Clone, Default, PartialOrd, Ord)]
@@ -21,20 +22,22 @@ pub enum CsGenericTemplateType {
 }
 
 impl CsGenericTemplate {
-    pub fn make_typenames(names: impl Iterator<Item = String>) -> Self {
+    pub fn make_typenames(names: impl Iterator<Item = String>, indices: impl Iterator<Item = u16>) -> Self {
         CsGenericTemplate {
             names: names
                 .into_iter()
                 .map(|s| (CsGenericTemplateType::AnyType, s))
                 .collect(),
+            indices: indices.collect()
         }
     }
-    pub fn make_ref_types(names: impl Iterator<Item = String>) -> Self {
+    pub fn make_ref_types(names: impl Iterator<Item = String>, indices: impl Iterator<Item = u16>) -> Self {
         CsGenericTemplate {
             names: names
                 .into_iter()
                 .map(|s| (CsGenericTemplateType::ReferenceType, s))
                 .collect(),
+            indices: indices.collect()
         }
     }
 
