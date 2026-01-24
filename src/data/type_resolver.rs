@@ -29,22 +29,77 @@ pub enum TypeUsage {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum ResolvedTypeData {
+    /// array of another type
     Array(Box<ResolvedType>),
+
+    /// generic instantiation of another type with args directly specified
+    /// TypeDefinition + Generic Arguments
+    /// GenericArguments are (ResolvedType, should_include)
     GenericInst(Box<ResolvedType>, Vec<(ResolvedType, bool)>),
-    GenericArg(GenericParameterIndex, u16), // points to class generic
-    GenericMethodArg(MethodIndex, GenericParameterIndex, u16), // points to method generic
+
+    /// points to class generic | (global_metadata.generic_parameters[id], num)
+    /// This is used for class generic parameters used in fields, properties, method parameters, etc.
+    /// The u32|GenericParameterIndex is the index into global_metadata.generic_parameters
+    /// The u16 is the generic parameter number in the declaring generic type's generic parameter list
+    /// e.g for class MyClass<T1, T2>, T1 has num 0, T2 has num 1
+    /// GenericParameterIndex will give you the owner, name, constraints, etc.
+    /// and using the num you can determine which generic parameter it is in the declaring type's generic instantiation.
+    /// 
+    /// The generic instantiation comes from `metadata.metadata_registration.generic_insts[generic_class.context.class_inst_idx]`
+    ///
+    /// ```
+    /// let declaring_cpp_type: CppType = ...;
+    /// let arg = declaring_cpp_type
+    ///    .generic_instantiations_args_types
+    ///    .get(&method_index)
+    ///    .and_then(|v| v.get(method_arg as usize));
+    /// ```
+    GenericArg(GenericParameterIndex, u16),
+
+    /// points to method generic | (method_index, global_metadata.generic_parameters[id], num)
+    /// This is used for method generic parameters used in method parameters, return types, etc.
+    /// The MethodIndex is the index of the method that declares the generic parameter
+    /// The u32|GenericParameterIndex is the index into global_metadata.generic_parameters
+    /// The u16 is the generic parameter number in the declaring method's generic parameter list
+    /// e.g for method MyMethod<T1, T2>, T1 has num 0, T2 has num 1
+    /// GenericParameterIndex will give you the owner, name, constraints, etc.
+    /// and using the num you can determine which generic parameter it is in the declaring method's generic instantiation.
+    /// 
+    /// The generic instantiation comes from `metadata.metadata_registration.generic_insts[method_spec.context.method_inst_idx]`
+    /// 
+    /// ```
+    /// let declaring_cpp_type: CppType = ...;
+    /// let arg = declaring_cpp_type
+    ///    .method_generic_instantiation_map
+    ///    .get(&method_index)
+    ///    .and_then(|v| v.get(method_arg as usize));
+    /// ```
+    GenericMethodArg(MethodIndex, GenericParameterIndex, u16),
+
+    /// pointer to another type.
     Ptr(Box<ResolvedType>),
+
+    /// Points to a type by its type tag. Can be a TypeDefinition or GenericInstantiation
     Type(CsTypeTag),
+
+    /// Primitive type
     Primitive(Il2CppTypeEnum),
+
+    /// Blacklisted type
     Blacklisted(CsTypeTag),
+
+    /// byref type e.g out/ref
     ByRef(Box<ResolvedType>),
+
+    /// byref const type e.g in
     ByRefConst(Box<ResolvedType>),
 }
 
+/// Represents a resolved type along with its metadata index
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ResolvedType {
-    pub data: ResolvedTypeData,
-    pub ty: usize,
+    pub data: ResolvedTypeData, // the resolved type data
+    pub ty: usize,              // index into metadata_registration.types
 }
 
 pub struct TypeResolver<'a, 'b> {

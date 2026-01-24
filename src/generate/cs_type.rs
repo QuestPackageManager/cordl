@@ -92,7 +92,6 @@ pub struct CsType {
     ///
     /// for generic instantiation e.g Foo<T> -> Foo<int>
     pub generic_instantiations_args_types: Option<Vec<ResolvedType>>, // GenericArg idx -> Instantiation Arg
-    pub method_generic_instantiation_map: HashMap<MethodIndex, Vec<ResolvedType>>, // MethodIndex -> Generic Args
 
     pub is_interface: bool,
     pub nested_types: HashSet<CsTypeTag>,
@@ -121,18 +120,18 @@ impl CsType {
         }
     }
 
-    pub fn add_method_generic_inst(
+    pub fn make_generic_inst(
         &mut self,
-        method_spec: &Il2CppMethodSpec,
+        generic_inst_idx: u32,
         type_resolver: &TypeResolver,
-    ) -> &mut CsType {
-        assert!(method_spec.method_inst_index != u32::MAX);
+    ) -> Vec<ResolvedType> {
+        assert!(generic_inst_idx != u32::MAX);
 
         let metadata = type_resolver.cordl_metadata;
         let inst = metadata
             .metadata_registration
             .generic_insts
-            .get(method_spec.method_inst_index as usize)
+            .get(generic_inst_idx as usize)
             .unwrap();
 
         let args = inst
@@ -140,10 +139,8 @@ impl CsType {
             .iter()
             .map(|t| type_resolver.resolve_type(self, *t, TypeUsage::TypeName, true))
             .collect();
-        self.method_generic_instantiation_map
-            .insert(method_spec.method_definition_index, args);
 
-        self
+        args
     }
     pub fn add_class_generic_inst(
         &mut self,
@@ -267,7 +264,6 @@ impl CsType {
             generic_template: cpp_template,
 
             generic_instantiations_args_types: Default::default(),
-            method_generic_instantiation_map: Default::default(),
 
             nested_types: Default::default(),
             enum_backing_type: None,
@@ -306,6 +302,7 @@ impl CsType {
         let tdi = self.self_tag.get_tdi();
         let t = Self::get_type_definition(metadata, tdi);
 
+        // If this is an enum, figure out its backing type
         if t.element_type_index != u32::MAX && t.is_enum_type() {
             let element_type = metadata
                 .metadata_registration
@@ -381,7 +378,7 @@ impl CsType {
             // Then, for each method, write it out
             for (i, _method) in t.methods(metadata.metadata).iter().enumerate() {
                 let method_index = MethodIndex::new(t.method_start.index() + i as u32);
-                self.create_method(method_index, type_resolver, false);
+                self.create_method(method_index, type_resolver, None);
             }
         }
     }
@@ -692,7 +689,7 @@ impl CsType {
         &mut self,
         method_index: MethodIndex,
         type_resolver: &TypeResolver,
-        is_generic_method_inst: bool,
+        generic_inst: Option<Vec<ResolvedType>>,
     ) {
         let metadata = type_resolver.cordl_metadata;
         let method = &metadata.metadata.global_metadata.methods[method_index];
@@ -726,7 +723,7 @@ impl CsType {
         let template = method
             .generic_container_index
             .is_valid()
-            .then(|| match is_generic_method_inst {
+            .then(|| match generic_inst.is_some() {
                 true => Some(CsGenericTemplate { names: vec![], indices: vec![] }),
                 false => {
                     let container = method.generic_container(metadata.metadata).unwrap();
@@ -749,14 +746,6 @@ impl CsType {
             .as_ref()
             .is_some_and(|t| !t.names.is_empty())
             .then(|| self.generic_template.clone());
-
-        let _literal_types = is_generic_method_inst
-            .then(|| {
-                self.method_generic_instantiation_map
-                    .get(&method_index)
-                    .cloned()
-            })
-            .flatten();
 
         let method_calc = metadata.method_calculations.get(&method_index);
 
@@ -812,6 +801,7 @@ impl CsType {
             instance: !method.is_static_method(),
             template: template.clone(),
             method_data,
+            generic_instatiation: generic_inst,
         };
 
         // if type is a generic
@@ -830,8 +820,19 @@ impl CsType {
             self.constructors.push(constructor);
         }
 
-        if !is_generic_method_inst {
-            self.methods.push(method_decl);
+        // insert or update existing method
+        // this can happen with generic instantiations of methods
+        match self
+            .methods
+            .iter_mut()
+            .find(|m| m.method_index == method_index)
+        {
+            Some(existing_method) => {
+                *existing_method = method_decl;
+            }
+            None => {
+                self.methods.push(method_decl);
+            }
         }
     }
 

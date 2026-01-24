@@ -215,6 +215,9 @@ pub struct CsMethod {
 
     pub method_data: CsMethodData,
     pub method_flags: CSMethodFlags,
+    /// if this method is a generic instantiation, the types used to instantiate it
+    /// are stored here
+    pub generic_instatiation: Option<Vec<ResolvedType>>,
 }
 
 // TODO: Generics
