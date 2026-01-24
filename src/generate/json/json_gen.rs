@@ -82,7 +82,14 @@ pub enum JsonGenericArgumentType {
     ReferenceType,
 }
 
-type JsonTemplate = Vec<(JsonGenericArgumentType, String)>;
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct JsonGenericArgument {
+    pub r#type: JsonGenericArgumentType,
+    pub index: u16, // generic argument index
+    pub name: String,
+}
+
+type JsonTemplate = Vec<JsonGenericArgument>;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JsonMethod {
@@ -174,19 +181,18 @@ fn make_param(param: &CsParam, name_resolver: &JsonNameResolver) -> JsonParam {
 }
 
 fn make_template(template: &CsGenericTemplate) -> JsonTemplate {
-    // note: I'm not good at rust so there may be a better way to do this - zip
-    // (feel free to remove this comment if this is fine)
-    return template
-        .names
+    return template.names
         .iter()
-        .map(|p| {
-            (
-                match (p.0) {
+        .zip(template.indices.iter())
+        .map(|((ty, name), index)| {
+            JsonGenericArgument {
+                r#type: match ty {
                     CsGenericTemplateType::AnyType => JsonGenericArgumentType::AnyType,
                     CsGenericTemplateType::ReferenceType => JsonGenericArgumentType::ReferenceType,
                 },
-                p.1.clone(),
-            )
+                name: name.clone(),
+                index: *index
+            }
         })
         .collect_vec();
 }
