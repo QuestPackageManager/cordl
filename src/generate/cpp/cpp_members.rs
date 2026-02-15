@@ -1,10 +1,12 @@
 use itertools::Itertools;
 use pathdiff::diff_paths;
 
-use crate::generate::{
-    cs_members::{CsGenericTemplate, CsGenericTemplateType},
-    writer::Writable,
-};
+use crate::
+    generate::{
+        cs_members::CsGenericContainer,
+        writer::Writable,
+    }
+;
 
 use std::{
     collections::HashMap,
@@ -49,21 +51,29 @@ impl CppTemplate {
     }
 }
 
-impl From<CsGenericTemplate> for CppTemplate {
-    fn from(value: CsGenericTemplate) -> Self {
+impl From<CsGenericContainer> for CppTemplate {
+    fn from(value: CsGenericContainer) -> Self {
         CppTemplate {
             names: value
-                .names
+                .args
                 .into_iter()
-                .map(|(constraint, name)| {
-                    let cpp_ty = match constraint {
-                        CsGenericTemplateType::AnyType => "typename".to_string(),
-                        CsGenericTemplateType::ReferenceType => {
-                            CORDL_REFERENCE_TYPE_CONSTRAINT.to_string()
-                        }
-                    };
+                .map(|arg| {
+                    // TODO: Handle constraints properly, currently we just check if it's a reference type constraint and if it is we make it a ref type, otherwise we just make it a typename. This is obviously not ideal but it works for the cases we have and we can always improve it later if we need to
+                    // let ref_type = arg.constraints.iter().any(|c| {
+                    //     match c.data {
+                    //         ResolvedTypeData::Type(t) =>
+                    //     }
+                    // });
 
-                    (cpp_ty, name)
+                    // let mut cpp_ty: String;
+                    // if ref_type {
+                    //     cpp_ty = CORDL_REFERENCE_TYPE_CONSTRAINT.to_string();
+                    // } else {
+                    //     cpp_ty = "typename".to_string();
+                    //     // We make no further distinction between generic constraints, but we could if we wanted to
+                    // }
+
+                    ("typename".to_string(), arg.name)
                 })
                 .collect(),
         }

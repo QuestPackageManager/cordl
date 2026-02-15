@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashSet,
     io::{Cursor, Read},
 };
 
@@ -7,10 +7,10 @@ use byteorder::ReadBytesExt;
 
 use brocolib::{
     global_metadata::{
-        FieldIndex, Il2CppFieldDefinition, Il2CppTypeDefinition, Il2CppGenericContainer, MethodIndex, ParameterIndex,
-        TypeDefinitionIndex,
+        FieldIndex, Il2CppFieldDefinition, Il2CppGenericContainer, Il2CppTypeDefinition,
+        MethodIndex, ParameterIndex, TypeDefinitionIndex,
     },
-    runtime_metadata::{Il2CppMethodSpec, Il2CppType, Il2CppTypeEnum, TypeData},
+    runtime_metadata::{Il2CppType, Il2CppTypeEnum, TypeData},
 };
 use itertools::Itertools;
 use log::{debug, info, warn};
@@ -22,7 +22,7 @@ use crate::{
         type_resolver::{ResolvedType, TypeResolver, TypeUsage},
     },
     generate::{
-        cs_members::CsField,
+        cs_members::{CsField, CsGenericArg},
         type_extensions::{ParameterDefinitionExtensions, TypeExtentions},
     },
     helpers::cursor::ReadBytesExtensions,
@@ -30,7 +30,7 @@ use crate::{
 
 use super::{
     cs_members::{
-        CSMethodFlags, CsConstructor, CsGenericTemplate, CsMethod, CsMethodData, CsParam,
+        CSMethodFlags, CsConstructor, CsGenericContainer, CsMethod, CsMethodData, CsParam,
         CsParamFlags, CsProperty, CsValue,
     },
     cs_type_tag::CsTypeTag,
@@ -86,7 +86,7 @@ pub struct CsType {
     pub enum_backing_type: Option<Il2CppTypeEnum>,
     pub parent: Option<ResolvedType>,
     pub interfaces: Vec<ResolvedType>,
-    pub generic_template: Option<CsGenericTemplate>, // Names of templates e.g T, TKey etc.
+    pub generic_container: Option<CsGenericContainer>, // Names of templates e.g T, TKey etc.
 
     /// contains the array of generic Il2CppType indexes
     ///
@@ -168,11 +168,6 @@ impl CsType {
         self
     }
 
-    fn make_generic_arg_indices(container: &Il2CppGenericContainer) -> impl Iterator<Item = u16> {
-        let start = container.generic_parameter_start.index() as u16;
-        return start..start+(container.type_argc as u16);
-    }
-
     pub fn make_cs_type(
         metadata: &CordlMetadata,
         tdi: TypeDefinitionIndex,
@@ -189,20 +184,6 @@ impl CsType {
 
         // Generics
         // This is a generic type def
-        // TODO: Constraints!
-        let generics = t.generic_container_index.is_valid().then(|| {
-            t.generic_container(metadata.metadata)
-                .generic_parameters(metadata.metadata)
-                .iter()
-                .collect_vec()
-        });
-
-        let cpp_template = generics.as_ref().map(|g| {
-            CsGenericTemplate::make_typenames(
-                g.iter().map(|g| g.name(metadata.metadata).to_string()),
-                Self::make_generic_arg_indices(t.generic_container(metadata.metadata))
-            )
-        });
 
         let ns = t.namespace(metadata.metadata);
         let name = t.name(metadata.metadata);
@@ -261,7 +242,7 @@ impl CsType {
             parent: Default::default(),
 
             is_interface: t.is_interface(),
-            generic_template: cpp_template,
+            generic_container: None,
 
             generic_instantiations_args_types: Default::default(),
 
@@ -290,6 +271,8 @@ impl CsType {
     }
 
     pub fn fill_from_il2cpp(&mut self, type_resolver: &TypeResolver) {
+        self.make_generics(type_resolver);
+
         self.make_parents(type_resolver);
         self.make_interfaces(type_resolver);
 
@@ -534,6 +517,44 @@ impl CsType {
         }
     }
 
+    fn make_generics(&mut self, type_resolver: &TypeResolver) {
+        let metadata = type_resolver.cordl_metadata;
+        let tdi = self.self_tag.get_tdi();
+
+        let t = &metadata.metadata.global_metadata.type_definitions[tdi];
+
+        let generics = t.generic_container_index.is_valid().then(|| {
+            t.generic_container(metadata.metadata)
+                .generic_parameters(metadata.metadata)
+                .iter()
+                .collect_vec()
+        });
+
+        let generic_template = generics.as_ref().map(|g| CsGenericContainer {
+            args: g
+                .iter()
+                .map(|arg| CsGenericArg {
+                    name: arg.name(metadata.metadata).to_string(),
+                    constraints: arg
+                        .constraints(metadata.metadata)
+                        .iter()
+                        .map(|c| {
+                            type_resolver.resolve_type(
+                                self,
+                                *c as usize,
+                                TypeUsage::GenericConstraint,
+                                true,
+                            )
+                        })
+                        .collect_vec(),
+                    index: arg.num,
+                })
+                .collect(),
+        });
+
+        self.generic_container = generic_template;
+    }
+
     fn make_parents(&mut self, type_resolver: &TypeResolver) {
         let metadata = type_resolver.cordl_metadata;
         let tdi = self.self_tag.get_tdi();
@@ -720,32 +741,34 @@ impl CsType {
 
         // TODO: Add template<typename ...> if a generic inst e.g
         // T UnityEngine.Component::GetComponent<T>() -> bs_hook::Il2CppWrapperType UnityEngine.Component::GetComponent()
-        let template = method
-            .generic_container_index
-            .is_valid()
-            .then(|| match generic_inst.is_some() {
-                true => Some(CsGenericTemplate { names: vec![], indices: vec![] }),
-                false => {
-                    let container = method.generic_container(metadata.metadata).unwrap();
-                    let generics = container
+        let template =
+            (method.generic_container_index.is_valid() && generic_inst.is_none()).then(|| {
+                let container = method.generic_container(metadata.metadata).unwrap();
+                let generics =
+                    container
                         .generic_parameters(metadata.metadata)
                         .iter()
-                        .map(|param| param.name(metadata.metadata).to_string());
+                        .map(|param| CsGenericArg {
+                            name: param.name(metadata.metadata).to_string(),
+                            constraints: param
+                                .constraints(metadata.metadata)
+                                .iter()
+                                .map(|c| {
+                                    type_resolver.resolve_type(
+                                        self,
+                                        *c as usize,
+                                        TypeUsage::GenericArg,
+                                        true,
+                                    )
+                                })
+                                .collect_vec(),
+                            index: param.num,
+                        });
 
-
-                    Some(CsGenericTemplate::make_typenames(
-                        generics,
-                        Self::make_generic_arg_indices(container)
-                    ))
+                CsGenericContainer {
+                    args: generics.collect(),
                 }
-            })
-            .flatten();
-
-        let _declaring_type_template = self
-            .generic_template
-            .as_ref()
-            .is_some_and(|t| !t.names.is_empty())
-            .then(|| self.generic_template.clone());
+            });
 
         let method_calc = metadata.method_calculations.get(&method_index);
 
@@ -805,10 +828,6 @@ impl CsType {
         };
 
         // if type is a generic
-        let _has_template_args = self
-            .generic_template
-            .as_ref()
-            .is_some_and(|t| !t.names.is_empty());
 
         if method.name(metadata.metadata) == ".ctor" {
             let constructor = CsConstructor {

@@ -4,7 +4,7 @@ use std::{
     sync::Arc,
 };
 
-use brocolib::global_metadata::{FieldIndex, MethodIndex, TypeDefinitionIndex};
+use brocolib::global_metadata::{FieldIndex, TypeDefinitionIndex};
 use color_eyre::eyre::Context;
 use itertools::Itertools;
 
@@ -420,7 +420,7 @@ impl CppType {
 
             generic_instantiations_args_types,
 
-            cpp_template: cs_type.generic_template.clone().map(|t| t.into()),
+            cpp_template: cs_type.generic_container.clone().map(|t| t.into()),
             cpp_name_components, // TODO
             cs_name_components: cs_type.cs_name_components.clone(),
             prefix_comments: vec![],
@@ -885,7 +885,11 @@ impl CppType {
 
         // TODO: Add template<typename ...> if a generic inst e.g
         // T UnityEngine.Component::GetComponent<T>() -> bs_hook::Il2CppWrapperType UnityEngine.Component::GetComponent()
-        let template = method.template.clone().map(|t| t.into());
+        let template = match method.generic_instatiation {
+            // if generic method instantiation, we don't add template params, they are only for the decl
+            Some(_) => Some(CppTemplate::default()),
+            None => method.template.clone().map(|t| t.into()),
+        };
 
         let mut cpp_ret_type =
             name_resolver.resolve_name(self, &method.return_type, TypeUsage::ReturnType, false);

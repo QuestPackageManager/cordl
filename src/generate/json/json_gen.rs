@@ -6,13 +6,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::generate::{
     cs_context_collection::TypeContextCollection,
-    cs_members::{
-        CsField, CsGenericTemplate, CsGenericTemplateType, CsMethod, CsParam, CsParamFlags,
-        CsProperty,
-    },
+    cs_members::{CsField, CsGenericContainer, CsMethod, CsParam, CsParamFlags, CsProperty},
     cs_type::CsType,
     metadata::CordlMetadata,
-    type_extensions::TypeDefinitionExtensions,
 };
 
 use super::{
@@ -80,15 +76,11 @@ pub struct JsonProperty {
     pub setter: Option<(u32, String)>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum JsonGenericArgumentType {
-    AnyType,
-    ReferenceType,
-}
+pub type JsonGenericConstraint = Vec<JsonResolvedTypeData>;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JsonGenericArgument {
-    pub r#type: JsonGenericArgumentType,
+    pub constraints: JsonGenericConstraint,
     pub index: u16, // generic argument index
     pub name: String,
 }
@@ -186,21 +178,21 @@ fn make_param(param: &CsParam, name_resolver: &JsonNameResolver) -> JsonParam {
     }
 }
 
-fn make_template(template: &CsGenericTemplate) -> JsonTemplate {
-    return template.names
+fn make_template(template: &CsGenericContainer) -> JsonTemplate {
+    template
+        .args
         .iter()
-        .zip(template.indices.iter())
-        .map(|((ty, name), index)| {
-            JsonGenericArgument {
-                r#type: match ty {
-                    CsGenericTemplateType::AnyType => JsonGenericArgumentType::AnyType,
-                    CsGenericTemplateType::ReferenceType => JsonGenericArgumentType::ReferenceType,
-                },
-                name: name.clone(),
-                index: *index
-            }
+        .map(|arg| JsonGenericArgument {
+            name: arg.name.to_string(),
+            index: arg.index,
+            constraints: arg
+                .constraints
+                .iter()
+                .cloned()
+                .map(|c| c.into())
+                .collect_vec(),
         })
-        .collect_vec();
+        .collect_vec()
 }
 
 fn make_method(method: &CsMethod, name_resolver: &JsonNameResolver) -> JsonMethod {
@@ -285,12 +277,10 @@ pub fn make_type(
     let size = td.size_info.as_ref().unwrap().instance_size;
     let packing = td.packing;
 
-    let generic_instatiation = td.generic_instantiations_args_types.as_ref().map(|inst_types| {
-        inst_types
-            .iter()
-            .map(|ty| ty.clone().into())
-            .collect_vec()
-    });
+    let generic_instatiation = td
+        .generic_instantiations_args_types
+        .as_ref()
+        .map(|inst_types| inst_types.iter().map(|ty| ty.clone().into()).collect_vec());
 
     JsonType {
         full_name: td.cs_name_components.combine_all(),
@@ -301,7 +291,7 @@ pub fn make_type(
         properties,
         methods,
         children,
-        template: td.generic_template.as_ref().map(make_template),
+        template: td.generic_container.as_ref().map(make_template),
         packing,
         size,
         tag: td.self_tag.into(),

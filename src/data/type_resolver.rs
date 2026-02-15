@@ -25,6 +25,9 @@ pub enum TypeUsage {
     // naming the CppType itself
     TypeName,
     GenericArg,
+
+    // used in generic constraints
+    GenericConstraint,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]

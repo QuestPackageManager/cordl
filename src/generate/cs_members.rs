@@ -8,41 +8,23 @@ use std::hash::Hash;
 
 use super::cs_type_tag::CsTypeTag;
 
-#[derive(Debug, Eq, Hash, PartialEq, Clone, Default, PartialOrd, Ord)]
-pub struct CsGenericTemplate {
-    pub names: Vec<(CsGenericTemplateType, String)>,
-    pub indices: Vec<u16>
+#[derive(Debug, Eq, Hash, PartialEq, Clone, Default)]
+pub struct CsGenericContainer {
+    pub args: Vec<CsGenericArg>,
 }
 
-#[derive(Debug, Eq, Hash, PartialEq, Clone, Default, PartialOrd, Ord)]
-pub enum CsGenericTemplateType {
-    #[default]
-    AnyType,
-    ReferenceType,
+#[derive(Debug, Eq, Hash, PartialEq, Clone, Default)]
+pub struct CsGenericArg {
+    pub constraints: Vec<CsGenericConstraint>,
+    pub name: String,
+    pub index: u16,
 }
 
-impl CsGenericTemplate {
-    pub fn make_typenames(names: impl Iterator<Item = String>, indices: impl Iterator<Item = u16>) -> Self {
-        CsGenericTemplate {
-            names: names
-                .into_iter()
-                .map(|s| (CsGenericTemplateType::AnyType, s))
-                .collect(),
-            indices: indices.collect()
-        }
-    }
-    pub fn make_ref_types(names: impl Iterator<Item = String>, indices: impl Iterator<Item = u16>) -> Self {
-        CsGenericTemplate {
-            names: names
-                .into_iter()
-                .map(|s| (CsGenericTemplateType::ReferenceType, s))
-                .collect(),
-            indices: indices.collect()
-        }
-    }
+pub type CsGenericConstraint = ResolvedType;
 
+impl CsGenericContainer {
     pub fn just_names(&self) -> impl Iterator<Item = &String> {
-        self.names.iter().map(|(_constraint, t)| t)
+        self.args.iter().map(|t| &t.name)
     }
 }
 
@@ -52,15 +34,6 @@ pub struct CsCommentedString {
     pub comment: Option<String>,
 }
 
-#[derive(Debug, Hash, PartialEq, Eq, PartialOrd, Ord, Clone)]
-pub struct CsUsingAlias {
-    pub result: String,
-    pub alias: String,
-    pub template: Option<CsGenericTemplate>,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum CsMember {}
 
 #[derive(Clone, Debug, Default, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct CsMethodData {
@@ -84,7 +57,7 @@ pub struct CsMethodSizeData {
     pub method_info_lines: Vec<String>,
     pub method_info_var: String,
 
-    pub template: Option<CsGenericTemplate>,
+    pub template: Option<CsGenericContainer>,
     pub generic_literals: Option<Vec<String>>,
 
     pub interface_clazz_of: String,
@@ -208,7 +181,7 @@ pub struct CsMethod {
     pub return_type: ResolvedType,
     pub parameters: Vec<CsParam>,
     pub instance: bool,
-    pub template: Option<CsGenericTemplate>,
+    pub template: Option<CsGenericContainer>,
     pub brief: Option<String>,
 
     pub declaring_type: CsTypeTag,
@@ -225,7 +198,7 @@ pub struct CsMethod {
 pub struct CsConstructor {
     pub name: String,
     pub parameters: Vec<CsParam>,
-    pub template: Option<CsGenericTemplate>,
+    pub template: Option<CsGenericContainer>,
 }
 
 impl PartialEq for CsConstructor {

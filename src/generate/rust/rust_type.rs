@@ -146,11 +146,11 @@ impl RustType {
     ) -> Self {
         let cs_name_components = &cs_type.cs_name_components;
 
-        let generics = cs_type.generic_template.as_ref().map(|g| {
-            g.names
+        let generics = cs_type.generic_container.as_ref().map(|g| {
+            g.args
                 .iter()
-                .map(|(ty, s)| RustGeneric {
-                    name: s.to_string(),
+                .map(|arg| RustGeneric {
+                    name: arg.name.to_string(),
                     bounds: vec!["quest_hook::libil2cpp::Type".to_string()],
                 })
                 .collect_vec()
