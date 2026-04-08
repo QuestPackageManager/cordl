@@ -64,9 +64,9 @@ pub fn run_cpp(
         //     let dest = open_writer(&metadata, &config, &t);
         //     write_type(&metadata, &config, &t, &dest);
         // }
-        fn make_td_tdi(idx: u32) -> TypeData {
-            TypeData::TypeDefinitionIndex(TypeDefinitionIndex::new(idx))
-        }
+        // fn make_td_tdi(idx: u32) -> TypeData {
+        //     TypeData::TypeDefinitionIndex(TypeDefinitionIndex::new(idx))
+        // }
         // All indices require updating
         // cpp_context_collection.get()[&make_td_tdi(123)].write()?;
         // cpp_context_collection.get()[&make_td_tdi(342)].write()?;

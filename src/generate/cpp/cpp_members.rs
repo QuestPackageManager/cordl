@@ -20,7 +20,7 @@ use std::{
 use super::{
     config::STATIC_CONFIG,
     cpp_context::CppContext,
-    cpp_type::{CORDL_REFERENCE_TYPE_CONSTRAINT, CppType},
+    cpp_type::CppType,
 };
 
 #[derive(Debug, Eq, Hash, PartialEq, Clone, Default, PartialOrd, Ord)]
@@ -29,23 +29,6 @@ pub struct CppTemplate {
 }
 
 impl CppTemplate {
-    pub fn make_typenames(names: impl Iterator<Item = String>) -> Self {
-        CppTemplate {
-            names: names
-                .into_iter()
-                .map(|s| ("typename".to_string(), s))
-                .collect(),
-        }
-    }
-    pub fn make_ref_types(names: impl Iterator<Item = String>) -> Self {
-        CppTemplate {
-            names: names
-                .into_iter()
-                .map(|s| (CORDL_REFERENCE_TYPE_CONSTRAINT.to_string(), s))
-                .collect(),
-        }
-    }
-
     pub fn just_names(&self) -> impl Iterator<Item = &String> {
         self.names.iter().map(|(_constraint, t)| t)
     }
@@ -113,17 +96,16 @@ impl CppLine {
 pub trait WritableDebug: Writable + Debug {}
 impl<T: Writable + Debug> WritableDebug for T {}
 
-#[derive(Debug, Eq, Hash, PartialEq, Clone)]
-pub struct CppForwardDeclareGroup {
-    // TODO: Make this group lots into a single namespace
-    pub namespace: Option<String>,
-    pub items: Vec<CppForwardDeclare>,
-    pub group_items: Vec<CppForwardDeclareGroup>,
-}
+// TODO: Make this group lots into a single namespace
+// #[derive(Debug, Eq, Hash, PartialEq, Clone)]
+// pub struct CppForwardDeclareGroup {
+//     pub namespace: Option<String>,
+//     pub items: Vec<CppForwardDeclare>,
+//     pub group_items: Vec<CppForwardDeclareGroup>,
+// }
 
 #[derive(Debug, Eq, Hash, PartialEq, Clone)]
 pub struct CppForwardDeclare {
-    // TODO: Make this group lots into a single namespace
     pub is_struct: bool,
     pub cpp_namespace: Option<String>,
     pub cpp_name: String,
@@ -185,7 +167,6 @@ pub struct CppMethodData {
 #[derive(Clone, Debug)]
 pub struct CppMethodSizeStruct {
     pub cpp_method_name: String,
-    pub method_name: String,
     pub declaring_type_name: String,
     pub declaring_classof_call: String,
     pub ret_ty: String,
@@ -199,7 +180,6 @@ pub struct CppMethodSizeStruct {
 
     pub declaring_template: Option<CppTemplate>,
     pub template: Option<CppTemplate>,
-    pub generic_literals: Option<Vec<String>>,
 
     pub interface_clazz_of: String,
     pub is_final: bool,
@@ -661,12 +641,6 @@ impl CppParam {
     pub fn params_types(params: &[CppParam]) -> impl Iterator<Item = &String> {
         params.iter().map(|p| &p.ty)
     }
-
-    pub fn params_il2cpp_types(params: &[CppParam]) -> impl Iterator<Item = String> + '_ {
-        params
-            .iter()
-            .map(|p| format!("::il2cpp_utils::ExtractType({})", p.name))
-    }
 }
 
 impl CppInclude {
@@ -680,12 +654,6 @@ impl CppInclude {
     pub fn new_context_typeimpl(context: &CppContext) -> Self {
         Self {
             include: diff_paths(&context.type_impl_path, &STATIC_CONFIG.header_path).unwrap(),
-            system: false,
-        }
-    }
-    pub fn new_context_fundamental(context: &CppContext) -> Self {
-        Self {
-            include: diff_paths(&context.fundamental_path, &STATIC_CONFIG.header_path).unwrap(),
             system: false,
         }
     }

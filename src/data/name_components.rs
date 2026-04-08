@@ -28,15 +28,6 @@ impl NameComponents {
         completed
     }
 
-    pub fn into_ref_generics(self) -> Self {
-        Self {
-            generics: self
-                .generics
-                .map(|opt| opt.into_iter().map(|_| "void*".to_string()).collect()),
-            ..self
-        }
-    }
-
     pub fn remove_generics(self) -> Self {
         Self {
             generics: None,

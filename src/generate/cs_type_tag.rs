@@ -43,7 +43,6 @@ impl From<CsTypeTag> for TypeData {
         match value {
             CsTypeTag::TypeDefinitionIndex(i) => TypeData::TypeDefinitionIndex(i),
             CsTypeTag::GenericInstantiation(g) => TypeData::GenericClassIndex(g.inst), // TODO:?
-            _ => panic!("Can't go from {value:?} to TypeData"),
         }
     }
 }
@@ -53,7 +52,6 @@ impl From<CsTypeTag> for TypeDefinitionIndex {
         match value {
             CsTypeTag::TypeDefinitionIndex(i) => i,
             CsTypeTag::GenericInstantiation(generic_inst) => generic_inst.tdi,
-            _ => panic!("Type is not a TDI! {value:?}"),
         }
     }
 }

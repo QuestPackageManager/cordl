@@ -1,13 +1,11 @@
 use color_eyre::{Result, eyre::ContextCompat};
 use log::info;
-use std::{path::PathBuf, sync::Arc};
 
 use crate::{
     data::type_resolver::TypeUsage,
     generate::{
         cpp::{
             cpp_context_collection::CppContextCollection,
-            cpp_members::{CppInclude, CppMember},
             cpp_name_components::CppNameComponents,
             cpp_type::CppType,
         },
@@ -67,44 +65,4 @@ pub fn unity_object_resolve_handler(
         generics: Some(vec![original.remove_pointer().combine_all()]),
         is_pointer: false,
     }
-}
-
-fn unity_object_handler(cpp_type: &mut CppType) {
-    info!("Found UnityEngine.Object type, adding UnityW!");
-    cpp_type.parent = Some("bs_hook::UnityW".to_string());
-
-    let path = PathBuf::from(r"beatsaber-hook/shared/utils/unityw.hpp");
-
-    cpp_type
-        .requirements
-        .add_def_include(None, CppInclude::new_exact(path));
-
-    // Fixup ctor call declarations
-    cpp_type
-        .declarations
-        .iter_mut()
-        .filter(|t| matches!(t.as_ref(), CppMember::ConstructorDecl(_)))
-        .for_each(|d| {
-            let CppMember::ConstructorDecl(constructor) = Arc::get_mut(d).unwrap() else {
-                panic!()
-            };
-
-            if let Some(base_ctor) = &mut constructor.base_ctor {
-                base_ctor.0 = "UnityW".to_string();
-            }
-        });
-    // Fixup ctor call implementations
-    cpp_type
-        .implementations
-        .iter_mut()
-        .filter(|t| matches!(t.as_ref(), CppMember::ConstructorImpl(_)))
-        .for_each(|d| {
-            let CppMember::ConstructorImpl(constructor) = Arc::get_mut(d).unwrap() else {
-                panic!()
-            };
-
-            if let Some(base_ctor) = &mut constructor.base_ctor {
-                base_ctor.0 = "UnityW".to_string();
-            }
-        });
 }

@@ -474,15 +474,6 @@ impl TypeContextCollection {
             .and_then(|c| c.get_types().get(&ty))
     }
 
-    ///
-    /// By default will only look for nested types of the context, ignoring other CppTypes
-    ///
-    pub fn get_cs_type_mut(&mut self, ty: CsTypeTag) -> Option<&mut CsType> {
-        let context_root_tag = self.get_context_root_tag(ty);
-        self.get_context_mut(context_root_tag)
-            .and_then(|c| c.get_types_mut().get_mut(&ty))
-    }
-
     pub fn borrow_cs_type<F>(&mut self, ty: CsTypeTag, func: F)
     where
         F: Fn(&mut Self, CsType) -> CsType,
@@ -537,13 +528,7 @@ impl TypeContextCollection {
             borrowing_types: Default::default(),
         }
     }
-    pub fn take(self) -> HashMap<CsTypeTag, TypeContext> {
-        self.all_contexts
-    }
     pub fn get(&self) -> &HashMap<CsTypeTag, TypeContext> {
         &self.all_contexts
-    }
-    pub fn get_mut(&mut self) -> &mut HashMap<CsTypeTag, TypeContext> {
-        &mut self.all_contexts
     }
 }

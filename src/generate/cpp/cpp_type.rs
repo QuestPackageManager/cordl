@@ -40,32 +40,22 @@ use super::{
         CppNonMember, CppParam, CppPropertyDecl, CppTemplate, CppUsingAlias, WritableDebug,
     },
     cpp_name_components::CppNameComponents,
-    cpp_name_resolver::{CppNameResolver, VALUE_WRAPPER_TYPE},
+    cpp_name_resolver::CppNameResolver,
 };
 
 pub const CORDL_TYPE_MACRO: &str = "CORDL_TYPE";
 pub const __CORDL_IS_VALUE_TYPE: &str = "__IL2CPP_IS_VALUE_TYPE";
 pub const __CORDL_BACKING_ENUM_TYPE: &str = "__CORDL_BACKING_ENUM_TYPE";
 
-pub const CORDL_REFERENCE_TYPE_CONSTRAINT: &str = "::il2cpp_utils::il2cpp_reference_type";
-pub const CORDL_NUM_ENUM_TYPE_CONSTRAINT: &str = "::cordl_internals::is_or_is_backed_by";
 pub const CORDL_METHOD_HELPER_NAMESPACE: &str = "::cordl_internals";
 
-// negative
-pub const VALUE_TYPE_SIZE_OFFSET: u32 = 0x10;
-
 pub const VALUE_TYPE_WRAPPER_SIZE: &str = "__IL2CPP_VALUE_TYPE_SIZE";
-pub const REFERENCE_TYPE_WRAPPER_SIZE: &str = "__IL2CPP_REFERENCE_TYPE_SIZE";
-pub const REFERENCE_TYPE_FIELD_SIZE: &str = "__fields";
-pub const REFERENCE_WRAPPER_INSTANCE_NAME: &str = "::bs_hook::Il2CppWrapperType::instance";
 
 pub const CORDL_NO_INCLUDE_IMPL_DEFINE: &str = "CORDL_NO_IMPL_INCLUDE";
 pub const CORDL_ACCESSOR_FIELD_PREFIX: &str = "___";
 
 pub const ENUM_PTR_TYPE: &str = "::bs_hook::EnumPtr";
 pub const VT_PTR_TYPE: &str = "::bs_hook::VTPtr";
-
-const SIZEOF_IL2CPP_OBJECT: u32 = 0x10;
 
 #[derive(Debug, Clone)]
 pub struct CppTypeRequirements {
@@ -129,19 +119,6 @@ impl CppTypeRequirements {
         self.add_def_include(
             None,
             CppInclude::new_exact("beatsaber-hook/shared/utils/typedefs-string.hpp"),
-        );
-    }
-    pub fn needs_arrayw_include(&mut self) {
-        self.add_def_include(
-            None,
-            CppInclude::new_exact("beatsaber-hook/shared/utils/typedefs-array.hpp"),
-        );
-    }
-
-    pub fn needs_byref_include(&mut self) {
-        self.add_def_include(
-            None,
-            CppInclude::new_exact("beatsaber-hook/shared/utils/byref.hpp"),
         );
     }
 
@@ -1153,13 +1130,6 @@ impl CppType {
         let declaring_td = declaring_tdi.get_type_definition(metadata.metadata);
         let declaring_tag: CsTypeTag = CsTypeTag::TypeDefinitionIndex(*declaring_tdi);
 
-        let resolved_generic_types = method.generic_instatiation.clone().map(|g| {
-            g.iter()
-                .map(|t| name_resolver.resolve_name(self, t, TypeUsage::TypeName, false))
-                .map(|n| n.combine_all())
-                .collect_vec()
-        });
-
         let interface_declaring_cpp_type: Option<&CppType> =
             if *declaring_tdi == self.self_tag.get_tdi() {
                 Some(self)
@@ -1179,7 +1149,6 @@ impl CppType {
                     CppMethodSizeStruct {
                         ret_ty: method_decl.return_type.clone(),
                         cpp_method_name: method_decl.cpp_name.clone(),
-                        method_name: m_name.to_string(),
                         declaring_type_name: method_impl.declaring_cpp_full_name.clone(),
                         declaring_classof_call,
                         method_info_lines,
@@ -1188,7 +1157,6 @@ impl CppType {
                         params: method_decl.parameters.clone(),
                         declaring_template: self.cpp_template.clone(),
                         template: template.clone(),
-                        generic_literals: resolved_generic_types,
                         method_data: CppMethodData {
                             addrs: addr,
                             estimated_size: size,
@@ -1328,52 +1296,6 @@ impl CppType {
             })
             .into(),
         );
-    }
-
-    fn create_ref_size(&mut self) {
-        if let Some(size) = self.size_info.as_ref().map(|s| s.instance_size) {
-            self.declarations.push(
-                CppMember::FieldDecl(CppFieldDecl {
-                    cpp_name: REFERENCE_TYPE_WRAPPER_SIZE.to_string(),
-                    field_ty: "auto".to_string(),
-                    offset: None,
-                    instance: false,
-                    readonly: false,
-                    const_expr: true,
-                    value: Some(format!("0x{size:x}")),
-                    brief_comment: Some("The size of the true reference type".to_string()),
-                    is_private: false,
-                })
-                .into(),
-            );
-
-            // here we push an instance field like uint8_t __fields[total_size - base_size] to make sure ref types are the exact size they should be
-            let inherits = self.get_inherits().collect_vec();
-            let fixup_size = match inherits.first() {
-                Some(base_type) => format!("0x{size:x} - sizeof({base_type})"),
-                None => format!("0x{size:x}"),
-            };
-
-            self.declarations.push(
-                CppMember::FieldDecl(CppFieldDecl {
-                    cpp_name: format!("{REFERENCE_TYPE_FIELD_SIZE}[{fixup_size}]"),
-                    field_ty: "uint8_t".to_string(),
-                    offset: None,
-                    instance: true,
-                    readonly: false,
-                    const_expr: false,
-                    value: Some("".into()),
-                    brief_comment: Some(
-                        "The size this ref type adds onto its base type, may evaluate to 0"
-                            .to_string(),
-                    ),
-                    is_private: false,
-                })
-                .into(),
-            );
-        } else {
-            todo!("Why does this type not have a valid size??? {:?}", self);
-        }
     }
 
     fn create_enum_backing_type_constant(
@@ -1630,300 +1552,6 @@ impl CppType {
             .push(CppMember::ConstructorImpl(constructor_impl).into());
     }
 
-    fn create_valuetype_default_constructors(&mut self) {
-        // create the various copy and move ctors and operators
-        let cpp_name = self.cpp_name();
-        let wrapper = format!("{VALUE_WRAPPER_TYPE}<{VALUE_TYPE_WRAPPER_SIZE}>::instance");
-
-        let move_ctor = CppConstructorDecl {
-            cpp_name: cpp_name.clone(),
-            parameters: vec![CppParam {
-                ty: cpp_name.clone(),
-                name: "".to_string(),
-                modifiers: "&&".to_string(),
-                def_value: None,
-            }],
-            template: None,
-            is_constexpr: true,
-            is_explicit: false,
-            is_default: true,
-            is_no_except: false,
-            is_delete: false,
-            is_protected: false,
-            base_ctor: None,
-            initialized_values: Default::default(),
-            brief: None,
-            body: None,
-        };
-
-        let copy_ctor = CppConstructorDecl {
-            cpp_name: cpp_name.clone(),
-            parameters: vec![CppParam {
-                ty: cpp_name.clone(),
-                name: "".to_string(),
-                modifiers: "const &".to_string(),
-                def_value: None,
-            }],
-            template: None,
-            is_constexpr: true,
-            is_explicit: false,
-            is_default: true,
-            is_no_except: false,
-            is_delete: false,
-            is_protected: false,
-            base_ctor: None,
-            initialized_values: Default::default(),
-            brief: None,
-            body: None,
-        };
-
-        let move_operator_eq = CppMethodDecl {
-            cpp_name: "operator=".to_string(),
-            return_type: format!("{cpp_name}&"),
-            parameters: vec![CppParam {
-                ty: cpp_name.clone(),
-                name: "o".to_string(),
-                modifiers: "&&".to_string(),
-                def_value: None,
-            }],
-            instance: true,
-            template: None,
-            suffix_modifiers: vec![],
-            prefix_modifiers: vec![],
-            is_virtual: false,
-            is_constexpr: true,
-            is_const: false,
-            is_no_except: true,
-            is_implicit_operator: false,
-            is_explicit_operator: false,
-
-            is_inline: false,
-            brief: None,
-            body: Some(vec![
-                Arc::new(CppLine::make(format!(
-                    "this->{wrapper} = std::move(o.{wrapper});"
-                ))),
-                Arc::new(CppLine::make("return *this;".to_string())),
-            ]),
-        };
-
-        let copy_operator_eq = CppMethodDecl {
-            cpp_name: "operator=".to_string(),
-            return_type: format!("{cpp_name}&"),
-            parameters: vec![CppParam {
-                ty: cpp_name.clone(),
-                name: "o".to_string(),
-                modifiers: "const &".to_string(),
-                def_value: None,
-            }],
-            instance: true,
-            template: None,
-            suffix_modifiers: vec![],
-            prefix_modifiers: vec![],
-            is_virtual: false,
-            is_constexpr: true,
-            is_const: false,
-            is_no_except: true,
-            is_implicit_operator: false,
-            is_explicit_operator: false,
-
-            is_inline: false,
-            brief: None,
-            body: Some(vec![
-                Arc::new(CppLine::make(format!("this->{wrapper} = o.{wrapper};"))),
-                Arc::new(CppLine::make("return *this;".to_string())),
-            ]),
-        };
-
-        self.declarations
-            .push(CppMember::ConstructorDecl(move_ctor).into());
-        self.declarations
-            .push(CppMember::ConstructorDecl(copy_ctor).into());
-        self.declarations
-            .push(CppMember::MethodDecl(move_operator_eq).into());
-        self.declarations
-            .push(CppMember::MethodDecl(copy_operator_eq).into());
-    }
-
-    fn create_ref_default_constructor(&mut self) {
-        let cpp_name = self.cpp_name().clone();
-
-        let cs_name = self.name().clone();
-
-        // Skip if System.ValueType or System.Enum
-        if self.namespace() == "System" && (cs_name == "ValueType" || cs_name == "Enum") {
-            return;
-        }
-
-        let default_ctor = CppConstructorDecl {
-            cpp_name: cpp_name.clone(),
-            parameters: vec![],
-            template: None,
-            is_constexpr: true,
-            is_explicit: false,
-            is_default: true,
-            is_no_except: true,
-            is_delete: false,
-            is_protected: true,
-
-            base_ctor: None,
-            initialized_values: HashMap::new(),
-            brief: Some("Default ctor for custom type constructor invoke".to_string()),
-            body: None,
-        };
-        let copy_ctor = CppConstructorDecl {
-            cpp_name: cpp_name.clone(),
-            parameters: vec![CppParam {
-                name: "".to_string(),
-                modifiers: " const&".to_string(),
-                ty: cpp_name.clone(),
-                def_value: None,
-            }],
-            template: None,
-            is_constexpr: true,
-            is_explicit: false,
-            is_default: true,
-            is_no_except: true,
-            is_delete: false,
-            is_protected: false,
-
-            base_ctor: None,
-            initialized_values: HashMap::new(),
-            brief: None,
-            body: None,
-        };
-        let move_ctor = CppConstructorDecl {
-            cpp_name: cpp_name.clone(),
-            parameters: vec![CppParam {
-                name: "".to_string(),
-                modifiers: "&&".to_string(),
-                ty: cpp_name.clone(),
-                def_value: None,
-            }],
-            template: None,
-            is_constexpr: true,
-            is_explicit: false,
-            is_default: true,
-            is_no_except: true,
-            is_delete: false,
-            is_protected: false,
-
-            base_ctor: None,
-            initialized_values: HashMap::new(),
-            brief: None,
-            body: None,
-        };
-
-        self.declarations
-            .push(CppMember::ConstructorDecl(default_ctor).into());
-        self.declarations
-            .push(CppMember::ConstructorDecl(copy_ctor).into());
-        self.declarations
-            .push(CppMember::ConstructorDecl(move_ctor).into());
-
-        // // Delegates and such are reference types with no inheritance
-        // if self.inherit.is_empty() {
-        //     return;
-        // }
-
-        // let base_type = self
-        //     .inherit
-        //     .get(0)
-        //     .expect("No parent for reference type?");
-
-        // self.declarations.push(
-        //     CppMember::ConstructorDecl(CppConstructorDecl {
-        //         cpp_name: cpp_name.clone(),
-        //         parameters: vec![CppParam {
-        //             name: "ptr".to_string(),
-        //             modifiers: "".to_string(),
-        //             ty: "void*".to_string(),
-        //             def_value: None,
-        //         }],
-        //         template: None,
-        //         is_constexpr: true,
-        //         is_explicit: true,
-        //         is_default: false,
-        //         is_no_except: true,
-        //         is_delete: false,
-        //         is_protected: false,
-
-        //         base_ctor: Some((base_type.clone(), "ptr".to_string())),
-        //         initialized_values: HashMap::new(),
-        //         brief: None,
-        //         body: Some(vec![]),
-        //     })
-        //     .into(),
-        // );
-    }
-    fn make_interface_constructors(&mut self) {
-        let cpp_name = self.cpp_name().clone();
-
-        let base_type = self.parent.as_ref().expect("No parent for interface type?");
-
-        self.declarations.push(
-            CppMember::ConstructorDecl(CppConstructorDecl {
-                cpp_name: cpp_name.clone(),
-                parameters: vec![CppParam {
-                    name: "ptr".to_string(),
-                    modifiers: "".to_string(),
-                    ty: "void*".to_string(),
-                    def_value: None,
-                }],
-                template: None,
-                is_constexpr: true,
-                is_explicit: true,
-                is_default: false,
-                is_no_except: true,
-                is_delete: false,
-                is_protected: false,
-
-                base_ctor: Some((base_type.clone(), "ptr".to_string())),
-                initialized_values: HashMap::new(),
-                brief: None,
-                body: Some(vec![]),
-            })
-            .into(),
-        );
-    }
-    fn create_ref_default_operators(&mut self) {
-        let cpp_name = self.cpp_name();
-
-        // Skip if System.ValueType or System.Enum
-        if self.namespace() == "System"
-            && (self.cpp_name() == "ValueType" || self.cpp_name() == "Enum")
-        {
-            return;
-        }
-
-        // Delegates and such are reference types with no inheritance
-        if self.get_inherits().count() > 0 {
-            return;
-        }
-
-        self.declarations.push(
-            CppMember::CppLine(CppLine {
-                line: format!(
-                    "
-  constexpr {cpp_name}& operator=(std::nullptr_t) noexcept {{
-    this->{REFERENCE_WRAPPER_INSTANCE_NAME} = nullptr;
-    return *this;
-  }};
-
-  constexpr {cpp_name}& operator=(void* o) noexcept {{
-    this->{REFERENCE_WRAPPER_INSTANCE_NAME} = o;
-    return *this;
-  }};
-
-  constexpr {cpp_name}& operator=({cpp_name}&& o) noexcept = default;
-  constexpr {cpp_name}& operator=({cpp_name} const& o) noexcept = default;
-                "
-                ),
-            })
-            .into(),
-        );
-    }
-
     fn delete_move_ctor(&mut self) {
         let t = &self.cpp_name_components.name;
 
@@ -2030,32 +1658,6 @@ impl CppType {
 
         self.declarations
             .push(CppMember::FieldDecl(il2cpp_metadata_type_index).into());
-    }
-
-    fn delete_default_ctor(&mut self) {
-        let t = &self.cpp_name_components.name;
-
-        let default_ctor = CppConstructorDecl {
-            cpp_name: t.clone(),
-            parameters: vec![],
-            template: None,
-            is_constexpr: false,
-            is_explicit: false,
-            is_default: false,
-            is_no_except: false,
-            is_delete: true,
-            is_protected: false,
-            base_ctor: None,
-            initialized_values: Default::default(),
-            brief: Some(
-                "delete default ctor to prevent accidental value type instantiations of ref types"
-                    .to_string(),
-            ),
-            body: None,
-        };
-
-        self.declarations
-            .push(CppMember::ConstructorDecl(default_ctor).into());
     }
 
     fn create_ref_constructor(&mut self, m_params: &[CppParam], template: Option<&CppTemplate>) {
@@ -2190,8 +1792,6 @@ impl fmt::Display for CsValue {
                     write!(f, "static_cast<double_t>({:.1})", fl)
                 }
             }
-            CsValue::Object(_bytes) => todo!(),
-            CsValue::ValueType(_bytes) => todo!(),
             CsValue::Null => write!(f, "{{}}"),
         }
     }

@@ -7,7 +7,7 @@ use byteorder::ReadBytesExt;
 
 use brocolib::{
     global_metadata::{
-        FieldIndex, Il2CppFieldDefinition, Il2CppGenericContainer, Il2CppTypeDefinition,
+        FieldIndex, Il2CppFieldDefinition, Il2CppTypeDefinition,
         MethodIndex, ParameterIndex, TypeDefinitionIndex,
     },
     runtime_metadata::{Il2CppType, Il2CppTypeEnum, TypeData},
@@ -36,9 +36,7 @@ use super::{
     cs_type_tag::CsTypeTag,
     metadata::CordlMetadata,
     offsets::{self, SizeInfo},
-    type_extensions::{
-        MethodDefintionExtensions, TypeDefinitionExtensions, TypeDefinitionIndexExtensions,
-    },
+    type_extensions::{MethodDefintionExtensions, TypeDefinitionExtensions},
 };
 
 #[derive(Debug, Clone, Default)]
@@ -48,9 +46,6 @@ pub struct CsTypeRequirements {
 }
 
 impl CsTypeRequirements {
-    pub fn add_dependency(&mut self, ty: &CsType) {
-        self.depending_types.insert(ty.self_tag);
-    }
     pub fn add_dependency_tag(&mut self, tag: CsTypeTag) {
         self.depending_types.insert(tag);
     }
@@ -109,10 +104,6 @@ impl CsType {
         &self.cs_name_components.name
     }
 
-    pub fn get_nested_types(&self) -> &HashSet<CsTypeTag> {
-        &self.nested_types
-    }
-
     pub fn get_tag_tdi(tag: TypeData) -> TypeDefinitionIndex {
         match tag {
             TypeData::TypeDefinitionIndex(tdi) => tdi,
@@ -150,7 +141,6 @@ impl CsType {
         let metadata = type_resolver.cordl_metadata;
 
         let tdi = self.self_tag.get_tdi();
-        let t = tdi.get_type_definition(metadata.metadata);
 
         // TODO: Come up with a way to avoid this extra call to layout the entire type
         // We really just want to call it once for a given size and then move on

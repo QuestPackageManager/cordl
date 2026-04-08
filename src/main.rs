@@ -1,9 +1,5 @@
-#![feature(let_chains)]
-#![feature(slice_as_chunks)]
-#![feature(read_buf)]
 #![feature(map_try_insert)]
 #![feature(exit_status_error)]
-#![feature(iterator_try_collect)]
 
 #[cfg(feature = "il2cpp_v31")]
 extern crate brocolib_il2cpp_v31 as brocolib;
@@ -122,7 +118,7 @@ fn main() -> color_eyre::Result<()> {
 
     let unity_object_tdi_idx = get_tdi("UnityEngine.Object");
     let object_tdi_idx = get_tdi("System.Object");
-    let str_tdi_idx = get_tdi("System.String");
+    // let str_tdi_idx = get_tdi("System.String");
 
     let mut metadata = CordlMetadata {
         metadata: &il2cpp_metadata,
@@ -134,7 +130,7 @@ fn main() -> color_eyre::Result<()> {
 
         unity_object_tdi: unity_object_tdi_idx,
         object_tdi: object_tdi_idx,
-        string_tdi: str_tdi_idx,
+        // string_tdi: str_tdi_idx,
 
         name_to_tdi: Default::default(),
         blacklisted_types: Default::default(),

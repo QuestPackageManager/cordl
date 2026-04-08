@@ -430,37 +430,6 @@ impl TypeDefinitionExtensions for Il2CppTypeDefinition {
     }
 }
 
-pub trait Il2CppTypeEnumExtensions {
-    fn is_primitive_builtin(&self) -> bool;
-}
-
-impl Il2CppTypeEnumExtensions for Il2CppTypeEnum {
-    fn is_primitive_builtin(&self) -> bool {
-        // check if not a ref type
-        !matches!(
-            self,
-            Il2CppTypeEnum::Byref
-                | Il2CppTypeEnum::Valuetype // value type class
-                | Il2CppTypeEnum::Class
-                | Il2CppTypeEnum::Var
-                | Il2CppTypeEnum::Array
-                | Il2CppTypeEnum::Genericinst
-                | Il2CppTypeEnum::Typedbyref
-                | Il2CppTypeEnum::I
-                | Il2CppTypeEnum::U
-                | Il2CppTypeEnum::Fnptr
-                | Il2CppTypeEnum::Object
-                | Il2CppTypeEnum::Szarray
-                | Il2CppTypeEnum::Mvar
-                | Il2CppTypeEnum::Internal
-                | Il2CppTypeEnum::Modifier
-                | Il2CppTypeEnum::Sentinel
-                | Il2CppTypeEnum::Pinned
-                | Il2CppTypeEnum::Enum
-        )
-    }
-}
-
 pub trait TypeDefinitionIndexExtensions {
     fn get_type_definition<'a>(&self, metadata: &'a Metadata) -> &'a Il2CppTypeDefinition;
 }
