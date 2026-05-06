@@ -33,8 +33,6 @@ pub fn register_system(
 
 fn system_object_handler(cpp_type: &mut CppType) {
     info!("Found System.Object type, adding systemW!");
-    // clear inherit so that bs hook can dof include order shenanigans
-    cpp_type.requirements.need_wrapper();
     cpp_type.parent = Some(IL2CPP_OBJECT_TYPE.to_string());
 
     // Remove field because it does not size properly and is not necessary

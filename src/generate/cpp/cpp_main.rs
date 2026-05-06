@@ -1,6 +1,5 @@
 use std::process::Command;
 
-use brocolib::{global_metadata::TypeDefinitionIndex, runtime_metadata::TypeData};
 use color_eyre::{Section, eyre::Result};
 use filesize::PathExt;
 use itertools::Itertools;
@@ -153,25 +152,25 @@ pub fn run_cpp(
             .unwrap()
             .1
             .write(&STATIC_CONFIG)?;
-        info!("Default param");
-        cpp_context_collection
-            .get()
-            .iter()
-            .filter(|(_, c)| {
-                c.get_types().iter().any(|(_, t)| {
-                    t.implementations.iter().any(|d| {
-                        if let CppMember::MethodImpl(m) = d.as_ref() {
-                            m.parameters.iter().any(|p| p.def_value.is_some())
-                        } else {
-                            false
-                        }
-                    })
-                })
-            })
-            .nth(2)
-            .unwrap()
-            .1
-            .write(&STATIC_CONFIG)?;
+        // info!("Default param");
+        // cpp_context_collection
+        //     .get()
+        //     .iter()
+        //     .filter(|(_, c)| {
+        //         c.get_types().iter().any(|(_, t)| {
+        //             t.implementations.iter().any(|d| {
+        //                 if let CppMember::MethodImpl(m) = d.as_ref() {
+        //                     m.parameters.iter().any(|p| p.def_value.is_some())
+        //                 } else {
+        //                     false
+        //                 }
+        //             })
+        //         })
+        //     })
+        //     .nth(2)
+        //     .unwrap()
+        //     .1
+        //     .write(&STATIC_CONFIG)?;
         info!("Enum type");
         cpp_context_collection
             .get()
@@ -240,14 +239,26 @@ pub fn run_cpp(
             .unwrap()
             .1
             .write(&STATIC_CONFIG)?;
+        info!("UnityEngine.UIElements.UIR.IMeshGenerator");
+        cpp_context_collection
+            .get()
+            .iter()
+            .find(|(_, c)| {
+                c.get_types().iter().any(|(_, t)| {
+                    t.namespace() == "UnityEngine.UIElements.UIR" && t.name() == "IMeshGenerator"
+                })
+            })
+            .unwrap()
+            .1
+            .write(&STATIC_CONFIG)?;
         info!("MainFlowCoordinator");
         cpp_context_collection
             .get()
             .iter()
             .find(|(_, c)| {
-                c.get_types()
-                    .iter()
-                    .any(|(_, t)| t.namespace().is_empty() && t.name() == "MainFlowCoordinator")
+                c.get_types().iter().any(|(_, t)| {
+                    t.namespace() == "GlobalNamespace" && t.name() == "MainFlowCoordinator"
+                })
             })
             .unwrap()
             .1
@@ -259,7 +270,7 @@ pub fn run_cpp(
             .find(|(_, c)| {
                 c.get_types()
                     .iter()
-                    .any(|(_, t)| t.namespace().is_empty() && t.name() == "OVRPlugin")
+                    .any(|(_, t)| t.namespace() == "GlobalNamespace" && t.name() == "OVRPlugin")
             })
             .unwrap()
             .1
@@ -271,7 +282,7 @@ pub fn run_cpp(
             .find(|(_, c)| {
                 c.get_types()
                     .iter()
-                    .any(|(_, t)| t.namespace() == "HMUI" && t.name() == "IValueChanger`1")
+                    .any(|(_, t)| t.namespace() == "HMUI" && t.name() == "IValueChanger_1")
             })
             .unwrap()
             .1
@@ -295,7 +306,7 @@ pub fn run_cpp(
             .find(|(_, c)| {
                 c.get_types()
                     .iter()
-                    .any(|(_, t)| t.namespace() == "System" && t.name() == "ValueTuple`2")
+                    .any(|(_, t)| t.namespace() == "System" && t.name() == "ValueTuple_2")
             })
             .unwrap()
             .1
@@ -324,7 +335,7 @@ pub fn run_cpp(
             .unwrap()
             .1
             .write(&STATIC_CONFIG)?;
-        info!("System.Multicast");
+        info!("System.MulticastDelegate");
         cpp_context_collection
             .get()
             .iter()
@@ -348,14 +359,14 @@ pub fn run_cpp(
             .unwrap()
             .1
             .write(&STATIC_CONFIG)?;
-        info!("BeatmapSaveDataVersion3.BeatmapSaveData.EventBoxGroup`1");
+        info!("BeatmapSaveDataVersion3.BeatmapSaveData.EventBoxGroup_1");
         cpp_context_collection
             .get()
             .iter()
             .find(|(_, c)| {
                 c.get_types()
                     .iter()
-                    .any(|(_, t)| t.name().contains("EventBoxGroup`1"))
+                    .any(|(_, t)| t.name().contains("EventBoxGroup_1"))
             })
             .unwrap()
             .1

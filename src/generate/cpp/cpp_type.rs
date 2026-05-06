@@ -4,7 +4,10 @@ use std::{
     sync::Arc,
 };
 
-use brocolib::global_metadata::{FieldIndex, TypeDefinitionIndex};
+use brocolib::{
+    global_metadata::{FieldIndex, TypeDefinitionIndex},
+    runtime_metadata::Il2CppTypeEnum,
+};
 use color_eyre::eyre::Context;
 use itertools::Itertools;
 
@@ -100,12 +103,6 @@ impl CppTypeRequirements {
         self.depending_types.insert(tag);
     }
 
-    pub fn need_wrapper(&mut self) {
-        self.add_def_include(
-            None,
-            CppInclude::new_exact("beatsaber-hook/shared/utils/base-wrapper-type.hpp"),
-        );
-    }
     pub fn needs_int_include(&mut self) {
         self.add_def_include(None, CppInclude::new_system("cstdint"));
     }
@@ -118,21 +115,13 @@ impl CppTypeRequirements {
     pub fn needs_stringw_include(&mut self) {
         self.add_def_include(
             None,
-            CppInclude::new_exact("beatsaber-hook/shared/utils/typedefs-string.hpp"),
+            CppInclude::new_exact("beatsaber-hook/shared/stringw.hpp"),
         );
     }
-
-    pub fn needs_enum_include(&mut self) {
+    pub fn needs_arrayw_include(&mut self) {
         self.add_def_include(
             None,
-            CppInclude::new_exact("beatsaber-hook/shared/utils/enum-type.hpp"),
-        );
-    }
-
-    pub fn needs_value_include(&mut self) {
-        self.add_def_include(
-            None,
-            CppInclude::new_exact("beatsaber-hook/shared/utils/value-type.hpp"),
+            CppInclude::new_exact("beatsaber-hook/shared/arrayw.hpp"),
         );
     }
 }
@@ -316,7 +305,7 @@ impl CppType {
             let type_trait_macro = if self.is_enum_type || self.is_value_type {
                 "MARK_GEN_VAL_T"
             } else {
-                "MARK_GEN_REF_PTR_T"
+                "MARK_GEN_REF_T_PTR"
             };
 
             writeln!(
@@ -334,13 +323,14 @@ impl CppType {
             let type_trait_macro = if self.is_enum_type || self.is_value_type {
                 "MARK_VAL_T"
             } else {
-                "MARK_REF_PTR_T"
+                "MARK_REF_T"
             };
 
             writeln!(
                 writer,
                 "{type_trait_macro}({});",
-                self.cpp_name_components.remove_pointer().combine_all()
+                // leave pointer if not generic
+                self.cpp_name_components.combine_all()
             )?;
         }
 
@@ -750,7 +740,7 @@ impl CppType {
             let convert_line = match self_td.is_value_type() || self_td.is_enum_type() {
                 true => {
                     // box
-                    "static_cast<void*>(::il2cpp_utils::Box(this))".to_string()
+                    "static_cast<void*>(::i2c::to_object<true>(*this, false))".to_string()
                 }
                 false => "static_cast<void*>(this)".to_string(),
             };
@@ -871,16 +861,6 @@ impl CppType {
         let mut cpp_ret_type =
             name_resolver.resolve_name(self, &method.return_type, TypeUsage::ReturnType, false);
 
-        if cpp_ret_type.combine_all() == "System.Enum" {
-            self.requirements.needs_enum_include();
-            cpp_ret_type = ENUM_PTR_TYPE.to_string().into();
-        }
-
-        if cpp_ret_type.combine_all() == "System.ValueType" {
-            self.requirements.needs_value_include();
-            cpp_ret_type = VT_PTR_TYPE.to_string().into();
-        }
-
         let cpp_m_name = {
             let cpp_m_name = config.name_cpp(m_name);
 
@@ -940,6 +920,8 @@ impl CppType {
 
         let instance_ptr: String = if is_static {
             "nullptr".into()
+        } else if self.is_value_type {
+            "*this".into()
         } else {
             "this".into()
         };
@@ -950,18 +932,9 @@ impl CppType {
         let param_names = CppParam::params_names(&method_decl.parameters).map(|s| s.as_str());
         let declaring_type_cpp_full_name = self.cpp_name_components.remove_pointer().combine_all();
 
-        let declaring_classof_call = format!(
-            "::il2cpp_utils::il2cpp_type_check::il2cpp_no_arg_class<{}>::get()",
-            self.cpp_name_components.combine_all()
-        );
+        let declaring_classof_call = self.classof_cpp_name();
 
-        let extract_self_class =
-            "il2cpp_functions::object_get_class(reinterpret_cast<Il2CppObject*>(this))";
-
-        let params_types_format: String = CppParam::params_types(&method_decl.parameters)
-            .map(|t| format!("::il2cpp_utils::il2cpp_type_check::il2cpp_no_arg_type<{t}>::get()"))
-            .join(", ");
-        let params_types_count = method_decl.parameters.len();
+        let extract_self_class = "reinterpret_cast<Il2CppObject*>(this)->klass";
 
         let resolve_instance_slot_lines = if let Some(slot) = method.method_data.slot {
             match &template {
@@ -969,107 +942,72 @@ impl CppType {
                     // generic
                     let template_names = template
                         .just_names()
-                        .map(|t| {
-                            format!(
-                                "::il2cpp_utils::il2cpp_type_check::il2cpp_no_arg_class<{t}>::get()"
-                            )
-                        })
+                        .map(|t| format!("::i2c::class_of<{t}>()"))
                         .join(", ");
-                    let template_count = template.names.len();
-
-                    // if no template params, just empty span
-                    // avoid allocs
-                    let template_classes_array_cpp = match template_count {
-                        0 => "std::span<const Il2CppClass* const, 0>()".to_string(),
-                        _ => format!(
-                            "std::array<const Il2CppClass*, {template_count}>{{{template_names}}}"
-                        ),
-                    };
 
                     vec![
-                    format!("auto* ___internal_method_base = THROW_UNLESS((::il2cpp_utils::ResolveVtableSlot(
-                        {extract_self_class},
-                        {declaring_classof_call},
-                        {slot}
-                    )));"),
-                    format!("auto* {METHOD_INFO_VAR_NAME} = THROW_UNLESS(::il2cpp_utils::MakeGenericMethod(
-                        ___internal_method_base,
-                        {template_classes_array_cpp}
-                    ));"),
+                        format!(
+                            "auto* {METHOD_INFO_VAR_NAME}_base = THROW_UNLESS(::i2c::no_logger{{}}, (::i2c::find_method(
+                                {extract_self_class},
+                                {{{declaring_classof_call}, {slot}}}
+                            )));"
+                        ),
+                        format!(
+                            "auto* {METHOD_INFO_VAR_NAME} = THROW_UNLESS(::i2c::no_logger{{}}, ::i2c::make_generic(
+                                {METHOD_INFO_VAR_NAME}_base,
+                                {{{template_names}}}
+                            ));"
+                        ),
                     ]
                 }
                 None => {
-                    vec![
-                        format!("auto* {METHOD_INFO_VAR_NAME} = THROW_UNLESS((::il2cpp_utils::ResolveVtableSlot(
+                    vec![format!(
+                        "auto* {METHOD_INFO_VAR_NAME} = THROW_UNLESS(::i2c::no_logger{{}}, (::i2c::find_method(
                             {extract_self_class},
-                            {declaring_classof_call},
-                            {slot}
-                        )));")
-                    ]
+                            {{{declaring_classof_call}, {slot}}}
+                        )));"
+                    )]
                 }
             }
         } else {
             vec![]
         };
 
-        // if no params, just empty span
-        // avoid allocs
-        let params_types_array_cpp = match params_types_count {
-            0 => "::std::span<const Il2CppType* const, 0>()".to_string(),
-            _ => format!(
-                "::std::array<const Il2CppType*, {params_types_count}>{{{params_types_format}}}"
-            ),
-        };
+        let params_types_format: String = CppParam::params_types(&method_decl.parameters)
+            .map(|t| format!("::i2c::type_of<{t}>()"))
+            .join(", ");
 
         let method_info_lines = match &template {
             Some(template) => {
                 // generic
                 let template_names = template
                     .just_names()
-                    .map(|t| {
-                        format!(
-                            "::il2cpp_utils::il2cpp_type_check::il2cpp_no_arg_class<{t}>::get()"
-                        )
-                    })
+                    .map(|t| format!("::i2c::class_of<{t}>()"))
                     .join(", ");
-                let template_count = template.names.len();
-
-                // if no template params, just empty span
-                // avoid allocs
-                let template_classes_array_cpp = match template_count {
-                    0 => "std::span<const Il2CppClass* const, 0>()".to_string(),
-                    _ => format!(
-                        "std::array<const Il2CppClass*, {template_count}>{{{template_names}}}"
-                    ),
-                };
 
                 vec![
-                format!("static auto* ___internal_method_base = THROW_UNLESS((::il2cpp_utils::FindMethod(
+                format!("static auto* {METHOD_INFO_VAR_NAME}_base = THROW_UNLESS(::i2c::no_logger{{}}, (::i2c::find_method(
                     {declaring_classof_call},
-                    \"{m_name}\",
-                    {template_classes_array_cpp},
-                    {params_types_array_cpp}
+                    {{\"{m_name}\", {{{template_names}}}, {{{params_types_format}}}}}
                 )));"),
-                format!("static auto* {METHOD_INFO_VAR_NAME} = THROW_UNLESS(::il2cpp_utils::MakeGenericMethod(
-                    ___internal_method_base,
-                    {template_classes_array_cpp}
-                ));"),
+                format!("static auto* {METHOD_INFO_VAR_NAME} = THROW_UNLESS(::i2c::no_logger{{}}, (::i2c::make_generic(
+                    {METHOD_INFO_VAR_NAME}_base,
+                    {{{template_names}}}
+                )));"),
                 ]
             }
             None => {
-                vec![
-                    format!("static auto* {METHOD_INFO_VAR_NAME} = THROW_UNLESS((::il2cpp_utils::FindMethod(
+                vec![format!(
+                    "static auto* {METHOD_INFO_VAR_NAME} = THROW_UNLESS(::i2c::no_logger{{}}, (::i2c::find_method(
                         {declaring_classof_call},
-                        \"{m_name}\",
-                        std::span<const Il2CppClass* const, 0>(),
-                        {params_types_array_cpp}
-                    )));"),
-                    ]
+                        {{\"{m_name}\", {{}}, {{{params_types_format}}}}}
+                    )));"
+                )]
             }
         };
 
         let method_body_lines = [format!(
-            "return ::cordl_internals::RunMethodRethrow<{}, false>({});",
+            "return ::cordl_internals::RunMethodRethrow<{}>({});",
             cpp_ret_type.combine_all(),
             method_invoke_params
                 .into_iter()
@@ -1187,7 +1125,7 @@ impl CppType {
 
     pub fn classof_cpp_name(&self) -> String {
         format!(
-            "::il2cpp_utils::il2cpp_type_check::il2cpp_no_arg_class<{}>::get",
+            "::i2c::class_of<{}>()",
             self.cpp_name_components.combine_all()
         )
     }
@@ -1205,7 +1143,7 @@ impl CppType {
             assert!(!cpp_name.trim().is_empty(), "CPP Name cannot be empty!");
 
             let assert = CppStaticAssert {
-                condition: format!("::cordl_internals::size_check_v<{cpp_name}, 0x{size:x}>"),
+                condition: format!("sizeof({cpp_name}) == 0x{size:x}"),
                 message: Some("Size mismatch!".to_string()),
             };
 
@@ -1459,7 +1397,7 @@ impl CppType {
                         self,
                         &field.field_ty,
                         TypeUsage::Field,
-                        field_il2cpp_ty.valuetype,
+                        field_il2cpp_ty.valuetype || field_il2cpp_ty.ty == Il2CppTypeEnum::Array,
                     )
                     .combine_all();
 
@@ -1700,7 +1638,7 @@ impl CppType {
         let base_ctor_params = CppParam::params_names(&decl.parameters).join(", ");
 
         let allocate_call = format!(
-            "THROW_UNLESS(::il2cpp_utils::NewSpecific<{ty_full_cpp_name}>({base_ctor_params}))"
+            "THROW_UNLESS(::i2c::no_logger{{}}, ::i2c::new_ctor<{ty_full_cpp_name}>({base_ctor_params}))"
         );
 
         let declaring_template = self

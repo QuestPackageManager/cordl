@@ -621,18 +621,19 @@ impl Writable for CppMethodSizeStruct {
 
         // if we have a slot, this isn't final and we aren't an interface, do a slot resolve
         // interface classes don't actually have vtables to perform a slot resolve on (count == 0)
-        let method_info_lines = if let Some(slot) = self.slot && !self.is_final {
-            vec![
-                format!("
-                            static auto* {method_info_var} = THROW_UNLESS(::il2cpp_utils::ResolveVtableSlot(
-                                {classof_call},
-                                 {interface_klass_of}(),
-                                  {slot}
-                                ));")
-            ]
+        let method_info_lines = if let Some(slot) = self.slot
+            && !self.is_final
+        {
+            vec![format!(
+                "static auto* {method_info_var} = THROW_UNLESS(::i2c::no_logger{{}}, ::i2c::find_method(
+                    {classof_call},
+                    {{{interface_klass_of}, {slot}}}
+                ));"
+            )]
         } else {
             self.method_info_lines.clone()
-        }.join("\n");
+        }
+        .join("\n");
 
         let f_ptr_prefix = if self.instance {
             format!("{}::", self.declaring_type_name)
@@ -648,11 +649,11 @@ impl Writable for CppMethodSizeStruct {
         writeln!(
             writer,
             "
-struct CORDL_HIDDEN ::il2cpp_utils::il2cpp_type_check::MetadataGetter<static_cast<{ret_type} ({f_ptr_prefix}*)({params_format})>(&{complete_type_name}::{cpp_method_name})> {{
+struct CORDL_HIDDEN ::i2c::metadata_getter<static_cast<{ret_type} ({f_ptr_prefix}*)({params_format})>(&{complete_type_name}::{cpp_method_name})> {{
   constexpr static std::size_t size = 0x{size:x};
   constexpr static std::size_t addrs = 0x{addr:x};
 
-  inline static const ::MethodInfo* methodInfo() {{
+  inline static const ::MethodInfo* method_info() {{
     {method_info_lines}
     return {method_info_var};
   }}

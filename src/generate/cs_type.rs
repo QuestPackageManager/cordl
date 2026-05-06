@@ -559,7 +559,6 @@ impl CsType {
             match t.is_interface() {
                 true => {
                     // FIXME: should interfaces have a base type? I don't think they need to
-                    // self.inherit.push(INTERFACE_WRAPPER_TYPE.to_string());
                 }
                 false => {
                     info!(

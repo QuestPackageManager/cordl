@@ -7,6 +7,7 @@ pub static STATIC_CONFIG: LazyLock<CppGenerationConfig> = LazyLock::new(|| CppGe
         "./codegen/include/cordl_internals/cordl_internals.hpp",
     ),
     use_anonymous_namespace: false,
+    use_wbarrier: false,
 });
 
 pub struct CppGenerationConfig {
@@ -14,6 +15,7 @@ pub struct CppGenerationConfig {
     pub dst_internals_path: PathBuf,
     pub dst_header_internals_file: PathBuf,
     pub use_anonymous_namespace: bool,
+    pub use_wbarrier: bool,
 }
 
 impl CppGenerationConfig {

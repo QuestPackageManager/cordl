@@ -1,10 +1,11 @@
 #pragma once
 
 #include "config.hpp"
-#include "concepts.hpp"
 #include "internal.hpp"
 #include "exceptions.hpp"
-#include "beatsaber-hook/shared/utils/il2cpp-utils-fields.hpp"
+
+#include "beatsaber-hook/shared/find.hpp"
+#include "beatsaber-hook/shared/members.hpp"
 
 #include <bit>
 #include <cstddef>
@@ -19,92 +20,60 @@ namespace cordl_internals {
   /// @brief method to find a field info in a klass
   /// @tparam name field name
   /// @tparam klass_resolver method to get the Il2CppClass* on which to get the klass
-  template<internal::NTTPString name, auto klass_resolver>
-  CORDL_HIDDEN FieldInfo* FindField() {
-    static auto* klass = klass_resolver();
-    if (!klass)
-      throw NullException(std::string("Class for static field with name: ") +
-                          name.data.data() + " is null!");
-    static auto* field = ::il2cpp_utils::FindField(klass, name);
-    if (!field)
-      throw FieldException(std::string("Could not set static field with name: ") +
-                          name.data.data());
+  template<typename K>
+  CORDL_HIDDEN FieldInfo* findField(std::string_view name) {
+    auto klass = ::i2c::class_of<K>();
+    if (!klass) throw NullException(std::string("Class for field with name: ") + name.data() + " is null!");
+    auto field = ::i2c::find_field(klass, name);
+    if (!field) throw FieldException(std::string("Could not find field with name: ") + name.data());
     return field;
   }
-
-#pragma region static field setters
 
   /// @brief template for setting a static field on a class
   /// @tparam T field type
   /// @tparam name field name
-  /// @tparam klass_resolver method to get the Il2CppClass* on which the field resides
-  template<typename T, internal::NTTPString name, auto klass_resolver>
-  CORDL_HIDDEN void setStaticField(T&& v);
-
-  /// @brief method to set a field that's a reference type
-  template<::il2cpp_utils::il2cpp_reference_type T, internal::NTTPString name, auto klass_resolver>
-  CORDL_HIDDEN void setStaticField(T&& v) {
-    static auto* field = FindField<name, klass_resolver>();
-    auto value = il2cpp_utils::il2cpp_reference_type_value<T>(std::forward<T>(v));
-    ::il2cpp_functions::field_static_set_value(field, value);
+  /// @tparam K the class on which the field resides
+  template<typename T, ::i2c::str_lit name, typename K>
+  CORDL_HIDDEN void setStaticField(T&& value) {
+    static auto field = findField<K>(name.data);
+    ::i2c::functions::field_static_set_value(field, const_cast<void*>(static_cast<void const*>(&value)));
   }
 
-  /// @brief method to set a field that's a value type
-  template<::il2cpp_utils::il2cpp_value_type T, internal::NTTPString name, auto klass_resolver>
-  CORDL_HIDDEN void setStaticField(T&& v) {
-    static auto* field = FindField<name, klass_resolver>();
-    ::il2cpp_functions::field_static_set_value(field, static_cast<void*>(&v));
+  /// @brief method to set a field that's an il2cpp type
+  template<::i2c::type_check::full_class T, ::i2c::str_lit name, typename K>
+  CORDL_HIDDEN void setStaticField(T&& value) {
+    static auto field = findField<K>(name.data);
+    ::i2c::functions::field_static_set_value(field, ::i2c::to_object<false, T>(value));
   }
-
-  /// @brief method to set a field that's a trivial type
-  template<typename T, internal::NTTPString name, auto klass_resolver>
-  CORDL_HIDDEN void setStaticField(T&& v) {
-    static auto* field = FindField<name, klass_resolver>();
-    ::il2cpp_functions::field_static_set_value(
-        field, const_cast<void*>(static_cast<void const*>(&v)));
-  }
-
-#pragma endregion // static field setters
 
 #pragma region static field getters
 
   /// @brief template for getting a static field on a class
   /// @tparam T field type
   /// @tparam name field name
-  /// @tparam klass_resolver method to get the Il2CppClass* on which the field resides
-  template <typename T, internal::NTTPString name, auto klass_resolver>
-  [[nodiscard]] CORDL_HIDDEN T getStaticField();
-
-  /// @brief method to set a field that's a reference type
-  template <::il2cpp_utils::il2cpp_reference_type T, internal::NTTPString name, auto klass_resolver>
+  /// @tparam K the class on which the field resides
+  template <typename T, ::i2c::str_lit name, typename K>
   [[nodiscard]] CORDL_HIDDEN T getStaticField() {
-    static auto* field = FindField<name, klass_resolver>();
-    void* val{};
-    ::il2cpp_functions::field_static_get_value(field, &val);
-
-    if constexpr (il2cpp_utils::il2cpp_reference_type_pointer<T>) {
-      return static_cast<T>(val);
-    } else if constexpr (il2cpp_utils::il2cpp_reference_type_wrapper<T>) {
-      return T(val);
-    } else {
-      return {};
-    }
+    static auto field = findField<K>(name.data);
+    T val;
+    ::i2c::functions::field_static_get_value(field, static_cast<void*>(&val));
+    return val;
   }
 
-  /// @brief method to set a field that's a trivial type
-  template <typename T, internal::NTTPString name, auto klass_resolver>
+  /// @brief method to set a field that's a reference type
+  template <::i2c::type_check::ref_type T, ::i2c::str_lit name, typename K>
   [[nodiscard]] CORDL_HIDDEN T getStaticField() {
-    static auto* field = FindField<name, klass_resolver>();
-    T val{};
-    ::il2cpp_functions::field_static_get_value(field, static_cast<void*>(&val));
-    return val;
+    static auto field = findField<K>(name.data);
+    void* val;
+    ::i2c::functions::field_static_get_value(field, &val);
+    return ::i2c::from_object<T, false>(val);
   }
 
   /// @brief method to set a field for a generic container type
   template <typename T> CORDL_HIDDEN void setInstanceField(Il2CppObject* owner, T* pointer, std::type_identity_t<T>& value) {
     // if a ref type, use wbarrier
-    if constexpr (::il2cpp_utils::il2cpp_reference_type<T>) {
-      il2cpp_functions::gc_wbarrier_set_field(owner, static_cast<void**>(static_cast<void*>(pointer)), cordl_internals::convert(std::forward<T>(value)));
+    if constexpr (::i2c::type_check::ref_type<T>) {
+      ::i2c::functions::gc_wbarrier_set_field(owner, static_cast<void**>(static_cast<void*>(pointer)), cordl_internals::convert(value));
     } else {
       // if a value type, normal assignment wokrs
       *pointer = value;
