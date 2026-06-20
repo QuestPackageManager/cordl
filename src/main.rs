@@ -51,10 +51,22 @@ enum TargetLang {
 #[clap(author, version, about, long_about = None)]
 struct Cli {
     /// The global-metadata.dat file to use
+    /// Path:
+    /// - Windows: <game folder>/il2cpp_data/Metadata/global-metadata.dat
+    /// - Linux: <game folder>/il2cpp_data/Metadata/global-metadata.dat
+    /// - Android: <apk>/assets/bin/Data/Metadata/global-metadata.dat
+    /// - iOS: <game folder>/il2cpp_data/Metadata/global-metadata.dat
     #[clap(short, long, value_parser, value_name = "FILE")]
     metadata: PathBuf,
 
-    /// The libil2cpp.so file to use
+    /// The il2cpp file to use
+    /// For Windows, this is GameAssembly.dll
+    /// For Linux and Android, this is libil2cpp.so
+    /// For iOS, this is libil2cpp.a
+    /// Path:
+    /// - Windows: <game folder>/GameAssembly.dll
+    /// - Linux/Android: <game folder>/libil2cpp.so
+    /// - iOS: <game folder>/libil2cpp.a
     #[clap(short, long, value_parser, value_name = "FILE")]
     libil2cpp: PathBuf,
 
