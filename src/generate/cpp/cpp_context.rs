@@ -140,11 +140,15 @@ impl CppContext {
 
             if metadata.blacklisted_types.contains(&tdi) {
                 let result = match t.is_value_type() {
-                    true => todo!("Put namespace and name in ValueW"),
-                    // true => format!(
-                    //     "{VALUE_WRAPPER_TYPE}<{:x}>",
-                    //     ty.size_info.as_ref().unwrap().instance_size
-                    // ),
+                    true => format!(
+                        "{VALUE_WRAPPER_TYPE}<\"{}\", \"{}\", {:x}>",
+                        ty.cs_name_components
+                            .namespace
+                            .as_deref()
+                            .unwrap_or_default(),
+                        ty.cs_name_components.declaring_name(),
+                        ty.size_info.as_ref().unwrap().instance_size
+                    ),
                     false => IL2CPP_OBJECT_TYPE.to_string(),
                 };
 
