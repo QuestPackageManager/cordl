@@ -1,13 +1,14 @@
 #pragma once
 
 #include "config.hpp"
-#include "concepts.hpp"
 #include "internal.hpp"
 #include "exceptions.hpp"
+
+#include "beatsaber-hook/shared/members.hpp"
+#include "il2cpp-tabledefs.h"
+
 #include <type_traits>
 #include <sstream>
-#include "il2cpp-tabledefs.h"
-#include "beatsaber-hook/shared/utils/il2cpp-utils-methods.hpp"
 
 namespace UnityEngine {
 class Object;
@@ -16,15 +17,15 @@ class Object;
 namespace {
 namespace cordl_internals {
 
-template <typename TOut = void, bool checkTypes = true, typename T, typename... TArgs>
+template <typename TOut = void, typename T, typename... TArgs>
 CORDL_HIDDEN TOut RunMethodRethrow(T&& instance, MethodInfo const* method, TArgs&&... params) {
   CRASH_UNLESS(method);
 
   // do a null check for reference instance method calls
 #ifndef NO_RUNTIME_INSTANCE_METHOD_NULL_CHECKS
-  if constexpr (::il2cpp_utils::il2cpp_reference_type<T>) {
+  if constexpr (::i2c::type_check::ref_type<T>) {
     // get the instance value, regardless of if it is boxed or anything
-    auto inst = ::il2cpp_utils::ExtractValue(instance);
+    auto inst = ::i2c::to_object<false>(instance);
 
     if ((method->flags & METHOD_ATTRIBUTE_STATIC) == 0) { // method is instance method
       if (!inst) {
@@ -66,7 +67,7 @@ CORDL_HIDDEN TOut RunMethodRethrow(T&& instance, MethodInfo const* method, TArgs
   //     }
   //   }
 
-  return ::il2cpp_utils::RunMethodRethrow<TOut, checkTypes>(std::forward<T>(instance), method, std::forward<TArgs>(params)...);
+  return ::i2c::run_method<TOut>(std::forward<T>(instance), method, std::forward<TArgs>(params)...);
 }
 } // namespace cordl_internals
 } // end anonymous namespace

@@ -20,9 +20,6 @@ impl TypeContext {
     pub fn get_types(&self) -> &HashMap<CsTypeTag, CsType> {
         &self.typedef_types
     }
-    pub fn get_types_mut(&mut self) -> &mut HashMap<CsTypeTag, CsType> {
-        &mut self.typedef_types
-    }
 
     // TODO: Move out, this is CSContext
     pub fn make(metadata: &CordlMetadata, tdi: TypeDefinitionIndex, tag: CsTypeTag) -> TypeContext {

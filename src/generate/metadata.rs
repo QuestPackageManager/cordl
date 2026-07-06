@@ -3,8 +3,6 @@ use std::collections::{HashMap, HashSet};
 use brocolib::global_metadata::{Il2CppTypeDefinition, MethodIndex, TypeDefinitionIndex};
 use itertools::Itertools;
 
-use super::cs_type::CsType;
-
 pub struct MethodCalculations {
     pub estimated_size: usize,
     pub addrs: u64,
@@ -13,7 +11,6 @@ pub struct MethodCalculations {
 #[repr(u8)]
 #[derive(Clone, Copy)]
 pub enum PointerSize {
-    Bytes4 = 4,
     Bytes8 = 8,
 }
 
@@ -28,8 +25,6 @@ impl<'a> TypeDefinitionPair<'a> {
         TypeDefinitionPair { ty, tdi }
     }
 }
-
-pub type TypeHandlerFn = Box<dyn Fn(&mut CsType)>;
 
 pub type Il2cppNamespace<'a> = &'a str;
 pub type Il2cppName<'a> = &'a str;
@@ -48,7 +43,7 @@ pub struct CordlMetadata<'a> {
     pub child_to_parent_map: HashMap<TypeDefinitionIndex, TypeDefinitionPair<'a>>,
 
     pub unity_object_tdi: TypeDefinitionIndex,
-    pub string_tdi: TypeDefinitionIndex,
+    // pub string_tdi: TypeDefinitionIndex,
     pub object_tdi: TypeDefinitionIndex,
 
     pub name_to_tdi: HashMap<Il2cppFullName<'a>, TypeDefinitionIndex>,

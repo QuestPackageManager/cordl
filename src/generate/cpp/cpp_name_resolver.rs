@@ -1,4 +1,4 @@
-use brocolib::{global_metadata::Il2CppTypeDefinition, runtime_metadata::Il2CppTypeEnum};
+use brocolib::{Metadata, global_metadata::Il2CppTypeDefinition, runtime_metadata::Il2CppTypeEnum};
 use itertools::Itertools;
 
 use crate::{
@@ -17,10 +17,7 @@ use super::{
     handlers::unity,
 };
 
-pub const VALUE_WRAPPER_TYPE: &str = "::bs_hook::ValueType";
-pub const VALUE_SIZED_WRAPPER_TYPE: &str = "::bs_hook::ValueTypeWrapper";
-pub const ENUM_WRAPPER_TYPE: &str = "::bs_hook::EnumType";
-pub const INTERFACE_WRAPPER_TYPE: &str = "::cordl_internals::InterfaceW";
+pub const VALUE_WRAPPER_TYPE: &str = "::ValueW";
 pub const IL2CPP_OBJECT_TYPE: &str = "Il2CppObject";
 
 pub struct CppNameResolver<'a, 'b> {
@@ -51,13 +48,12 @@ impl<'b> CppNameResolver<'_, 'b> {
                     self.resolve_name(declaring_cpp_type, array_type, type_usage, hard_include);
                 let generic_formatted = generic.combine_all();
 
+                declaring_cpp_type.requirements.needs_arrayw_include();
+
                 CppNameComponents {
                     name: "ArrayW".into(),
                     namespace: Some("".into()),
-                    generics: Some(vec![
-                        generic_formatted.clone(),
-                        format!("::Array<{generic_formatted}>*"),
-                    ]),
+                    generics: Some(vec![generic_formatted.clone()]),
                     is_pointer: false,
                     ..Default::default()
                 }
@@ -106,12 +102,6 @@ impl<'b> CppNameResolver<'_, 'b> {
                     self.resolve_name(declaring_cpp_type, resolved_type, type_usage, hard_include);
 
                 generic_formatted.as_pointer()
-                // CppNameComponents {
-                //     namespace: Some("cordl_internals".into()),
-                //     generics: Some(vec![generic_formatted.combine_all()]),
-                //     name: "Ptr".into(),
-                //     ..Default::default()
-                // }
             }
             ResolvedTypeData::Type(resolved_tag) => self.resolve_type(
                 resolved_tag,
@@ -190,7 +180,12 @@ impl<'b> CppNameResolver<'_, 'b> {
                     metadata,
                 );
 
-                Self::wrapper_type_for_tdi(td, size, &mut declaring_cpp_type.requirements)
+                Self::wrapper_type_for_tdi(
+                    td,
+                    size,
+                    &mut declaring_cpp_type.requirements,
+                    metadata.metadata,
+                )
             }
             ResolvedTypeData::ByRef(resolved_type) => {
                 let generic =
@@ -198,7 +193,7 @@ impl<'b> CppNameResolver<'_, 'b> {
                 let generic_formatted = generic.combine_all();
 
                 CppNameComponents {
-                    name: "ByRef".into(),
+                    name: "by_ref".into(),
                     namespace: Some("".into()),
                     generics: Some(vec![generic_formatted.clone()]),
                     is_pointer: false,
@@ -314,21 +309,24 @@ impl<'b> CppNameResolver<'_, 'b> {
         td: &Il2CppTypeDefinition,
         size: u32,
         requirements: &mut CppTypeRequirements,
+        metadata: &Metadata,
     ) -> CppNameComponents {
-        if td.is_enum_type() {
-            return ENUM_WRAPPER_TYPE.to_string().into();
-        }
-
         if td.is_value_type() {
             requirements.add_def_include(
                 None,
-                CppInclude::new_exact("beatsaber-hook/shared/utils/value-wrapper-type.hpp"),
+                CppInclude::new_exact("beatsaber-hook/shared/valuew.hpp"),
             );
-            return format!("{VALUE_SIZED_WRAPPER_TYPE}<{size}>").into();
-        }
-
-        if td.is_interface() {
-            return INTERFACE_WRAPPER_TYPE.to_string().into();
+            let name_components = td.get_name_components(metadata);
+            let namespace = name_components.namespace.clone().unwrap_or_default();
+            let combined_name = match &name_components.declaring_types {
+                None => name_components.name.clone(),
+                Some(declaring_types) => format!(
+                    "{}/{}",
+                    declaring_types.join("/"),
+                    name_components.name.clone()
+                ),
+            };
+            return format!("{VALUE_WRAPPER_TYPE}<{size}, \"{namespace}\", \"{combined_name}\">").into();
         }
 
         il2cpp_object_name_component()

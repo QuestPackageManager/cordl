@@ -1,6 +1,5 @@
 use bitflags::bitflags;
 use brocolib::global_metadata::MethodIndex;
-use bytes::Bytes;
 
 use crate::data::type_resolver::ResolvedType;
 
@@ -28,40 +27,10 @@ impl CsGenericContainer {
     }
 }
 
-#[derive(Debug, Clone, Eq, Hash, PartialEq, PartialOrd)]
-pub struct CsCommentedString {
-    pub data: String,
-    pub comment: Option<String>,
-}
-
-
 #[derive(Clone, Debug, Default, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct CsMethodData {
     pub estimated_size: Option<usize>,
     pub addrs: Option<u64>,
-    pub slot: Option<u16>,
-}
-
-#[derive(Clone, Debug)]
-pub struct CsMethodSizeData {
-    pub cpp_method_name: String,
-    pub method_name: String,
-    pub declaring_type_name: String,
-    pub declaring_classof_call: String,
-    pub ret_ty: String,
-    pub instance: bool,
-    pub params: Vec<CsParam>,
-    pub method_data: CsMethodData,
-
-    // this is so bad
-    pub method_info_lines: Vec<String>,
-    pub method_info_var: String,
-
-    pub template: Option<CsGenericContainer>,
-    pub generic_literals: Option<Vec<String>>,
-
-    pub interface_clazz_of: String,
-    pub is_final: bool,
     pub slot: Option<u16>,
 }
 
@@ -84,8 +53,6 @@ pub enum CsValue {
     F32(f32),
     F64(f64),
 
-    Object(Bytes),
-    ValueType(Bytes),
     Null,
 }
 

@@ -8,12 +8,7 @@ pub struct NameComponents {
 
 impl NameComponents {
     pub fn combine_all(&self) -> String {
-        let mut completed = self.name.clone();
-
-        // add declaring types
-        if let Some(declaring_types) = self.declaring_types.as_ref() {
-            completed = format!("{}/{completed}", declaring_types.join("/"));
-        }
+        let mut completed = self.declaring_name();
 
         // add namespace
         if let Some(namespace) = self.namespace.as_ref() {
@@ -28,15 +23,6 @@ impl NameComponents {
         completed
     }
 
-    pub fn into_ref_generics(self) -> Self {
-        Self {
-            generics: self
-                .generics
-                .map(|opt| opt.into_iter().map(|_| "void*".to_string()).collect()),
-            ..self
-        }
-    }
-
     pub fn remove_generics(self) -> Self {
         Self {
             generics: None,
@@ -48,6 +34,14 @@ impl NameComponents {
         Self {
             namespace: None,
             ..self
+        }
+    }
+
+    pub fn declaring_name(&self) -> String {
+        if let Some(declaring_types) = self.declaring_types.as_ref() {
+            format!("{}/{}", declaring_types.join("/"), self.name)
+        } else {
+            self.name.clone()
         }
     }
 

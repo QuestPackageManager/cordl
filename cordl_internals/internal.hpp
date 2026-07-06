@@ -1,6 +1,8 @@
 #pragma once
 
 #include "config.hpp"
+#include "beatsaber-hook/shared/types.hpp"
+
 #include <array>
 #include <cstddef>
 #include <cstring>
@@ -12,18 +14,6 @@ namespace UnityEngine {
 
 namespace {
 namespace cordl_internals {
-    namespace internal {
-        template <std::size_t sz> struct NTTPString {
-            constexpr NTTPString(char const (&n)[sz]) : data{} {
-                std::copy_n(n, sz, data.begin());
-            }
-            std::array<char, sz> data;
-            constexpr operator std::string_view() const {
-                return {data.data(), sz};
-            }
-        };
-    }
-
     /// @brief gets an offset from a given pointer
     template <std::size_t offset>
     CORDL_HIDDEN constexpr inline void** getAtOffset(void* instance) {
@@ -48,14 +38,14 @@ namespace cordl_internals {
     #ifdef CORDL_RUNTIME_FIELD_NULL_CHECKS
         #define CORDL_FIELD_NULL_CHECK(inst) if (!inst) throw ::cordl_internals::NullException(std::string("Field access on nullptr instance, please make sure your instance is not null"))
     #else
-        #define CORDL_FIELD_NULL_CHECK(instance)
+        #define CORDL_FIELD_NULL_CHECK(inst)
     #endif
 
     template<typename T>
     requires(std::is_pointer_v<T>)
     constexpr inline void* convert(T&& inst) { return static_cast<void*>(const_cast<void*>(static_cast<const void*>(inst))); }
 
-    template<il2cpp_utils::has_il2cpp_conversion T>
+    template<::i2c::type_check::wrapper_type T>
     constexpr inline void* convert(T&& inst) { return inst.convert(); }
 }
 }

@@ -81,33 +81,6 @@ pub fn get_size_info(
     }
 }
 
-// TODO: is this deprecated now?
-#[deprecated(note = "Use get_size_info instead?")]
-pub fn get_size_and_packing<'a>(
-    tdi: TypeDefinitionIndex,
-    generic_inst_types: Option<&[usize]>,
-    metadata: &'a CordlMetadata,
-) -> (u32, Option<u8>) {
-    let t = &metadata.metadata.global_metadata.type_definitions[tdi];
-    let size_metadata = get_size_of_type_table(metadata, tdi).unwrap();
-    let mut metadata_size = size_metadata.instance_size;
-
-    if metadata_size == 0 && !t.is_interface() {
-        let sa = layout_fields(metadata, tdi, generic_inst_types, None, true);
-        metadata_size = sa.size.try_into().unwrap();
-    }
-
-    if t.is_value_type() || t.is_enum_type() {
-        metadata_size = metadata_size
-            .checked_sub(metadata.object_size() as u32)
-            .unwrap()
-    }
-
-    let packing = get_packing(metadata, t);
-
-    (metadata_size, packing)
-}
-
 pub fn get_il2cpptype_sa(
     metadata: &CordlMetadata<'_>,
     ty: &Il2CppType,
@@ -226,18 +199,6 @@ fn size_is_default(bitfield: u32, size_is_default_offset: u8) -> bool {
     ((bitfield >> (size_is_default_offset - 1)) & 0x1) != 0
 }
 
-fn get_size(
-    metadata: &CordlMetadata<'_>,
-    tdi: TypeDefinitionIndex,
-) -> Option<u32> {
-    let ty_def = &metadata.metadata.global_metadata.type_definitions[tdi];
-    if size_is_default(ty_def.bitfield, metadata.size_is_default_offset) {
-        return None;
-    }
-
-    get_size_of_type_table(metadata, tdi).map(|sz| sz.native_size as u32)
-}
-
 fn is_reference(ty: &Il2CppType) -> bool {
     if matches!(
         ty.ty,
@@ -334,8 +295,6 @@ pub fn layout_fields(
         if declaring_ty_def.is_value_type() && local_offsets.is_empty() {
             instance_size = (IL2CPP_SIZEOF_STRUCT_WITH_NO_INSTANCE_FIELDS
                 + metadata.object_size() as u32) as usize;
-            actual_size = (IL2CPP_SIZEOF_STRUCT_WITH_NO_INSTANCE_FIELDS
-                + metadata.object_size() as u32) as usize;
         }
 
         instance_size = update_instance_size_for_generic_class(
@@ -395,7 +354,6 @@ fn layout_instance_fields(
     let parent_alignment = parent_sa.alignment;
     let packing = parent_sa.packing;
 
-    let mut instance_size = parent_size;
     let mut actual_size = actual_parent_size;
     let mut minimum_alignment = parent_alignment;
 
@@ -448,7 +406,7 @@ fn layout_instance_fields(
         minimum_alignment = std::cmp::max(minimum_alignment, alignment);
     }
 
-    instance_size = align_to(actual_size, minimum_alignment as usize);
+    let instance_size = align_to(actual_size, minimum_alignment as usize);
 
     SizeAndAlignment {
         size: instance_size,

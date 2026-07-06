@@ -350,8 +350,6 @@ pub(crate) fn handle_const_fields(
                     _ => panic!("Unexpected f64 value: {}", f),
                 },
                 CsValue::Null => parse_quote! { Default::default() },
-                CsValue::Object(_) => todo!(),
-                CsValue::ValueType(_) => todo!(),
             };
 
             let cpp_field_template = ConstRustField {

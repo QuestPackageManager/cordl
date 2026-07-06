@@ -141,7 +141,12 @@ impl CppContext {
             if metadata.blacklisted_types.contains(&tdi) {
                 let result = match t.is_value_type() {
                     true => format!(
-                        "{VALUE_WRAPPER_TYPE}<{:x}>",
+                        "{VALUE_WRAPPER_TYPE}<\"{}\", \"{}\", {:x}>",
+                        ty.cs_name_components
+                            .namespace
+                            .as_deref()
+                            .unwrap_or_default(),
+                        ty.cs_name_components.declaring_name(),
                         ty.size_info.as_ref().unwrap().instance_size
                     ),
                     false => IL2CPP_OBJECT_TYPE.to_string(),
@@ -239,9 +244,8 @@ impl CppContext {
         )
         .unwrap();
 
-        // write typedefs.h include first - this makes include order mostly happy (probably System.Object would still be weird!)
-        CppInclude::new_exact("beatsaber-hook/shared/utils/typedefs.h")
-            .write(&mut typedef_writer)?;
+        // write types.hpp include first - this makes include order mostly happy (probably System.Object would still be weird!)
+        CppInclude::new_exact("beatsaber-hook/shared/types.hpp").write(&mut typedef_writer)?;
         CppInclude::new_exact(dest_path).write(&mut typedef_writer)?;
 
         // after including cordl internals
@@ -429,6 +433,11 @@ impl CppContext {
                     }
                     Ok(())
                 })?;
+
+            // write macros
+            typedef_types
+                .iter()
+                .try_for_each(|t| Self::write_il2cpp_arg_macros(t, &mut typedef_writer))?;
         }
 
         for t in &typedef_root_types_sorted {
@@ -441,11 +450,6 @@ impl CppContext {
             writeln!(typedef_writer, "}} // end anonymous namespace")?;
             writeln!(typeimpl_writer, "}} // end anonymous namespace")?;
         }
-
-        // write macros
-        typedef_types
-            .iter()
-            .try_for_each(|t| Self::write_il2cpp_arg_macros(t, &mut typedef_writer))?;
 
         // Fundamental
         {
@@ -476,27 +480,14 @@ impl CppContext {
             .as_ref()
             .is_some_and(|t| !t.names.is_empty());
 
-        if !ty.is_value_type && !template_container_type && !is_generic_instantiation {
-            // reference types need no boxing
-            writeln!(
-                writer,
-                "NEED_NO_BOX({});",
-                ty.cpp_name_components
-                    .clone()
-                    .remove_generics()
-                    .remove_pointer()
-                    .combine_all()
-            )?;
-        }
-
         let macro_arg_define = {
             match //ty.generic_instantiation_args.is_some() ||
                     template_container_type {
                     true => match ty.is_value_type {
-                        true => "DEFINE_IL2CPP_ARG_TYPE_GENERIC_STRUCT",
-                        false => "DEFINE_IL2CPP_ARG_TYPE_GENERIC_CLASS",
+                        true => "DEFINE_IL2CPP_GEN_CLASS",
+                        false => "DEFINE_IL2CPP_GEN_CLASS_PTR",
                     },
-                    false => "DEFINE_IL2CPP_ARG_TYPE",
+                    false => "DEFINE_IL2CPP_CLASS",
                 }
         };
 

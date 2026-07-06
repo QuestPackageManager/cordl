@@ -1,4 +1,5 @@
 use crate::data::type_resolver::{ResolvedTypeData, TypeUsage};
+use crate::generate::cpp::config::STATIC_CONFIG;
 use crate::generate::cpp::cpp_type::CORDL_ACCESSOR_FIELD_PREFIX;
 
 use crate::generate::cs_members::CsField;
@@ -61,15 +62,15 @@ pub fn handle_static_fields(
         // ref type instance fields are specially named because the field getters are supposed to be used
         let f_cpp_name = f_cpp_decl.cpp_name.clone();
 
-        let klass_resolver = cpp_type.classof_cpp_name();
+        let cpp_class_name = cpp_type.cpp_name_components.combine_all();
 
         let getter_call = format!(
-            "return {CORDL_METHOD_HELPER_NAMESPACE}::getStaticField<{field_ty_cpp_name}, \"{f_name}\", {klass_resolver}>();"
+            "return {CORDL_METHOD_HELPER_NAMESPACE}::getStaticField<{field_ty_cpp_name}, \"{f_name}\", {cpp_class_name}>();"
         );
 
         let setter_var_name = "value";
         let setter_call = format!(
-            "{CORDL_METHOD_HELPER_NAMESPACE}::setStaticField<{field_ty_cpp_name}, \"{f_name}\", {klass_resolver}>(std::forward<{field_ty_cpp_name}>({setter_var_name}));"
+            "{CORDL_METHOD_HELPER_NAMESPACE}::setStaticField<{field_ty_cpp_name}, \"{f_name}\", {cpp_class_name}>(std::forward<{field_ty_cpp_name}>({setter_var_name}));"
         );
 
         // don't get a template that has no names
@@ -561,7 +562,8 @@ pub(crate) fn prop_methods_from_fieldinfo(
     let getter_call = format!("return {field_access};");
     let setter_var_name = "value";
     // if the declaring type is a value type, we should not use wbarrier
-    let setter_call = match !f_type.valuetype && declaring_is_ref {
+    let wbarrier_setter = !f_type.valuetype && declaring_is_ref && STATIC_CONFIG.use_wbarrier;
+    let setter_call = match wbarrier_setter {
         // setter for generic type
         true if field_template.as_ref().is_some_and(|s| !s.names.is_empty()) => {
             format!(
@@ -571,7 +573,7 @@ pub(crate) fn prop_methods_from_fieldinfo(
         // ref type field write on a ref type
         true => {
             format!(
-                "il2cpp_functions::gc_wbarrier_set_field(this, static_cast<void**>(static_cast<void*>(&{field_access})), cordl_internals::convert(std::forward<decltype({setter_var_name})>({setter_var_name})));"
+                "::i2c::functions::gc_wbarrier_set_field(this, static_cast<void**>(static_cast<void*>(&{field_access})), cordl_internals::convert(std::forward<decltype({setter_var_name})>({setter_var_name})));"
             )
         }
         false => {
@@ -631,7 +633,7 @@ pub(crate) fn prop_methods_from_fieldinfo(
         brief: None,
         body: None,      //TODO:
         is_const: false, // TODO: readonly fields?
-        is_constexpr: !f_type.is_static() || f_type.is_constant(),
+        is_constexpr: (!f_type.is_static() || f_type.is_constant()) && !wbarrier_setter,
         is_inline: true,
         is_virtual: false,
         is_implicit_operator: false,
@@ -895,6 +897,7 @@ pub fn make_cpp_field_decl(
             &field.field_ty,
             TypeUsage::Field,
             field_ty.valuetype
+                || field_ty.ty == Il2CppTypeEnum::Szarray
                 || field_ty.ty == Il2CppTypeEnum::Valuetype
                 || field_ty.ty == Il2CppTypeEnum::Enum,
         )

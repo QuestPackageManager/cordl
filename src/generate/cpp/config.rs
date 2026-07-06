@@ -2,20 +2,20 @@ use std::{path::PathBuf, sync::LazyLock};
 
 pub static STATIC_CONFIG: LazyLock<CppGenerationConfig> = LazyLock::new(|| CppGenerationConfig {
     header_path: PathBuf::from("./codegen/include"),
-    source_path: PathBuf::from("./codegen/src"),
     dst_internals_path: PathBuf::from("./codegen/include/cordl_internals"),
     dst_header_internals_file: PathBuf::from(
         "./codegen/include/cordl_internals/cordl_internals.hpp",
     ),
     use_anonymous_namespace: false,
+    use_wbarrier: false,
 });
 
 pub struct CppGenerationConfig {
-    pub source_path: PathBuf,
     pub header_path: PathBuf,
     pub dst_internals_path: PathBuf,
     pub dst_header_internals_file: PathBuf,
     pub use_anonymous_namespace: bool,
+    pub use_wbarrier: bool,
 }
 
 impl CppGenerationConfig {
