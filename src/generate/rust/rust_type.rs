@@ -12,7 +12,7 @@ use crate::{
         type_resolver::{ResolvedType, TypeUsage},
     },
     generate::{
-        cs_members::{CsConstructor, CsField, CsMethod, CsParam},
+        cs_members::{CSMethodFlags, CsConstructor, CsField, CsMethod, CsParam},
         cs_type::CsType,
         cs_type_tag::{self, CsTypeTag},
         metadata::CordlMetadata,
@@ -240,11 +240,19 @@ impl RustType {
         }
 
         if self.is_interface {
+            // Runtime-checked casts from a dynamically-typed object to this interface, backed
+            // by `is_assignable_from` rather than an unconditional transmute - unlike
+            // `make_interfaces`'s `AsRef`/`AsMut` (sound by construction, since the concrete
+            // type's declared interfaces are known at codegen time), the object passed here
+            // could be any instance, so soundness has to be checked at runtime instead.
             self.methods.push(
                 RustFunction {
-                    name: format_ident!("from_object_mut"),
+                    name: format_ident!("try_cast"),
                     body: Some(parse_quote! {
-                        unsafe{ (object_param as *mut Self) }
+                        match <Self as quest_hook::libil2cpp::Type>::class().is_assignable_from(object.class()) {
+                            true => Some(unsafe { &*(object as *const quest_hook::libil2cpp::Il2CppObject as *const Self) }),
+                            false => None,
+                        }
                     }),
                     generics: Default::default(),
                     is_mut: false,
@@ -253,10 +261,35 @@ impl RustType {
                     where_clause: None,
                     feature: None,
                     params: vec![RustParam {
-                        name: format_ident!("object_param"),
-                        param_type: parse_quote!(*mut quest_hook::libil2cpp::Il2CppObject),
+                        name: format_ident!("object"),
+                        param_type: parse_quote!(&quest_hook::libil2cpp::Il2CppObject),
                     }],
-                    return_type: Some(parse_quote!(*mut Self)),
+                    return_type: Some(parse_quote!(Option<&Self>)),
+                    visibility: Visibility::Public,
+                }
+                .into(),
+            );
+            self.methods.push(
+                RustFunction {
+                    name: format_ident!("try_cast_mut"),
+                    body: Some(parse_quote! {
+                        let __cordl_matches = <Self as quest_hook::libil2cpp::Type>::class().is_assignable_from(object.class());
+                        match __cordl_matches {
+                            true => Some(unsafe { &mut *(object as *mut quest_hook::libil2cpp::Il2CppObject as *mut Self) }),
+                            false => None,
+                        }
+                    }),
+                    generics: Default::default(),
+                    is_mut: false,
+                    is_ref: false,
+                    is_self: false,
+                    where_clause: None,
+                    feature: None,
+                    params: vec![RustParam {
+                        name: format_ident!("object"),
+                        param_type: parse_quote!(&mut quest_hook::libil2cpp::Il2CppObject),
+                    }],
+                    return_type: Some(parse_quote!(Option<&mut Self>)),
                     visibility: Visibility::Public,
                 }
                 .into(),
@@ -465,7 +498,6 @@ impl RustType {
         name_resolver: &RustNameResolver,
         config: &RustGenerationConfig,
     ) {
-        // TODO: Implement AsMut
         for i in interfaces {
             let self_ident = self.rs_name_components.to_type_path_token();
 
@@ -474,19 +506,25 @@ impl RustType {
             let interface = name_resolver.resolve_name(self, i, TypeUsage::TypeName, true, false);
             let interface_ident = interface.to_type_path_token();
 
-            let impl_data: Vec<syn::Stmt> = match self.is_reference_type {
-                true => parse_quote! {
-                    unsafe { std::mem::transmute(self) }
-                },
-                false => parse_quote! {
-                    // TODO: implement for value types
-                    todo!()
-                },
+            // Sound by construction: C# metadata already guarantees the concrete type declares
+            // this interface, so a plain reinterpret is safe here (contrast with the interface's
+            // own `try_cast`, which checks at runtime because it starts from an arbitrary
+            // object).
+
+            // Value types have no interface-typed representation of their own - C#
+            // only exposes one after boxing - so the impl target is `BoxedValue<Self>` instead
+            // of `Self` for them.
+            let target: syn::Type = match self.is_reference_type {
+                true => parse_quote!(#self_ident),
+                false => parse_quote!(quest_hook::libil2cpp::BoxedValue<#self_ident>),
+            };
+            let impl_data: Vec<syn::Stmt> = parse_quote! {
+                unsafe { std::mem::transmute(self) }
             };
             let as_ref = RustTraitImpl {
                 name: interface.combine_all(),
                 impl_data: parse_quote! {
-                    impl #generics AsRef<#interface_ident> for #self_ident {
+                    impl #generics AsRef<#interface_ident> for #target {
                         fn as_ref(&self) -> & #interface_ident {
                             #(#impl_data)*
                         }
@@ -496,7 +534,7 @@ impl RustType {
             let as_mut = RustTraitImpl {
                 name: interface.combine_all(),
                 impl_data: parse_quote! {
-                    impl #generics AsMut<#interface_ident> for #self_ident {
+                    impl #generics AsMut<#interface_ident> for #target {
                         fn as_mut(&mut self) -> &mut #interface_ident {
                             #(#impl_data)*
                         }
@@ -538,7 +576,7 @@ impl RustType {
             let body: Vec<syn::Stmt> = parse_quote! {
                 let __cordl_object: &mut Self = <Self as quest_hook::libil2cpp::Type>::class().instantiate();
 
-                quest_hook::libil2cpp::ObjectType::as_object_mut(__cordl_object).invoke_void(".ctor", (#(#param_names),*))?;
+                quest_hook::libil2cpp::RefType::as_object_mut(__cordl_object).invoke_void(".ctor", (#(#param_names),*))?;
 
                 Ok(__cordl_object.into())
             };
@@ -562,17 +600,7 @@ impl RustType {
                 .unwrap_or_default()
                 .into_iter()
                 .chain(generics.clone().into_iter())
-                .map(|mut g| {
-                    // TODO: Add these bounds on demand
-                    let bounds = vec![
-                        "quest_hook::libil2cpp::Type".to_string(),
-                        "quest_hook::libil2cpp::Argument".to_owned(),
-                        "quest_hook::libil2cpp::Returned".to_owned(),
-                    ];
-
-                    g.bounds.extend(bounds);
-                    g
-                })
+                .map(Self::with_arg_bounds)
                 .map(|g| -> syn::GenericParam { g.to_token_stream() })
                 .collect_vec();
 
@@ -727,7 +755,7 @@ impl RustType {
                     param_types,
                     param_names,
                     m_ret_ty_ident,
-                    None,
+                    &method_generics,
                 );
 
                 let combined_generics = self
@@ -737,17 +765,7 @@ impl RustType {
                     .unwrap_or_default()
                     .into_iter()
                     .chain(method_generics.clone().into_iter())
-                    .map(|mut g| {
-                        // TODO: Add these bounds on demand
-                        let bounds = vec![
-                            "quest_hook::libil2cpp::Type".to_string(),
-                            "quest_hook::libil2cpp::Argument".to_owned(),
-                            "quest_hook::libil2cpp::Returned".to_owned(),
-                        ];
-
-                        g.bounds.extend(bounds);
-                        g
-                    })
+                    .map(Self::with_arg_bounds)
                     .map(|g| -> syn::GenericParam { g.to_token_stream() })
                     .collect_vec();
 
@@ -775,6 +793,26 @@ impl RustType {
         }
     }
 
+    /// Builds the `G` (method-generics) type argument for `find_method`/`find_static_method`/
+    /// `MethodInfo::make_generic`: `()` for no generics, a bare type for one (matches
+    /// quest_hook's blanket `impl<T: Type> Generics for T`), or a real tuple for N (matches its
+    /// macro-generated tuple impls) - mirrors [`Self::get_generics_names_args`]'s tuple shape.
+    fn generics_tuple_type(generics: &[RustGeneric]) -> syn::Type {
+        let idents = generics.iter().map(|g| format_ident!("{}", g.name));
+        parse_quote!( (#(#idents),*) )
+    }
+
+    /// Bounds required on a generic type argument passed by value across the quest_hook FFI
+    /// boundary (as a method/constructor argument or return value).
+    fn with_arg_bounds(mut g: RustGeneric) -> RustGeneric {
+        g.bounds.extend([
+            "quest_hook::libil2cpp::Type".to_string(),
+            "quest_hook::libil2cpp::Argument".to_string(),
+            "quest_hook::libil2cpp::Returned".to_string(),
+        ]);
+        g
+    }
+
     fn make_method_body<'a>(
         &self,
         m: &CsMethod,
@@ -782,86 +820,111 @@ impl RustType {
         param_types: impl Iterator<Item = &'a syn::Type>,
         param_names: impl Iterator<Item = &'a syn::Ident>,
         m_ret_ty: syn::Type,
-        generic_args: Option<Vec<syn::GenericArgument>>,
+        method_generics: &[RustGeneric],
     ) -> Vec<syn::Stmt> {
         let param_types = param_types.collect_vec();
         let n = param_types.len();
 
         let method_name = format_ident!("cordl_method_info");
+        let g_ty = Self::generics_tuple_type(method_generics);
+        let is_generic = !method_generics.is_empty();
 
-        // Use OnceLock for thread safety
-        // TODO: Can we make this more optimal?
-        let define_method_info: Vec<syn::Stmt> = match m.instance {
-            // instance
-            true => parse_quote! {
-                static METHOD: std::sync::OnceLock<&'static quest_hook::libil2cpp::MethodInfo> = std::sync::OnceLock::new();
-                let #method_name: &'static quest_hook::libil2cpp::MethodInfo = METHOD.get_or_init(|| {
+        let instantiate_generic: Option<syn::Expr> = is_generic.then(|| {
+            parse_quote! {
+                __cordl_base_method
+                    .make_generic::<#g_ty>()
+                    .unwrap_or_else(|e| panic!("failed to instantiate generic method {}: {e:?}", #m_name))
+                    .unwrap_or_else(|| panic!("generic method instantiation returned no method for {}", #m_name))
+            }
+        });
+
+        // instance methods declared on an interface, or virtual/abstract (and not final),
+        // must be resolved against the vtable slot of the *actual* runtime class of `self`
+        // every call - the concrete override can differ per subclass, so (unlike the
+        // name+signature lookup below) this can never be cached in a `static`. Mirrors the
+        // C++ backend's `should_resolve_slot` (src/generate/cpp/cpp_type.rs).
+        let is_virtual = m.method_flags.contains(CSMethodFlags::VIRTUAL);
+        let is_abstract = m.method_flags.contains(CSMethodFlags::ABSTRACT);
+        let is_final = m.method_flags.contains(CSMethodFlags::FINAL);
+        let should_resolve_slot =
+            m.instance && (self.is_interface || ((is_virtual || is_abstract) && !is_final));
+
+        let get_method: Vec<syn::Stmt> = if should_resolve_slot {
+            let slot = m.method_data.slot.unwrap_or_else(|| {
+                panic!(
+                    "virtual/interface method {} on {} has no vtable slot",
+                    m_name,
+                    self.rs_name()
+                )
+            });
+
+            let resolved: syn::Expr = match &instantiate_generic {
+                Some(instantiate_generic) => instantiate_generic.clone(),
+                None => parse_quote!(__cordl_base_method),
+            };
+
+            parse_quote! {
+                let __cordl_self_class = quest_hook::libil2cpp::RefType::as_object(self).class();
+                let __cordl_declaring_class = <Self as quest_hook::libil2cpp::Type>::class();
+                let __cordl_base_method: &'static quest_hook::libil2cpp::MethodInfo = __cordl_self_class
+                    .find_method_by_vtable(__cordl_declaring_class, #slot)
+                    .unwrap_or_else(|| panic!("no vtable method found for slot {} of {}", #slot, #m_name));
+                let #method_name: &'static quest_hook::libil2cpp::MethodInfo = #resolved;
+            }
+        } else {
+            let find_call: syn::Expr = match m.instance {
+                true => parse_quote! {
                     <Self as quest_hook::libil2cpp::Type>::class()
-                    .find_method::<(#(#param_types),*), #m_ret_ty, #n>(#m_name)
-                    .unwrap_or_else(|e| {
-                        panic!(
-                            "no matching methods found for non-void {}.{}({}) Cause: {e:?}",
-                            <Self as quest_hook::libil2cpp::Type>::class(),
-                            #m_name,
-                            #n
-                        )
-                    })
-                });
-            },
-            // static
-            false => parse_quote! {
-                static METHOD: std::sync::OnceLock<&'static quest_hook::libil2cpp::MethodInfo> = std::sync::OnceLock::new();
-                let #method_name: &'static quest_hook::libil2cpp::MethodInfo = METHOD.get_or_init(|| {
+                        .find_method::<(#(#param_types),*), #g_ty, #m_ret_ty, #n>(#m_name)
+                        .unwrap_or_else(|e| {
+                            panic!(
+                                "no matching methods found for non-void {}.{}({}) Cause: {e:?}",
+                                <Self as quest_hook::libil2cpp::Type>::class(),
+                                #m_name,
+                                #n
+                            )
+                        })
+                },
+                false => parse_quote! {
                     <Self as quest_hook::libil2cpp::Type>::class()
-                    .find_static_method::<(#(#param_types),*), #m_ret_ty, #n>(#m_name)
-                    .unwrap_or_else(|e| {
-                        panic!(
-                            "no matching methods found for non-void {}.{}({}) Cause: {e:?}",
-                            <Self as quest_hook::libil2cpp::Type>::class(),
-                            #m_name,
-                            #n
-                        )
-                    })
+                        .find_static_method::<(#(#param_types),*), #g_ty, #m_ret_ty, #n>(#m_name)
+                        .unwrap_or_else(|e| {
+                            panic!(
+                                "no matching methods found for non-void {}.{}({}) Cause: {e:?}",
+                                <Self as quest_hook::libil2cpp::Type>::class(),
+                                #m_name,
+                                #n
+                            )
+                        })
+                },
+            };
+
+            let resolved: syn::Expr = match &instantiate_generic {
+                Some(instantiate_generic) => instantiate_generic.clone(),
+                None => parse_quote!(__cordl_base_method),
+            };
+
+            parse_quote! {
+                static METHOD: std::sync::OnceLock<&'static quest_hook::libil2cpp::MethodInfo> = std::sync::OnceLock::new();
+                let #method_name: &'static quest_hook::libil2cpp::MethodInfo = *METHOD.get_or_init(|| {
+                    let __cordl_base_method: &'static quest_hook::libil2cpp::MethodInfo = #find_call;
+                    #resolved
                 });
-            },
+            }
         };
 
-        // TODO: Generic method info
-        // for now we take the hit and use invoke_unchecked for generic methods
-        // which has lookup costs
-
-        let invoke_call: Vec<syn::Stmt> = match (m.instance, generic_args) {
-            // instance, not generic
-            (true, None) => parse_quote! {
-                #(#define_method_info);*
+        let invoke_call: Vec<syn::Stmt> = match m.instance {
+            true => parse_quote! {
+                #(#get_method)*
 
                 let __cordl_ret: #m_ret_ty = unsafe { #method_name.invoke_unchecked(self, ( #(#param_names),* ))? };
 
                 Ok(__cordl_ret.into())
             },
-            // instance, generic
-            (true, Some(args)) => parse_quote! {
-                #(#define_method_info);*
-
-                let __cordl_object: &mut quest_hook::libil2cpp::Il2CppObject = quest_hook::libil2cpp::ObjectType::as_object_mut(self);
-
-                let __cordl_ret: #m_ret_ty = __cordl_object.invoke(#m_name, ( #(#param_names),* ))?;
-
-                Ok(__cordl_ret.into())
-            },
-            // static not generic
-            (false, None) => parse_quote! {
-                #(#define_method_info);*
+            false => parse_quote! {
+                #(#get_method)*
 
                 let __cordl_ret: #m_ret_ty = unsafe { #method_name.invoke_unchecked((), ( #(#param_names),* ))? };
-
-                Ok(__cordl_ret.into())
-            },
-            // static generic
-            (false, Some(args)) => parse_quote! {
-                #(#define_method_info);*
-
-                let __cordl_ret: #m_ret_ty = <Self as quest_hook::libil2cpp::Type>::class().invoke_generic(#m_name, ( #(#param_names),* ), (#(#args),*))?;
 
                 Ok(__cordl_ret.into())
             },
@@ -1367,19 +1430,29 @@ impl RustType {
             }
         };
 
-        let impl_object_tokens: Option<syn::ItemImpl> = self.parent.as_ref().map(|_| -> syn::ItemImpl {
+        // `RefType` is blanket-implemented by quest_hook for anything implementing
+        // `AsRef<Il2CppObject> + AsMut<Il2CppObject>` (no longer Deref-based) - every reference
+        // type except Il2CppObject itself (which gets the identity impl from quest_hook) needs
+        // to provide those explicitly, delegating one hop through its parent field. The parent
+        // field's own `AsRef`/`AsMut<Il2CppObject>` impl (this same mechanism, recursively, or
+        // the identity impl if the parent field type *is* Il2CppObject) continues the chain, so
+        // this only ever needs to delegate one level up, regardless of hierarchy depth.
+        let impl_object_tokens: Option<TokenStream> = self.parent.as_ref().map(|_| {
             let parent_field_ident = format_ident!(r#"{}"#, PARENT_FIELD);
 
             // TODO: Figure out if we use def/impl feature here
-            parse_quote! {
+            quote! {
                 #def_feature
-                impl #generics quest_hook::libil2cpp::ObjectType for #path_ident {
-                    fn as_object(&self) -> &quest_hook::libil2cpp::Il2CppObject {
-                        quest_hook::libil2cpp::ObjectType::as_object(&self.#parent_field_ident)
+                impl #generics AsRef<quest_hook::libil2cpp::Il2CppObject> for #path_ident {
+                    fn as_ref(&self) -> &quest_hook::libil2cpp::Il2CppObject {
+                        AsRef::<quest_hook::libil2cpp::Il2CppObject>::as_ref(&self.#parent_field_ident)
                     }
+                }
 
-                    fn as_object_mut(&mut self) -> &mut quest_hook::libil2cpp::Il2CppObject {
-                        quest_hook::libil2cpp::ObjectType::as_object_mut(&mut self.#parent_field_ident)
+                #def_feature
+                impl #generics AsMut<quest_hook::libil2cpp::Il2CppObject> for #path_ident {
+                    fn as_mut(&mut self) -> &mut quest_hook::libil2cpp::Il2CppObject {
+                        AsMut::<quest_hook::libil2cpp::Il2CppObject>::as_mut(&mut self.#parent_field_ident)
                     }
                 }
             }
@@ -1602,6 +1675,9 @@ impl RustType {
                 fn matches(ty: &quest_hook::libil2cpp::Il2CppType) -> bool {
                     <Self as quest_hook::libil2cpp::Type> ::matches_value_argument(ty)
                 }
+                fn class() -> &'static quest_hook::libil2cpp::Il2CppClass {
+                    <Self as quest_hook::libil2cpp::Type>::class()
+                }
                 fn invokable(&mut self) ->  *mut ::std::ffi::c_void {
                     self as *mut Self as *mut ::std::ffi::c_void
                 }
@@ -1612,6 +1688,9 @@ impl RustType {
                 type Actual = Self;
                 fn matches(ty: &quest_hook::libil2cpp::Il2CppType) -> bool {
                     <Self as quest_hook::libil2cpp::Type> ::matches_value_parameter(ty)
+                }
+                fn class() -> &'static quest_hook::libil2cpp::Il2CppClass {
+                    <Self as quest_hook::libil2cpp::Type>::class()
                 }
                 fn from_actual(actual: <Self as quest_hook::libil2cpp::Parameter>::Actual) -> Self {
                     actual
