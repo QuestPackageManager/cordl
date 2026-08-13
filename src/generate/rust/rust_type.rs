@@ -571,15 +571,10 @@ impl RustType {
                 .map(|p| self.make_parameter(p, name_resolver, config))
                 .collect_vec();
 
-            let param_names = params.iter().map(|p| &p.name);
+            let param_names = params.iter().map(|p| &p.name).collect_vec();
+            let param_types = params.iter().map(|p| &p.param_type).collect_vec();
+            let n = params.len();
 
-            let body: Vec<syn::Stmt> = parse_quote! {
-                let __cordl_object: &mut Self = <Self as quest_hook::libil2cpp::Type>::class().instantiate();
-
-                quest_hook::libil2cpp::RefType::as_object_mut(__cordl_object).invoke_void(".ctor", (#(#param_names),*))?;
-
-                Ok(__cordl_object.into())
-            };
             let generics = c
                 .template
                 .as_ref()
@@ -592,6 +587,30 @@ impl RustType {
                         .collect_vec()
                 })
                 .unwrap_or_default();
+            let g_ty = Self::generics_tuple_type(&generics);
+
+            // Cache the `.ctor` lookup ourselves rather than going through
+            // `Il2CppObject::invoke_void`, which repeats an uncached `find_method` by name on
+            // every call - same reasoning as the OnceLock caching in `make_method_body`.
+            let body: Vec<syn::Stmt> = parse_quote! {
+                let __cordl_object: &mut Self = <Self as quest_hook::libil2cpp::Type>::class().instantiate();
+
+                static METHOD: std::sync::OnceLock<&'static quest_hook::libil2cpp::MethodInfo> = std::sync::OnceLock::new();
+                let __cordl_ctor: &'static quest_hook::libil2cpp::MethodInfo = *METHOD.get_or_init(|| {
+                    <Self as quest_hook::libil2cpp::Type>::class()
+                        .find_method::<(#(#param_types),*), #g_ty, (), #n>(".ctor")
+                        .unwrap_or_else(|e| {
+                            panic!(
+                                "no matching constructor found for {}(...) Cause: {e:?}",
+                                <Self as quest_hook::libil2cpp::Type>::class()
+                            )
+                        })
+                });
+
+                let _cordl_ctor_ret: () = unsafe { __cordl_ctor.invoke_unchecked(&mut *__cordl_object, (#(#param_names),*))? };
+
+                Ok(__cordl_object.into())
+            };
 
             let combined_generics = self
                 .rs_name_components
@@ -800,6 +819,38 @@ impl RustType {
     fn generics_tuple_type(generics: &[RustGeneric]) -> syn::Type {
         let idents = generics.iter().map(|g| format_ident!("{}", g.name));
         parse_quote!( (#(#idents),*) )
+    }
+
+    /// `Type::class()`'s default implementation (quest_hook's `typecheck/ty.rs`) does an
+    /// uncached `Il2CppClass::find(namespace, name)` on every call - a string-keyed lookup
+    /// that's on the hot path of every generated method/constructor call (each looks up
+    /// `Self::class()` at least once). Overriding it here with a `OnceLock` cache turns every
+    /// call after the first into a plain atomic load.
+    fn class_fn_override(
+        namespace: &str,
+        class_name: &str,
+        generic_names: Option<Vec<syn::GenericArgument>>,
+    ) -> syn::ImplItemFn {
+        let lookup: syn::Expr = match generic_names {
+            Some(names) => parse_quote! {
+                quest_hook::libil2cpp::Il2CppClass::find(#namespace, #class_name)
+                    .unwrap_or_else(|| panic!("Class {}.{} not found", #namespace, #class_name))
+                    .make_generic::<(#(#names),*)>()
+                    .unwrap_or_else(|e| panic!("failed to instantiate generic class {}.{}: {e:?}", #namespace, #class_name))
+                    .unwrap_or_else(|| panic!("generic class instantiation returned no class for {}.{}", #namespace, #class_name))
+            },
+            None => parse_quote! {
+                quest_hook::libil2cpp::Il2CppClass::find(#namespace, #class_name)
+                    .unwrap_or_else(|| panic!("Class {}.{} not found", #namespace, #class_name))
+            },
+        };
+
+        parse_quote! {
+            fn class() -> &'static quest_hook::libil2cpp::Il2CppClass {
+                static CLASS: ::std::sync::OnceLock<&'static quest_hook::libil2cpp::Il2CppClass> = ::std::sync::OnceLock::new();
+                CLASS.get_or_init(|| #lookup)
+            }
+        }
     }
 
     /// Bounds required on a generic type argument passed by value across the quest_hook FFI
@@ -1576,15 +1627,7 @@ impl RustType {
         let generics = self.get_generics(0);
         let generic_names = self.get_generics_names_args(0);
 
-        let class_fn_override: Option<syn::ImplItemFn> = generic_names.map(|names| {
-            parse_quote! {
-                fn class() ->  &'static quest_hook::libil2cpp::Il2CppClass {
-                    static CLASS: ::std::sync::OnceLock< &'static quest_hook::libil2cpp::Il2CppClass>  =  ::std::sync::OnceLock::new();
-                    CLASS.get_or_init(||{
-                        quest_hook::libil2cpp::Il2CppClass::find(#namespace, #class_name).unwrap().make_generic:: <(#(#names),*)> ().unwrap().unwrap()
-                    })
-                }
-        }});
+        let class_fn_override = Self::class_fn_override(namespace, &class_name, generic_names);
 
         let feature = self.self_def_feature.as_ref().map(|f| f.to_token_stream());
 
@@ -1631,15 +1674,8 @@ impl RustType {
 
         let self_item = self.rs_name_components.to_type_path_token();
 
-        let class_fn_override: Option<syn::ImplItemFn> = generic_names.clone().map(|names| {
-            parse_quote! {
-                fn class() ->  &'static quest_hook::libil2cpp::Il2CppClass {
-                    static CLASS: ::std::sync::OnceLock< &'static quest_hook::libil2cpp::Il2CppClass>  =  ::std::sync::OnceLock::new();
-                    CLASS.get_or_init(||{
-                        quest_hook::libil2cpp::Il2CppClass::find(#namespace, #class_name).unwrap().make_generic:: <(#(#names),*)> ().unwrap().unwrap()
-                    })
-                }
-        }});
+        let class_fn_override =
+            Self::class_fn_override(namespace, &class_name, generic_names.clone());
 
         let feature = self.self_def_feature.as_ref().map(|f| f.to_token_stream());
 
