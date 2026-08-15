@@ -17,7 +17,7 @@ use crate::{
         cs_type_tag::{self, CsTypeTag},
         metadata::CordlMetadata,
         offsets::SizeInfo,
-        type_extensions::{TypeDefinitionExtensions, TypeDefinitionIndexExtensions},
+        type_extensions::{TypeDefinitionExtensions, TypeDefinitionIndexExtensions, TypeIndexExt},
         writer::Writer,
     },
 };
@@ -150,7 +150,7 @@ impl RustType {
             g.args
                 .iter()
                 .map(|arg| RustGeneric {
-                    name: arg.name.to_string(),
+                    name: config.name_rs(&arg.name),
                     bounds: vec!["quest_hook::libil2cpp::Type".to_string()],
                 })
                 .collect_vec()
@@ -581,7 +581,7 @@ impl RustType {
                 .map(|t| {
                     t.just_names()
                         .map(|g| RustGeneric {
-                            name: g.clone(),
+                            name: config.name_rs(g),
                             bounds: vec!["quest_hook::libil2cpp::Type".to_string()],
                         })
                         .collect_vec()
@@ -760,7 +760,7 @@ impl RustType {
                         t.just_names()
                             .map(|g| -> RustGeneric {
                                 RustGeneric {
-                                    name: g.clone(),
+                                    name: config.name_rs(g),
                                     bounds: vec![],
                                 }
                             })
@@ -1057,9 +1057,9 @@ impl RustType {
             .get_type_definition(metadata.metadata);
         let mut declaring_name = declaring_td.get_name_components(metadata.metadata).name;
 
-        while declaring_td.declaring_type_index != u32::MAX {
-            let declaring_ty =
-                &metadata.metadata_registration.types[declaring_td.declaring_type_index as usize];
+        while declaring_td.declaring_type_index.idx_is_valid() {
+            let declaring_ty = &metadata.metadata_registration.types
+                [declaring_td.declaring_type_index.idx() as usize];
 
             let declaring_tag =
                 cs_type_tag::CsTypeTag::from_type_data(declaring_ty.data, metadata.metadata);

@@ -1,5 +1,7 @@
 use std::{path::PathBuf, sync::LazyLock};
 
+use itertools::Itertools;
+
 pub static STATIC_CONFIG: LazyLock<RustGenerationConfig> = LazyLock::new(|| RustGenerationConfig {
     source_path: PathBuf::from("./codegen-rs/src"),
     cargo_config: PathBuf::from("./codegen-rs/Cargo.toml"),
@@ -10,12 +12,39 @@ pub struct RustGenerationConfig {
     pub cargo_config: PathBuf,
 }
 
+/// Sanitizes an arbitrary Il2Cpp metadata name (type name, generic parameter
+/// name, field name, ...) into something usable as a Rust identifier.
+///
+/// Il2Cpp metadata names come from the target game/assembly and may be
+/// arbitrarily obfuscated (e.g. renamed to raw control bytes by a name
+/// obfuscator), so every character outside `[A-Za-z0-9_]` is replaced rather
+/// than relying on a fixed blocklist of "expected" punctuation.
+pub fn sanitize_rs_ident(string: &str) -> String {
+    let mut s: String = string
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() || c == '_' { c } else { '_' })
+        .collect();
+
+    if s.chars().next().is_some_and(|c| c.is_numeric()) {
+        s = format!("_cordl_{s}");
+    }
+
+    // A name that's just underscores (e.g. a single obfuscated control byte
+    // replaced above) parses as the `_` wildcard token in most syn grammar
+    // positions rather than a plain identifier - not usable as a generic
+    // parameter/type name.
+    if s.chars().all(|c| c == '_') {
+        s = format!("_cordl_{s}");
+    }
+    s
+}
+
 impl RustGenerationConfig {
     pub fn namespace_rs(&self, string: &str) -> String {
         let final_ns = if string.is_empty() {
             "GlobalNamespace".to_owned()
         } else {
-            string.replace(['<', '>', '`', '/'], "_").replace('.', "::")
+            string.split('.').map(sanitize_rs_ident).join("::")
         };
 
         format!("crate::{final_ns}")
@@ -97,19 +126,7 @@ impl RustGenerationConfig {
     }
     /// for converting C++ names into just a single C++ word
     pub fn sanitize_to_rs_name(&self, string: &str) -> String {
-        // Coincidentally the same as path_name
-        let mut s = string.replace(
-            [
-                '<', '`', '>', '/', '.', ':', '|', ',', '(', ')', '*', '=', '$', '[', ']', '-',
-                ' ', '=', '<', '`', '>', '/', '.', '|', ',', '(', ')', '[', ']', '-', '&',
-            ],
-            "_",
-        );
-
-        if s.chars().next().is_some_and(|c| c.is_numeric()) {
-            s = format!("_cordl_{s}");
-        }
-        s
+        sanitize_rs_ident(string)
     }
     pub fn namespace_path(&self, string: &str) -> String {
         string.replace(['<', '>', '`', '/'], "_").replace('.', "/")
