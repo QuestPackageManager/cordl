@@ -434,7 +434,7 @@ impl TypeContextCollection {
         let type_tag = CsType::get_tag_tdi(type_data);
         assert!(
             !metadata.child_to_parent_map.contains_key(&type_tag),
-            "Cannot create context for nested type",
+            "Cannot create context for nested type as it is already a child of another context! {type_tag:?}",
         );
         let context_root_tag = self.get_context_root_tag(type_tag.into());
 

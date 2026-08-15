@@ -482,12 +482,20 @@ impl TypeDefinitionExtensions for Il2CppTypeDefinition {
             .then_some(self.element_type_index)
     }
 
+    // il2cpp_v39 dropped the dedicated `element_type_index` field and
+    // repurposed `parent_index` to hold the enum's backing/underlying
+    // primitive type instead of a real class parent (verified empirically:
+    // e.g. two different `uint`-backed Win32 interop enums both point
+    // `parent_index` at the same `TypeIndex`, which resolves to a `U4`
+    // `Il2CppType`, not `System.Enum`). See also the special-casing this
+    // requires in `CsType::make_parents`, which must NOT treat an enum's
+    // `parent_index` as a real class parent under v39.
     #[cfg(feature = "il2cpp_v39")]
     fn enum_backing_type_index(
         &self,
-        metadata: &Metadata,
+        _metadata: &Metadata,
     ) -> Option<brocolib::global_metadata::TypeIndex> {
-        self.fields(metadata).first().map(|f| f.type_index)
+        self.parent_index.idx_is_valid().then_some(self.parent_index)
     }
 }
 

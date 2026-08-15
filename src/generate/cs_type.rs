@@ -572,6 +572,17 @@ impl CsType {
             return;
         }
 
+        // il2cpp_v39 dropped `element_type_index` and repurposed `parent_index`
+        // on enum types to hold the backing primitive type instead of a real
+        // class parent (see `TypeDefinitionExtensions::enum_backing_type_index`).
+        // There's no real parent to resolve here, so skip straight past it -
+        // `enum_backing_type` (set in `fill_from_il2cpp`) already captures the
+        // backing type for codegen.
+        #[cfg(feature = "il2cpp_v39")]
+        if t.is_enum_type() {
+            return;
+        }
+
         let parent_type = metadata
             .metadata_registration
             .types
