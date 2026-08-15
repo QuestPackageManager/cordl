@@ -5,7 +5,8 @@ use crate::{
     data::type_resolver::{ResolvedType, ResolvedTypeData, TypeUsage},
     generate::{
         cs_type_tag::CsTypeTag, metadata::CordlMetadata, offsets,
-        rust::rust_type::RustTypeRequirement, type_extensions::TypeDefinitionExtensions,
+        rust::rust_type::RustTypeRequirement,
+        type_extensions::{TypeDefinitionExtensions, TypeIndexExt},
     },
 };
 
@@ -301,13 +302,15 @@ impl<'b> RustNameResolver<'_, 'b> {
             .type_definitions[tag.get_tdi()];
 
         if td.is_enum_type() {
-            let ty_idx = td.element_type_index;
+            let ty_idx = td
+                .enum_backing_type_index(self.cordl_metadata.metadata)
+                .unwrap();
             let ty = &self
                 .cordl_metadata
                 .metadata
                 .runtime_metadata
                 .metadata_registration
-                .types[ty_idx as usize];
+                .types[ty_idx.idx() as usize];
 
             return RustNameComponents {
                 name: Self::primitive_to_rust_ty(&ty.ty).into(),
