@@ -252,7 +252,7 @@ dependencies = [
 [[package]]
 name = "brocolib"
 version = "0.1.0"
-source = "git+https://github.com/Fernthedev/brocolib.git?branch=il2cpp_v39#c2189893ca1c7b1708d45473af0f9453955c5789"
+source = "git+https://github.com/Fernthedev/brocolib.git?branch=il2cpp_v39#618b38b1fd6d697474c93079c74198eae9475c74"
 dependencies = [
  "bad64 0.12.0",
  "binde",
@@ -267,7 +267,7 @@ dependencies = [
 [[package]]
 name = "brocolib-macros"
 version = "0.1.0"
-source = "git+https://github.com/Fernthedev/brocolib.git?branch=il2cpp_v39#c2189893ca1c7b1708d45473af0f9453955c5789"
+source = "git+https://github.com/Fernthedev/brocolib.git?branch=il2cpp_v39#618b38b1fd6d697474c93079c74198eae9475c74"
 dependencies = [
  "quote",
  "syn 2.0.119",

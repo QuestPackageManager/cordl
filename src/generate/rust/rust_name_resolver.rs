@@ -90,7 +90,9 @@ impl<'b> RustNameResolver<'_, 'b> {
                 let generic_param =
                     &metadata.metadata.global_metadata.generic_parameters[*gen_param_idx];
 
-                generic_param.name(metadata.metadata).to_string().into()
+                self.config
+                    .name_rs(generic_param.name(metadata.metadata))
+                    .into()
             }
             ResolvedTypeData::GenericMethodArg(_method_index, gen_param_idx, _method_arg) => {
                 let generic_param =
@@ -101,7 +103,9 @@ impl<'b> RustNameResolver<'_, 'b> {
                 //     .get(&method_index)
                 //     .and_then(|v| v.get(method_arg as usize));
 
-                generic_param.name(metadata.metadata).to_string().into()
+                self.config
+                    .name_rs(generic_param.name(metadata.metadata))
+                    .into()
             }
             ResolvedTypeData::Ptr(resolved_type) => {
                 let generic_formatted = self

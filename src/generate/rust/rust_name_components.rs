@@ -5,7 +5,7 @@ use syn::parse_quote;
 
 use crate::data::name_components::NameComponents;
 
-use super::rust_members::RustGeneric;
+use super::{config::STATIC_CONFIG, rust_members::RustGeneric};
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Default, Hash, Clone)]
 pub struct RustNameComponents {
@@ -261,12 +261,12 @@ impl NameComponents {
 impl From<NameComponents> for RustNameComponents {
     fn from(value: NameComponents) -> Self {
         Self {
-            name: value.name,
+            name: STATIC_CONFIG.name_rs(&value.name),
             namespace: value.namespace,
             generics: value.generics.map(|g| {
                 g.into_iter()
                     .map(|g| RustGeneric {
-                        name: g,
+                        name: STATIC_CONFIG.name_rs(&g),
                         ..Default::default()
                     })
                     .collect_vec()

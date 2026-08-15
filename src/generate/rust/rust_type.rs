@@ -150,7 +150,7 @@ impl RustType {
             g.args
                 .iter()
                 .map(|arg| RustGeneric {
-                    name: arg.name.to_string(),
+                    name: config.name_rs(&arg.name),
                     bounds: vec!["quest_hook::libil2cpp::Type".to_string()],
                 })
                 .collect_vec()
@@ -581,7 +581,7 @@ impl RustType {
                 .map(|t| {
                     t.just_names()
                         .map(|g| RustGeneric {
-                            name: g.clone(),
+                            name: config.name_rs(g),
                             bounds: vec!["quest_hook::libil2cpp::Type".to_string()],
                         })
                         .collect_vec()
@@ -760,7 +760,7 @@ impl RustType {
                         t.just_names()
                             .map(|g| -> RustGeneric {
                                 RustGeneric {
-                                    name: g.clone(),
+                                    name: config.name_rs(g),
                                     bounds: vec![],
                                 }
                             })
