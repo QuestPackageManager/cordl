@@ -1727,7 +1727,7 @@ impl fmt::Display for CsValue {
                 } else if fl.is_nan() {
                     write!(f, "NAN")
                 } else {
-                    write!(f, "static_cast<double_t>({:.1})", fl)
+                    write!(f, "static_cast<double_t>({:?})", fl)
                 }
             }
             CsValue::Null => write!(f, "{{}}"),
