@@ -45,7 +45,7 @@ pub struct JsonType {
     pub tag: JsonTypeTag,
     pub parent: Option<JsonResolvedTypeData>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub template: Option<JsonTemplate>,
+    pub generic_container: Option<JsonGenericContainer>,
 
     /// Generic instatiation types if this is a generic instance type
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -94,7 +94,7 @@ pub struct JsonGenericArgument {
     pub name: String,
 }
 
-type JsonTemplate = Vec<JsonGenericArgument>;
+type JsonGenericContainer = Vec<JsonGenericArgument>;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JsonMethod {
@@ -105,7 +105,7 @@ pub struct JsonMethod {
     pub instance: bool,
     pub method_info: JsonMethodInfo,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub template: Option<JsonTemplate>,
+    pub generic_container: Option<JsonGenericContainer>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub generic_instatiation: Option<Vec<JsonResolvedTypeData>>,
 
@@ -261,8 +261,8 @@ fn make_param(param: &CsParam, name_resolver: &JsonNameResolver) -> JsonParam {
     }
 }
 
-fn make_template(template: &CsGenericContainer) -> JsonTemplate {
-    template
+fn make_generic(generic_container: &CsGenericContainer) -> JsonGenericContainer {
+    generic_container
         .args
         .iter()
         .map(|arg| JsonGenericArgument {
@@ -308,7 +308,7 @@ fn make_method(method: &CsMethod, name_resolver: &JsonNameResolver) -> JsonMetho
         ret: ret_ty_name,
         ret_ty_tag: ret_ty,
         method_info: json_method_info,
-        template: method.template.as_ref().map(make_template),
+        generic_container: method.generic_container.as_ref().map(make_generic),
         generic_instatiation,
         attributes: make_attributes(&method.attributes, name_resolver.cordl_metadata),
     }
@@ -375,7 +375,7 @@ pub fn make_type(
         properties,
         methods,
         children,
-        template: td.generic_container.as_ref().map(make_template),
+        generic_container: td.generic_container.as_ref().map(make_generic),
         packing,
         size,
         tag: td.self_tag.into(),

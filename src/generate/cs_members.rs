@@ -264,7 +264,7 @@ pub struct CsMethod {
     pub return_type: ResolvedType,
     pub parameters: Vec<CsParam>,
     pub instance: bool,
-    pub template: Option<CsGenericContainer>,
+    pub generic_container: Option<CsGenericContainer>,
     pub brief: Option<String>,
 
     pub declaring_type: CsTypeTag,
@@ -282,7 +282,7 @@ pub struct CsMethod {
 pub struct CsConstructor {
     pub name: String,
     pub parameters: Vec<CsParam>,
-    pub template: Option<CsGenericContainer>,
+    pub generic_container: Option<CsGenericContainer>,
     pub attributes: Vec<CsAttribute>,
 }
 
@@ -290,6 +290,6 @@ impl PartialEq for CsConstructor {
     fn eq(&self, other: &Self) -> bool {
         self.name == other.name
             && self.parameters == other.parameters
-            && self.template == other.template
+            && self.generic_container == other.generic_container
     }
 }

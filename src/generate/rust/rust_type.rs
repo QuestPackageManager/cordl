@@ -576,7 +576,7 @@ impl RustType {
             let n = params.len();
 
             let generics = c
-                .template
+                .generic_container
                 .as_ref()
                 .map(|t| {
                     t.just_names()
@@ -754,7 +754,7 @@ impl RustType {
                 let param_types = params.iter().map(|p| &p.param_type);
 
                 let method_generics = m
-                    .template
+                    .generic_container
                     .as_ref()
                     .map(|t| {
                         t.just_names()

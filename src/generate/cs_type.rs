@@ -682,8 +682,7 @@ impl CsType {
             // Need to include this type
             let prop_ty = type_resolver.resolve_type(self, p_type_index, TypeUsage::Property, true);
             let attributes = cs_attributes::decode_custom_attributes(metadata, tdi, prop.token);
-            let brief_comment =
-                cs_attributes::format_attributes(&attributes, metadata);
+            let brief_comment = cs_attributes::format_attributes(&attributes, metadata);
 
             self.properties.push(CsProperty {
                 name: p_name.to_owned(),
@@ -833,7 +832,7 @@ impl CsType {
             declaring_type: method.declaring_type.into(),
             parameters: m_params_no_def.clone(),
             instance: !method.is_static_method(),
-            template: template.clone(),
+            generic_container: template.clone(),
             method_data,
             generic_instatiation: generic_inst,
             attributes: method_attributes,
@@ -845,7 +844,7 @@ impl CsType {
             let constructor = CsConstructor {
                 name: m_name.to_string(),
                 parameters: method_decl.parameters.clone(),
-                template: method_decl.template.clone(),
+                generic_container: method_decl.generic_container.clone(),
                 attributes: method_decl.attributes.clone(),
             };
 
@@ -932,7 +931,7 @@ impl CsType {
 
     /// Unbox a nullable value type to its underlying type if it is a System.Nullable`1
     /// e.g System.Nullable`1<System.Int32> -> System.Int32
-    /// 
+    ///
     /// Based on il2cpp's implementation of `il2cpp::vm::Type::GetUnderlyingType` in `vm/Type.cpp`
     fn unbox_nullable_valuetype<'a>(
         metadata: &'a CordlMetadata,

@@ -659,7 +659,7 @@ impl CppType {
             let m_params_with_def = self.make_params(ctor.parameters, name_resolver, config);
 
             let template: Option<CppTemplate> = ctor
-                .template
+                .generic_container
                 .as_ref()
                 .map(|t| CppTemplate::make_constrained(t, self, name_resolver));
             self.create_ref_constructor(&m_params_with_def, template.as_ref(), brief);
@@ -874,7 +874,7 @@ impl CppType {
             // if generic method instantiation, we don't add template params, they are only for the decl
             Some(_) => Some(CppTemplate::default()),
             None => method
-                .template
+                .generic_container
                 .as_ref()
                 .map(|t| CppTemplate::make_constrained(t, self, name_resolver)),
         };
@@ -1755,10 +1755,7 @@ impl fmt::Display for CsValue {
             CsValue::Array(items) => write!(
                 f,
                 "{{ {} }}",
-                items
-                    .iter()
-                    .map(ToString::to_string)
-                    .join(", ")
+                items.iter().map(ToString::to_string).join(", ")
             ),
             CsValue::Type(_) | CsValue::Enum(_, _) => {
                 // Rendering these compilably needs the resolved C++ name of a CsTypeTag, which
