@@ -236,10 +236,13 @@ impl CppContext {
         let fundamental_include_path = diff_paths(&self.fundamental_path, base_path)
             .context("Failed to get fundamental include path")?;
 
-        let fundamental_include_pragma = format!(
-            "// IWYU pragma private; include \"{}\"",
-            fundamental_include_path.display()
-        );
+        let fundamental_include_path_str = if cfg!(windows) {
+            fundamental_include_path.to_string_lossy().replace('\\', "/")
+        } else {
+            fundamental_include_path.to_string_lossy().to_string()
+        };
+        let fundamental_include_pragma =
+            format!("// IWYU pragma private; include \"{fundamental_include_path_str}\"");
         writeln!(typedef_writer, "{fundamental_include_pragma}")?;
         writeln!(typeimpl_writer, "{fundamental_include_pragma}")?;
         writeln!(fundamental_writer, "// IWYU pragma: begin_exports")?;
