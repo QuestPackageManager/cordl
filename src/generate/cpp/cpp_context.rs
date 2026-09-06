@@ -138,6 +138,15 @@ impl CppContext {
             let mut cpp_ty = CppType::make_cpp_type(*tag, ty, config);
             cpp_ty.nested_fixup(context_tag, ty, metadata, config);
 
+            // one prefix_comments entry per attribute - each entry becomes its own `// ...` line,
+            // so a single joined multi-line string here would print raw unprefixed continuation
+            // lines instead
+            cpp_ty.prefix_comments.extend(
+                ty.attributes
+                    .iter()
+                    .map(|attr| attr.to_comment_string(metadata)),
+            );
+
             if metadata.blacklisted_types.contains(&tdi) {
                 let result = match t.is_value_type() {
                     true => format!(

@@ -273,6 +273,62 @@ pub fn handle_static_fields(
     }
 }
 
+/// Renders a [`CsValue`] as a Rust literal expression, for use as a const field's initializer.
+fn cs_value_to_rust_expr(value: &CsValue) -> syn::Expr {
+    match value {
+        CsValue::String(s) => {
+            let new_s = s.replace("\\\\", "\\");
+
+            parse_quote! { #new_s }
+        }
+        CsValue::Char(c) => syn::parse_str(format!("'{}'", c).as_str()).unwrap(),
+        CsValue::Bool(b) => parse_quote! { #b },
+        CsValue::U8(u) => parse_quote! { #u },
+        CsValue::U16(u) => parse_quote! { #u },
+        CsValue::U32(u) => parse_quote! { #u },
+        CsValue::U64(u) => parse_quote! { #u },
+        CsValue::I8(i) => parse_quote! { #i },
+        CsValue::I16(i) => parse_quote! { #i },
+        CsValue::I32(i) => parse_quote! { #i },
+        CsValue::I64(i) => parse_quote! { #i },
+        CsValue::F32(f) => match f {
+            f if f.is_finite() => parse_quote! { #f },
+            f if f.is_infinite() => {
+                if f.is_sign_positive() {
+                    parse_quote! { std::f32::INFINITY }
+                } else {
+                    parse_quote! { std::f32::NEG_INFINITY }
+                }
+            }
+            f if f.is_nan() => parse_quote! { std::f64::NAN },
+            _ => panic!("Unexpected f32 value: {}", f),
+        },
+        CsValue::F64(f) => match f {
+            f if f.is_finite() => parse_quote! { #f },
+            f if f.is_infinite() => {
+                if f.is_sign_positive() {
+                    parse_quote! { std::f64::INFINITY }
+                } else {
+                    parse_quote! { std::f64::NEG_INFINITY }
+                }
+            }
+            f if f.is_nan() => parse_quote! { std::f64::NAN },
+            _ => panic!("Unexpected f64 value: {}", f),
+        },
+        CsValue::Null => parse_quote! { Default::default() },
+        CsValue::Array(items) => {
+            let elements = items.iter().map(cs_value_to_rust_expr);
+            parse_quote! { [#(#elements),*] }
+        }
+        // CsType::default_value_blob (the only source of field/parameter default values,
+        // which is what this renders) never produces these - they only come from decoded
+        // custom attribute arguments, which aren't rendered as Rust code at all right now.
+        CsValue::Type(_) | CsValue::Enum(_, _) => {
+            unreachable!("{value:?} is not a valid field/parameter default value")
+        }
+    }
+}
+
 pub(crate) fn handle_const_fields(
     cpp_type: &mut RustType,
     fields: &[CsField],
@@ -309,48 +365,7 @@ pub(crate) fn handle_const_fields(
 
             let def_value = def_value.expect("Constant with no default value?");
 
-            let rs_def_value: syn::Expr = match def_value {
-                CsValue::String(s) => {
-                    let new_s = s.replace("\\\\", "\\");
-
-                    parse_quote! { #new_s }
-                }
-                CsValue::Char(c) => syn::parse_str(format!("'{}'", c).as_str()).unwrap(),
-                CsValue::Bool(b) => parse_quote! { #b },
-                CsValue::U8(u) => parse_quote! { #u },
-                CsValue::U16(u) => parse_quote! { #u },
-                CsValue::U32(u) => parse_quote! { #u },
-                CsValue::U64(u) => parse_quote! { #u },
-                CsValue::I8(i) => parse_quote! { #i },
-                CsValue::I16(i) => parse_quote! { #i },
-                CsValue::I32(i) => parse_quote! { #i },
-                CsValue::I64(i) => parse_quote! { #i },
-                CsValue::F32(f) => match f {
-                    f if f.is_finite() => parse_quote! { #f },
-                    f if f.is_infinite() => {
-                        if f.is_sign_positive() {
-                            parse_quote! { std::f32::INFINITY }
-                        } else {
-                            parse_quote! { std::f32::NEG_INFINITY }
-                        }
-                    }
-                    f if f.is_nan() => parse_quote! { std::f64::NAN },
-                    _ => panic!("Unexpected f32 value: {}", f),
-                },
-                CsValue::F64(f) => match f {
-                    f if f.is_finite() => parse_quote! { #f },
-                    f if f.is_infinite() => {
-                        if f.is_sign_positive() {
-                            parse_quote! { std::f64::INFINITY }
-                        } else {
-                            parse_quote! { std::f64::NEG_INFINITY }
-                        }
-                    }
-                    f if f.is_nan() => parse_quote! { std::f64::NAN },
-                    _ => panic!("Unexpected f64 value: {}", f),
-                },
-                CsValue::Null => parse_quote! { Default::default() },
-            };
+            let rs_def_value: syn::Expr = cs_value_to_rust_expr(def_value);
 
             let cpp_field_template = ConstRustField {
                 name: f_name,

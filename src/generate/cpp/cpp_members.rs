@@ -429,6 +429,9 @@ pub struct CppParam {
     // &&
     pub modifiers: String,
     pub def_value: Option<String>,
+    /// e.g. `[Optional]` - rendered as a leading `/* ... */` comment since a parameter has no
+    /// room for a line comment of its own within a signature.
+    pub comment: Option<String>,
 }
 
 // TODO: Generics
@@ -806,16 +809,27 @@ impl CppForwardDeclare {
 }
 
 impl CppParam {
+    fn attribute_comment_prefix(p: &CppParam) -> String {
+        match &p.comment {
+            Some(comment) => format!("/* {comment} */ "),
+            None => String::new(),
+        }
+    }
+
     pub fn params_as_args(params: &[CppParam]) -> impl Iterator<Item = String> + '_ {
-        params.iter().map(|p| match &p.def_value {
-            Some(val) => format!("{}{} {} = {val}", p.ty, p.modifiers, p.name),
-            None => format!("{} {} {}", p.ty, p.modifiers, p.name),
+        params.iter().map(|p| {
+            let prefix = Self::attribute_comment_prefix(p);
+            match &p.def_value {
+                Some(val) => format!("{prefix}{}{} {} = {val}", p.ty, p.modifiers, p.name),
+                None => format!("{prefix}{}{} {}", p.ty, p.modifiers, p.name),
+            }
         })
     }
     pub fn params_as_args_no_default(params: &[CppParam]) -> impl Iterator<Item = String> + '_ {
-        params
-            .iter()
-            .map(|p| format!("{} {} {}", p.ty, p.modifiers, p.name))
+        params.iter().map(|p| {
+            let prefix = Self::attribute_comment_prefix(p);
+            format!("{prefix}{}{} {}", p.ty, p.modifiers, p.name)
+        })
     }
     pub fn params_names(params: &[CppParam]) -> impl Iterator<Item = &String> {
         params.iter().map(|p| &p.name)

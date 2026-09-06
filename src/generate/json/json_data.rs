@@ -265,3 +265,59 @@ impl From<TypeDefinitionIndex> for JsonTypeTag {
         JsonTypeTag::TypeDefinition(value.index())
     }
 }
+
+/// A decoded C# custom attribute, e.g. `[Obsolete("reason")]`
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct JsonAttribute {
+    pub attribute_type: JsonTypeTag,
+    /// Resolved full name of the attribute class, e.g. `System.ObsoleteAttribute` - provided
+    /// since the attribute class may belong to an assembly that isn't part of this JSON output,
+    /// so `attribute_type` alone may not be resolvable by consumers.
+    pub attribute_type_name: String,
+    pub arguments: Vec<JsonValue>,
+    pub named_arguments: Vec<JsonNamedArgument>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct JsonNamedArgument {
+    pub name: String,
+    pub value: JsonValue,
+}
+
+/// Mirrors [`CsValue`](crate::generate::cs_members::CsValue) - the value of a custom attribute
+/// argument, or a field/parameter default value.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub enum JsonValue {
+    String(String),
+    Char(String),
+    Bool(bool),
+
+    U8(u8),
+    U16(u16),
+    U32(u32),
+    U64(u64),
+
+    I8(i8),
+    I16(i16),
+    I32(i32),
+    I64(i64),
+
+    F32(f32),
+    F64(f64),
+
+    /// `typeof(...)`
+    Type {
+        tag: JsonTypeTag,
+        name: String,
+    },
+    /// `new[] { 1, 2, 3 }`
+    Array(Vec<JsonValue>),
+    /// `(MyEnum)5`
+    Enum {
+        tag: JsonTypeTag,
+        name: String,
+        value: Box<JsonValue>,
+    },
+
+    Null,
+}

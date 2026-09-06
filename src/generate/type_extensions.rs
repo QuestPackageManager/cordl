@@ -226,6 +226,12 @@ pub trait TypeDefinitionExtensions {
     // fn full_name_nested(&self, metadata: &Metadata, with_generics: bool) -> String;
 
     fn is_reference_type(&self, metadata: &Metadata) -> bool;
+
+    /// An enum's backing integer type - `Il2CppTypeDefinition::elementTypeIndex`
+    /// (`GlobalMetadataFileInternals.h:74`), the metadata counterpart of what
+    /// `Class::GetEnumBaseType` (`vm/Class.cpp:270`) reads off the runtime `Il2CppClass`.
+    /// `None` if this isn't an enum, or it has no backing type on record.
+    fn enum_backing_type<'a>(&self, metadata: &'a Metadata) -> Option<&'a Il2CppType>;
 }
 
 impl TypeDefinitionExtensions for Il2CppTypeDefinition {
@@ -472,6 +478,18 @@ impl TypeDefinitionExtensions for Il2CppTypeDefinition {
             &metadata.runtime_metadata.metadata_registration.types[self.byval_type_index as usize];
 
         (!self.is_value_type() && !self.is_enum_type()) || ty.ty == Il2CppTypeEnum::Class
+    }
+
+    fn enum_backing_type<'a>(&self, metadata: &'a Metadata) -> Option<&'a Il2CppType> {
+        if !self.is_enum_type() || self.element_type_index == u32::MAX {
+            return None;
+        }
+
+        metadata
+            .runtime_metadata
+            .metadata_registration
+            .types
+            .get(self.element_type_index as usize)
     }
 }
 

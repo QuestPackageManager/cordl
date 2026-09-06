@@ -20,6 +20,7 @@ use crate::{
     },
     generate::{
         cpp::cpp_members::{CppMethodSizeStruct, CppStaticAssert},
+        cs_attributes,
         cs_members::{
             CSMethodFlags, CsConstructor, CsField, CsMethod, CsParam, CsProperty, CsValue,
         },
@@ -595,11 +596,14 @@ impl CppType {
         config: &CppGenerationConfig,
     ) -> CppParam {
         let ty = name_resolver.resolve_name(self, &p.il2cpp_ty, TypeUsage::Parameter, false);
+        let attribute_comment =
+            cs_attributes::format_attributes_inline(&p.attributes, name_resolver.cordl_metadata);
         CppParam {
             name: config.name_cpp(&p.name),
             ty: ty.combine_all(),
             modifiers: "".to_string(), // TODO: Convert flags
             def_value: p.def_value.as_ref().map(|v| v.to_string()),
+            comment: attribute_comment,
         }
     }
 
@@ -650,13 +654,15 @@ impl CppType {
 
         self.declarations.reserve(constructors.len());
         for ctor in constructors {
+            let brief =
+                cs_attributes::format_attributes(&ctor.attributes, name_resolver.cordl_metadata);
             let m_params_with_def = self.make_params(ctor.parameters, name_resolver, config);
 
             let template: Option<CppTemplate> = ctor
                 .template
                 .as_ref()
                 .map(|t| CppTemplate::make_constrained(t, self, name_resolver));
-            self.create_ref_constructor(&m_params_with_def, template.as_ref());
+            self.create_ref_constructor(&m_params_with_def, template.as_ref(), brief);
         }
     }
 
@@ -907,15 +913,7 @@ impl CppType {
 
         let method_decl = CppMethodDecl {
             body: None,
-            brief: format!(
-                "Method {m_name}, addr 0x{:x}, size 0x{:x}, virtual {}, abstract: {}, final {}",
-                method.method_data.addrs.unwrap_or(u64::MAX),
-                method.method_data.estimated_size.unwrap_or(usize::MAX),
-                is_virtual,
-                is_abstract,
-                is_final
-            )
-            .into(),
+            brief: method.brief.clone(),
             is_const: false,
             is_constexpr: false,
             is_no_except: false,
@@ -1428,6 +1426,7 @@ impl CppType {
                     modifiers: "".to_string(),
                     // no default value for first param
                     def_value: Some(def_value),
+                    comment: None,
                 })
             })
             .collect_vec();
@@ -1515,6 +1514,7 @@ impl CppType {
                 modifiers: "&&".to_string(),
                 name: "".to_string(),
                 ty: t.clone(),
+                comment: None,
             }],
             template: None,
             is_constexpr: false,
@@ -1543,6 +1543,7 @@ impl CppType {
                 modifiers: "const&".to_string(),
                 name: "".to_string(),
                 ty: t.clone(),
+                comment: None,
             }],
             template: None,
             is_constexpr: false,
@@ -1613,7 +1614,12 @@ impl CppType {
             .push(CppMember::FieldDecl(il2cpp_metadata_type_index).into());
     }
 
-    fn create_ref_constructor(&mut self, m_params: &[CppParam], template: Option<&CppTemplate>) {
+    fn create_ref_constructor(
+        &mut self,
+        m_params: &[CppParam],
+        template: Option<&CppTemplate>,
+        brief: Option<String>,
+    ) {
         if self.is_value_type || self.is_enum_type {
             return;
         }
@@ -1635,7 +1641,7 @@ impl CppType {
             parameters: params_no_default,
             template: template.cloned(),
             body: None, // TODO:
-            brief: None,
+            brief,
             is_no_except: false,
             is_constexpr: false,
             instance: false,
@@ -1746,6 +1752,24 @@ impl fmt::Display for CsValue {
                 }
             }
             CsValue::Null => write!(f, "{{}}"),
+            CsValue::Array(items) => write!(
+                f,
+                "{{ {} }}",
+                items
+                    .iter()
+                    .map(ToString::to_string)
+                    .join(", ")
+            ),
+            CsValue::Type(_) | CsValue::Enum(_, _) => {
+                // Rendering these compilably needs the resolved C++ name of a CsTypeTag, which
+                // needs a name resolver Display has no way to receive (its signature is fixed
+                // by the trait). CsType::default_value_blob (the only source of field/parameter
+                // default values, which is what this Display renders) never produces them
+                // anyway - they only come from decoded custom attribute arguments, which render
+                // through CsValue::to_display_string (cs_attributes.rs) instead, where a
+                // CordlMetadata is available to take as a parameter.
+                unreachable!("{self:?} is not a valid field/parameter default value")
+            }
         }
     }
 }

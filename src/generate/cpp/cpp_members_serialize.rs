@@ -70,6 +70,22 @@ impl Writable for CppForwardDeclare {
     }
 }
 
+/// Writes a brief comment, one `line_prefix`-prefixed line per `\n`-separated segment of
+/// `comment`. When `comment` came from [`crate::generate::cs_attributes::prefix_with_attributes`],
+/// every line but the last is a `[Attr(...)]` line (one per custom attribute); the last line is
+/// always the actual description, so only it gets tagged `@brief`.
+fn write_brief(writer: &mut Writer, line_prefix: &str, comment: &str) -> color_eyre::Result<()> {
+    let mut lines = comment.split('\n').peekable();
+    while let Some(line) = lines.next() {
+        // last line is @brief
+        match lines.peek().is_some() {
+            true => writeln!(writer, "{line_prefix} {line}")?,
+            false => writeln!(writer, "{line_prefix} @brief {line}")?,
+        }
+    }
+    Ok(())
+}
+
 impl Writable for CppCommentedString {
     fn write(&self, writer: &mut Writer) -> color_eyre::Result<()> {
         writeln!(writer, "{}", self.data)?;
@@ -122,7 +138,7 @@ impl Sortable for CppUsingAlias {
 impl Writable for CppFieldDecl {
     fn write(&self, writer: &mut Writer) -> color_eyre::Result<()> {
         if let Some(comment) = &self.brief_comment {
-            writeln!(writer, "/// @brief {comment}")?;
+            write_brief(writer, "///", comment)?;
         }
 
         if self.is_private {
@@ -209,7 +225,7 @@ impl Writable for CppMethodDecl {
     // declaration
     fn write(&self, writer: &mut Writer) -> color_eyre::Result<()> {
         if let Some(brief) = &self.brief {
-            writeln!(writer, "/// @brief {brief}")?;
+            write_brief(writer, "///", brief)?;
         }
 
         // Param default comments
@@ -304,7 +320,7 @@ impl Writable for CppMethodImpl {
     // declaration
     fn write(&self, writer: &mut Writer) -> color_eyre::Result<()> {
         if let Some(brief) = &self.brief {
-            writeln!(writer, "/// @brief {brief}")?;
+            write_brief(writer, "///", brief)?;
         }
 
         // Param default comments
@@ -397,7 +413,7 @@ impl Writable for CppConstructorDecl {
 
         writeln!(writer, "// Ctor Parameters {:?}", self.parameters)?;
         if let Some(brief) = &self.brief {
-            writeln!(writer, "// @brief {brief}")?;
+            write_brief(writer, "//", brief)?;
         }
 
         if let Some(template) = &self.template {
@@ -583,7 +599,7 @@ impl Writable for CppPropertyDecl {
         };
 
         if let Some(comment) = &self.brief_comment {
-            writeln!(writer, "/// @brief {comment}")?;
+            write_brief(writer, "///", comment)?;
         }
 
         writeln!(
@@ -698,7 +714,7 @@ impl Writable for CppNestedStruct {
         }
 
         if let Some(brief) = &self.brief_comment {
-            writeln!(writer, "/// @brief {brief}")?;
+            write_brief(writer, "///", brief)?;
         }
 
         if let Some(packing) = self.packing {
@@ -752,7 +768,7 @@ impl Writable for CppNestedUnion {
             writeln!(writer, "private:")?;
         }
         if let Some(brief) = &self.brief_comment {
-            writeln!(writer, "/// @brief {brief}")?;
+            write_brief(writer, "///", brief)?;
         }
 
         writeln!(writer, "union {{")?;

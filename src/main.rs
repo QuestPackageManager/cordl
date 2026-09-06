@@ -146,6 +146,8 @@ fn main() -> color_eyre::Result<()> {
 
         name_to_tdi: Default::default(),
         blacklisted_types: Default::default(),
+        tdi_to_image: Default::default(),
+        custom_attributes_by_image: Default::default(),
         pointer_size: generate::metadata::PointerSize::Bytes8,
         // For most il2cpp versions
         packing_field_offset: 7,

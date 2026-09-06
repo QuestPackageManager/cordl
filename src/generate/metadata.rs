@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use brocolib::global_metadata::{Il2CppTypeDefinition, MethodIndex, TypeDefinitionIndex};
+use brocolib::global_metadata::{ImageIndex, Il2CppTypeDefinition, MethodIndex, TypeDefinitionIndex};
 use itertools::Itertools;
 
 pub struct MethodCalculations {
@@ -49,6 +49,22 @@ pub struct CordlMetadata<'a> {
     pub name_to_tdi: HashMap<Il2cppFullName<'a>, TypeDefinitionIndex>,
     pub blacklisted_types: HashSet<TypeDefinitionIndex>,
 
+    /// Which image (assembly) declares a given type - custom attribute tokens are only
+    /// unique within their own image, since il2cpp keeps each assembly's original token
+    /// numbering when merging them into one metadata file. Built from
+    /// `Il2CppImageDefinition::typeStart`/`typeCount`
+    /// (`vm/GlobalMetadataFileInternals.h:209`), the same fields `img.types(metadata)` walks.
+    pub tdi_to_image: HashMap<TypeDefinitionIndex, ImageIndex>,
+    /// Per image: token (raw value) -> offset into `attribute_data` where that member's
+    /// custom attributes are encoded. Built from each image's slice of
+    /// `Il2CppCustomAttributeDataRange { token, startOffset }`
+    /// (`vm/GlobalMetadataFileInternals.h:236`), addressed via
+    /// `Il2CppImageDefinition::customAttributeStart`/`customAttributeCount` (same header, line
+    /// 209) - a `HashMap` standing in for the `bsearch` by token that
+    /// `vm/GlobalMetadata.cpp:857` (`GetCustomAttributeTypeToken`) does at runtime.
+    /// See [`crate::generate::cs_attributes`].
+    pub custom_attributes_by_image: HashMap<u32, HashMap<u32, u32>>,
+
     pub pointer_size: PointerSize,
     pub packing_field_offset: u8,
     pub size_is_default_offset: u8,
@@ -68,6 +84,39 @@ impl<'a> CordlMetadata<'a> {
         self.parse_name_tdi(gm);
         self.parse_type_hierarchy(gm);
         self.parse_method_size(gm);
+        self.parse_custom_attributes(gm);
+    }
+
+    /// Builds the lookup tables [`Self::tdi_to_image`] and
+    /// [`Self::custom_attributes_by_image`] used to find a member's custom attribute data.
+    fn parse_custom_attributes(&mut self, gm: &'a brocolib::global_metadata::GlobalMetadata) {
+        let mut tdi_to_image = HashMap::new();
+        let mut custom_attributes_by_image = HashMap::new();
+
+        for (image_idx, image) in gm.images.as_vec().iter().enumerate() {
+            let image_index = ImageIndex::new(image_idx as u32);
+
+            // Il2CppImageDefinition::typeStart/typeCount, GlobalMetadataFileInternals.h:214-215
+            let type_start = image.type_start.index();
+            for offset in 0..image.type_count {
+                tdi_to_image.insert(TypeDefinitionIndex::new(type_start + offset), image_index);
+            }
+
+            // image.custom_attributes() is Il2CppImageDefinition::customAttributeStart/Count
+            // (GlobalMetadataFileInternals.h:223-224) slicing the table of
+            // Il2CppCustomAttributeDataRange { token, startOffset } (same header, line 236) -
+            // the exact table vm/GlobalMetadata.cpp:857 (GetCustomAttributeTypeToken) binary
+            // searches by token; a HashMap serves the same purpose here.
+            let attr_offsets: HashMap<u32, u32> = image
+                .custom_attributes(self.metadata)
+                .iter()
+                .map(|range| (range.token.0, range.start_offset))
+                .collect();
+            custom_attributes_by_image.insert(image_idx as u32, attr_offsets);
+        }
+
+        self.tdi_to_image = tdi_to_image;
+        self.custom_attributes_by_image = custom_attributes_by_image;
     }
 
     fn parse_type_hierarchy(&mut self, gm: &'a brocolib::global_metadata::GlobalMetadata) {

@@ -5,14 +5,16 @@ use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
 use crate::generate::{
+    cs_attributes::CsAttribute,
     cs_context_collection::TypeContextCollection,
-    cs_members::{CsField, CsGenericContainer, CsMethod, CsParam, CsParamFlags, CsProperty},
+    cs_members::{CsField, CsGenericContainer, CsMethod, CsParam, CsParamFlags, CsProperty, CsValue},
     cs_type::CsType,
+    cs_type_tag::CsTypeTag,
     metadata::CordlMetadata,
 };
 
 use super::{
-    json_data::{JsonGenericConstraint, JsonResolvedTypeData, JsonTypeTag},
+    json_data::{JsonAttribute, JsonGenericConstraint, JsonNamedArgument, JsonResolvedTypeData, JsonTypeTag, JsonValue},
     json_name_resolver::JsonNameResolver,
 };
 
@@ -51,6 +53,9 @@ pub struct JsonType {
 
     pub size: u32,
     pub packing: Option<u8>,
+
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub attributes: Vec<JsonAttribute>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -62,6 +67,9 @@ pub struct JsonField {
     pub is_const: bool,
     pub readonly: bool,
     pub offset: Option<u32>,
+
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub attributes: Vec<JsonAttribute>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JsonProperty {
@@ -74,6 +82,9 @@ pub struct JsonProperty {
     pub getter: Option<(u32, String)>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub setter: Option<(u32, String)>,
+
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub attributes: Vec<JsonAttribute>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -97,6 +108,9 @@ pub struct JsonMethod {
     pub template: Option<JsonTemplate>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub generic_instatiation: Option<Vec<JsonResolvedTypeData>>,
+
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub attributes: Vec<JsonAttribute>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -114,6 +128,74 @@ pub struct JsonParam {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ref_mode: Option<JsonFieldRef>,
+
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub attributes: Vec<JsonAttribute>,
+}
+
+/// Resolves the full C# name of a custom attribute's type, e.g. `System.ObsoleteAttribute` -
+/// looked up directly by [`TypeDefinitionIndex`](brocolib::global_metadata::TypeDefinitionIndex)
+/// rather than through [`JsonNameResolver::resolve_name`], since a [`CsTypeTag`] on its own
+/// (unlike a [`crate::data::type_resolver::ResolvedType`]) carries no generic/pointer/array shape
+/// to resolve.
+fn attribute_type_name(tag: CsTypeTag, metadata: &CordlMetadata) -> String {
+    metadata.metadata.global_metadata.type_definitions[tag.get_tdi()]
+        .full_name(metadata.metadata, true)
+}
+
+fn make_value(value: &CsValue, metadata: &CordlMetadata) -> JsonValue {
+    match value {
+        CsValue::String(v) => JsonValue::String(v.clone()),
+        CsValue::Char(v) => JsonValue::Char(v.clone()),
+        CsValue::Bool(v) => JsonValue::Bool(*v),
+        CsValue::U8(v) => JsonValue::U8(*v),
+        CsValue::U16(v) => JsonValue::U16(*v),
+        CsValue::U32(v) => JsonValue::U32(*v),
+        CsValue::U64(v) => JsonValue::U64(*v),
+        CsValue::I8(v) => JsonValue::I8(*v),
+        CsValue::I16(v) => JsonValue::I16(*v),
+        CsValue::I32(v) => JsonValue::I32(*v),
+        CsValue::I64(v) => JsonValue::I64(*v),
+        CsValue::F32(v) => JsonValue::F32(*v),
+        CsValue::F64(v) => JsonValue::F64(*v),
+        CsValue::Null => JsonValue::Null,
+        CsValue::Array(items) => {
+            JsonValue::Array(items.iter().map(|v| make_value(v, metadata)).collect_vec())
+        }
+        CsValue::Type(tag) => JsonValue::Type {
+            tag: (*tag).into(),
+            name: attribute_type_name(*tag, metadata),
+        },
+        CsValue::Enum(tag, value) => JsonValue::Enum {
+            tag: (*tag).into(),
+            name: attribute_type_name(*tag, metadata),
+            value: Box::new(make_value(value, metadata)),
+        },
+    }
+}
+
+fn make_attribute(attr: &CsAttribute, metadata: &CordlMetadata) -> JsonAttribute {
+    JsonAttribute {
+        attribute_type: attr.attribute_type.into(),
+        attribute_type_name: attribute_type_name(attr.attribute_type, metadata),
+        arguments: attr
+            .arguments
+            .iter()
+            .map(|v| make_value(v, metadata))
+            .collect_vec(),
+        named_arguments: attr
+            .named_arguments
+            .iter()
+            .map(|a| JsonNamedArgument {
+                name: a.name.clone(),
+                value: make_value(&a.value, metadata),
+            })
+            .collect_vec(),
+    }
+}
+
+fn make_attributes(attrs: &[CsAttribute], metadata: &CordlMetadata) -> Vec<JsonAttribute> {
+    attrs.iter().map(|a| make_attribute(a, metadata)).collect_vec()
 }
 
 fn make_field(field: &CsField, name_resolver: &JsonNameResolver) -> JsonField {
@@ -129,6 +211,7 @@ fn make_field(field: &CsField, name_resolver: &JsonNameResolver) -> JsonField {
         instance: field.instance,
         is_const: field.is_const,
         readonly: field.readonly,
+        attributes: make_attributes(&field.attributes, name_resolver.cordl_metadata),
     }
 }
 fn make_property(property: &CsProperty, name_resolver: &JsonNameResolver) -> JsonProperty {
@@ -152,6 +235,7 @@ fn make_property(property: &CsProperty, name_resolver: &JsonNameResolver) -> Jso
         indexable: property.indexable,
         setter: p_setter,
         getter: p_getter,
+        attributes: make_attributes(&property.attributes, name_resolver.cordl_metadata),
     }
 }
 fn make_param(param: &CsParam, name_resolver: &JsonNameResolver) -> JsonParam {
@@ -173,6 +257,7 @@ fn make_param(param: &CsParam, name_resolver: &JsonNameResolver) -> JsonParam {
         ty: ty_name,
         ty_tag: param_type,
         ref_mode,
+        attributes: make_attributes(&param.attributes, name_resolver.cordl_metadata),
     }
 }
 
@@ -225,6 +310,7 @@ fn make_method(method: &CsMethod, name_resolver: &JsonNameResolver) -> JsonMetho
         method_info: json_method_info,
         template: method.template.as_ref().map(make_template),
         generic_instatiation,
+        attributes: make_attributes(&method.attributes, name_resolver.cordl_metadata),
     }
 }
 
@@ -295,5 +381,6 @@ pub fn make_type(
         tag: td.self_tag.into(),
         parent,
         generic_instatiation,
+        attributes: make_attributes(&td.attributes, metadata),
     }
 }

@@ -1,4 +1,5 @@
 pub mod context;
+pub mod cs_attributes;
 pub mod cs_context_collection;
 pub mod cs_members;
 pub mod cs_type;

@@ -3,8 +3,6 @@ use std::{
     io::{Cursor, Read},
 };
 
-use byteorder::ReadBytesExt;
-
 use brocolib::{
     global_metadata::{
         FieldIndex, Il2CppFieldDefinition, Il2CppGenericParameter, Il2CppTypeDefinition,
@@ -22,6 +20,7 @@ use crate::{
         type_resolver::{ResolvedType, TypeResolver, TypeUsage},
     },
     generate::{
+        cs_attributes,
         cs_members::{CsField, CsGenericArg, CsGenericConstraint},
         type_extensions::{
             GenericParameterExtensions, ParameterDefinitionExtensions, TypeExtentions,
@@ -92,6 +91,8 @@ pub struct CsType {
 
     pub is_interface: bool,
     pub nested_types: HashSet<CsTypeTag>,
+
+    pub attributes: Vec<cs_attributes::CsAttribute>,
 }
 
 impl CsType {
@@ -240,6 +241,7 @@ impl CsType {
 
             nested_types: Default::default(),
             enum_backing_type: None,
+            attributes: cs_attributes::decode_custom_attributes(metadata, tdi, t.token),
         };
 
         if t.parent_index == u32::MAX {
@@ -278,13 +280,7 @@ impl CsType {
         let t = Self::get_type_definition(metadata, tdi);
 
         // If this is an enum, figure out its backing type
-        if t.element_type_index != u32::MAX && t.is_enum_type() {
-            let element_type = metadata
-                .metadata_registration
-                .types
-                .get(t.element_type_index as usize)
-                .unwrap();
-
+        if let Some(element_type) = t.enum_backing_type(metadata.metadata) {
             self.enum_backing_type = Some(element_type.ty);
         }
     }
@@ -295,7 +291,6 @@ impl CsType {
         type_resolver: &TypeResolver,
     ) -> Vec<CsParam> {
         let metadata = type_resolver.cordl_metadata;
-        let _tdi = self.self_tag.get_tdi();
 
         method
             .parameters(metadata.metadata)
@@ -304,7 +299,7 @@ impl CsType {
             .map(|(pi, param)| {
                 let param_index = ParameterIndex::new(method.parameter_start.index() + pi as u32);
 
-                self.make_parameter(param, param_index, type_resolver)
+                self.make_parameter(param, param_index, method.declaring_type, type_resolver)
             })
             .collect()
     }
@@ -313,6 +308,7 @@ impl CsType {
         &mut self,
         param: &brocolib::global_metadata::Il2CppParameterDefinition,
         param_index: ParameterIndex,
+        declaring_tdi: TypeDefinitionIndex,
         type_resolver: &TypeResolver,
     ) -> CsParam {
         let metadata = type_resolver.cordl_metadata;
@@ -325,6 +321,8 @@ impl CsType {
             .unwrap();
 
         let def_value = Self::param_default_value(metadata, param_index);
+        let attributes =
+            cs_attributes::decode_custom_attributes(metadata, declaring_tdi, param.token);
 
         CsParam {
             name: param.name(metadata.metadata).to_owned(),
@@ -336,6 +334,7 @@ impl CsType {
                 false,
             ),
             modifiers: CsParamFlags::empty(),
+            attributes,
         }
     }
 
@@ -489,6 +488,12 @@ impl CsType {
 
                 assert!(def_value.is_none() || (def_value.is_some() && f_type.is_param_optional()));
 
+                let attributes = cs_attributes::decode_custom_attributes(metadata, tdi, field.token);
+                let brief_comment = cs_attributes::prefix_with_attributes(
+                    &attributes,
+                    metadata,
+                    format!("Field {f_name}, offset: 0x{:x}, size: 0x{f_size:x}, def value: {def_value:?}", f_offset.unwrap_or(u32::MAX)),
+                );
 
                 CsField {
                     name: f_name.to_owned(),
@@ -497,9 +502,10 @@ impl CsType {
                     size: f_size,
                     instance: !f_type.is_static() && !f_type.is_constant(),
                     readonly: f_type.is_constant(),
-                    brief_comment: Some(format!("Field {f_name}, offset: 0x{:x}, size: 0x{f_size:x}, def value: {def_value:?}", f_offset.unwrap_or(u32::MAX))),
+                    brief_comment: Some(brief_comment),
                     is_const: f_type.is_constant() || def_value.is_some(),
                     value: def_value,
+                    attributes,
                 }
             })
             .collect_vec();
@@ -675,6 +681,10 @@ impl CsType {
 
             // Need to include this type
             let prop_ty = type_resolver.resolve_type(self, p_type_index, TypeUsage::Property, true);
+            let attributes = cs_attributes::decode_custom_attributes(metadata, tdi, prop.token);
+            let brief_comment =
+                cs_attributes::format_attributes(&attributes, metadata);
+
             self.properties.push(CsProperty {
                 name: p_name.to_owned(),
                 prop_ty,
@@ -692,8 +702,9 @@ impl CsType {
                     )
                 }),
                 indexable: index,
-                brief_comment: None,
+                brief_comment,
                 instance: true,
+                attributes,
             });
         }
     }
@@ -793,16 +804,23 @@ impl CsType {
             slot: (method.slot != u16::MAX).then_some(method.slot),
         };
 
-        let method_decl = CsMethod {
-            brief: format!(
+        let method_attributes =
+            cs_attributes::decode_custom_attributes(metadata, method.declaring_type, method.token);
+        let method_brief = cs_attributes::prefix_with_attributes(
+            &method_attributes,
+            metadata,
+            format!(
                 "Method {m_name}, addr 0x{:x}, size 0x{:x}, virtual {}, abstract: {}, final {}",
                 method_calc.map(|m| m.addrs).unwrap_or(u64::MAX),
                 method_calc.map(|m| m.estimated_size).unwrap_or(usize::MAX),
                 method.is_virtual_method(),
                 method.is_abstract_method(),
                 method.is_final_method()
-            )
-            .into(),
+            ),
+        );
+
+        let method_decl = CsMethod {
+            brief: method_brief.into(),
             method_flags: flag,
             method_index,
             name: m_name.to_string(),
@@ -818,6 +836,7 @@ impl CsType {
             template: template.clone(),
             method_data,
             generic_instatiation: generic_inst,
+            attributes: method_attributes,
         };
 
         // if type is a generic
@@ -827,6 +846,7 @@ impl CsType {
                 name: m_name.to_string(),
                 parameters: method_decl.parameters.clone(),
                 template: method_decl.template.clone(),
+                attributes: method_decl.attributes.clone(),
             };
 
             self.constructors.push(constructor);
@@ -864,32 +884,21 @@ impl CsType {
         let mut cursor = Cursor::new(data);
 
         match ty.ty {
-            Il2CppTypeEnum::Boolean => CsValue::Bool(data[0] != 0),
-            Il2CppTypeEnum::I1 => CsValue::I8(cursor.read_i8().unwrap()),
-            Il2CppTypeEnum::I2 => CsValue::I16(cursor.read_i16::<Endian>().unwrap()),
-            Il2CppTypeEnum::I4 => CsValue::I32(cursor.read_compressed_i32::<Endian>().unwrap()),
-            // TODO: We assume 64 bit
-            Il2CppTypeEnum::I | Il2CppTypeEnum::I8 => {
-                CsValue::I64(cursor.read_i64::<Endian>().unwrap())
-            }
-            Il2CppTypeEnum::U1 => CsValue::U8(cursor.read_u8().unwrap()),
-            Il2CppTypeEnum::U2 => CsValue::U16(cursor.read_u16::<Endian>().unwrap()),
-            Il2CppTypeEnum::U4 => CsValue::U32(cursor.read_compressed_u32::<Endian>().unwrap()),
-            // TODO: We assume 64 bit
-            Il2CppTypeEnum::U | Il2CppTypeEnum::U8 => {
-                CsValue::U64(cursor.read_u64::<Endian>().unwrap())
-            }
-            // https://learn.microsoft.com/en-us/nimbusml/concepts/types
-            // https://en.cppreference.com/w/cpp/types/floating-point
-            Il2CppTypeEnum::R4 => CsValue::F32(cursor.read_f32::<Endian>().unwrap()),
-            Il2CppTypeEnum::R8 => CsValue::F64(cursor.read_f64::<Endian>().unwrap()),
-            Il2CppTypeEnum::Char => {
-                let res = String::from_utf16_lossy(&[cursor.read_u16::<Endian>().unwrap()])
-                    .escape_default()
-                    .to_string();
-
-                CsValue::Char(res)
-            }
+            // shared with custom attribute argument decoding - see CsValue::read_primitive
+            Il2CppTypeEnum::Boolean
+            | Il2CppTypeEnum::I1
+            | Il2CppTypeEnum::I2
+            | Il2CppTypeEnum::I4
+            | Il2CppTypeEnum::I
+            | Il2CppTypeEnum::I8
+            | Il2CppTypeEnum::U1
+            | Il2CppTypeEnum::U2
+            | Il2CppTypeEnum::U4
+            | Il2CppTypeEnum::U
+            | Il2CppTypeEnum::U8
+            | Il2CppTypeEnum::R4
+            | Il2CppTypeEnum::R8
+            | Il2CppTypeEnum::Char => CsValue::read_primitive(ty.ty, &mut cursor).unwrap(),
             Il2CppTypeEnum::String => {
                 let stru16_len = cursor.read_compressed_i32::<Endian>().unwrap();
                 if stru16_len == -1 {
@@ -921,6 +930,10 @@ impl CsType {
         }
     }
 
+    /// Unbox a nullable value type to its underlying type if it is a System.Nullable`1
+    /// e.g System.Nullable`1<System.Int32> -> System.Int32
+    /// 
+    /// Based on il2cpp's implementation of `il2cpp::vm::Type::GetUnderlyingType` in `vm/Type.cpp`
     fn unbox_nullable_valuetype<'a>(
         metadata: &'a CordlMetadata,
         ty: &'a Il2CppType,
