@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     data::type_resolver::{ResolvedType, ResolvedTypeData},
-    generate::cs_type_tag::CsTypeTag,
+    generate::{cs_members::CsGenericConstraint, cs_type_tag::CsTypeTag},
 };
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, PartialOrd, Ord, Eq, Hash)]
@@ -50,6 +50,36 @@ impl From<ResolvedType> for JsonResolvedTypeData {
             ResolvedTypeData::ByRefConst(inner) => {
                 JsonResolvedTypeData::ByRefConst(Box::new((*inner).into()))
             }
+        }
+    }
+}
+
+/// One entry of a C# `where` clause, or the variance of the parameter it belongs to
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum JsonGenericConstraint {
+    /// A type the parameter must be convertible to
+    Resolved(JsonResolvedTypeData),
+    /// `where T : struct`
+    Struct,
+    /// `where T : class`
+    Class,
+    /// `where T : new()`
+    DefaultConstructor,
+    /// `out T`
+    Covariant,
+    /// `in T`
+    Contravariant,
+}
+
+impl From<CsGenericConstraint> for JsonGenericConstraint {
+    fn from(value: CsGenericConstraint) -> Self {
+        match value {
+            CsGenericConstraint::Resolved(ty) => JsonGenericConstraint::Resolved(ty.into()),
+            CsGenericConstraint::Struct => JsonGenericConstraint::Struct,
+            CsGenericConstraint::Class => JsonGenericConstraint::Class,
+            CsGenericConstraint::DefaultConstructor => JsonGenericConstraint::DefaultConstructor,
+            CsGenericConstraint::Covariant => JsonGenericConstraint::Covariant,
+            CsGenericConstraint::Contravariant => JsonGenericConstraint::Contravariant,
         }
     }
 }

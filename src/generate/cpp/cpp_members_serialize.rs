@@ -17,10 +17,14 @@ impl Writable for CppTemplate {
             "template<{}>",
             self.names
                 .iter()
-                .map(|(constraint, t)| format!("{constraint} {t}"))
+                .map(|p| format!("{} {}", p.kind, p.name))
                 .collect_vec()
                 .join(",")
         )?;
+
+        if let Some(requires_clause) = self.requires_clause() {
+            writeln!(writer, "requires({requires_clause})")?;
+        }
 
         Ok(())
     }

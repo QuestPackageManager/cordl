@@ -19,8 +19,8 @@ unsafe impl Send for CsTypeTag {}
 unsafe impl Send for CppContext {}
 
 use super::{
-    config::CppGenerationConfig, cpp_context::CppContext, cpp_members::CppInclude,
-    cpp_name_resolver::CppNameResolver, cpp_type::CppType,
+    config::CppGenerationConfig, cpp_context::CppContext,
+    cpp_members::{CppInclude, CppTemplate}, cpp_name_resolver::CppNameResolver, cpp_type::CppType,
 };
 
 #[derive(Default)]
@@ -49,6 +49,16 @@ impl CppContextCollection {
         }
         cpp_collection.alias_context = collection.alias_context;
 
+        // Constraints have to be resolved before anything is filled, since filling a type
+        // forward declares the generic types it references. A forward declaration whose
+        // requires clause differs from the definition's does not compile.
+        info!("Filling generic constraints in CppContextCollection");
+        for context in collection.all_contexts.values() {
+            for (tag, cs_type) in &context.typedef_types {
+                cpp_collection.fill_generic_constraints(*tag, cs_type, metadata);
+            }
+        }
+
         info!("Filling typedefs in CppContextCollection");
         for (_, context) in collection.all_contexts {
             for (tag, cs_type) in context.typedef_types {
@@ -57,6 +67,45 @@ impl CppContextCollection {
         }
 
         cpp_collection
+    }
+
+    /// Rewrites a type's template with the constraints of its C# generic parameters
+    fn fill_generic_constraints(
+        &mut self,
+        type_tag: CsTypeTag,
+        cs_type: &CsType,
+        metadata: &CordlMetadata,
+    ) {
+        let Some(generic_container) = cs_type.generic_container.as_ref() else {
+            return;
+        };
+
+        let context_tag = self.get_context_root_tag(type_tag);
+
+        // Move ownership to local, the name resolver borrows the whole collection
+        let Some(context) = self.all_contexts.get_mut(&context_tag) else {
+            return;
+        };
+        // Blacklisted types live in typealias_types instead and have no template to constrain
+        let Some((_, mut cpp_type)) = context.typedef_types.remove_entry(&type_tag) else {
+            return;
+        };
+
+        let name_resolver = CppNameResolver {
+            cordl_metadata: metadata,
+            collection: self,
+        };
+        cpp_type.cpp_template = Some(CppTemplate::make_constrained(
+            generic_container,
+            &mut cpp_type,
+            &name_resolver,
+        ));
+
+        // Move ownership back up
+        self.all_contexts
+            .get_mut(&context_tag)
+            .expect("No cpp context")
+            .insert_cpp_type(cpp_type);
     }
 
     fn do_fill_cpp_type(

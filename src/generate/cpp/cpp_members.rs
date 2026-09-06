@@ -1,12 +1,15 @@
 use itertools::Itertools;
 use pathdiff::diff_paths;
 
-use crate::
+use crate::{
+    data::type_resolver::{ResolvedType, ResolvedTypeData, TypeUsage},
     generate::{
-        cs_members::CsGenericContainer,
+        cs_members::{CsGenericConstraint, CsGenericContainer},
+        cs_type_tag::CsTypeTag,
+        type_extensions::TypeDefinitionIndexExtensions,
         writer::Writable,
-    }
-;
+    },
+};
 
 use std::{
     collections::HashMap,
@@ -20,44 +23,223 @@ use std::{
 use super::{
     config::STATIC_CONFIG,
     cpp_context::CppContext,
-    cpp_type::CppType,
+    cpp_name_resolver::CppNameResolver,
+    cpp_type::{
+        CORDL_DEFAULT_CTOR_CONSTRAINT, CORDL_REFERENCE_TYPE_CONSTRAINT, CORDL_TYPE_CONSTRAINT,
+        CORDL_VALUE_TYPE_CONSTRAINT, CppType,
+    },
 };
+
+/// A single template parameter, e.g. `typename T`, plus the C# constraints declared on it
+#[derive(Debug, Eq, Hash, PartialEq, Clone, Default, PartialOrd, Ord)]
+pub struct CppTemplateParam {
+    /// The parameter kind, practically always `typename`
+    pub kind: String,
+    pub name: String,
+    /// Boolean expressions that must hold for [`Self::name`], written out as a `requires` clause.
+    /// Empty for an unconstrained parameter.
+    pub constraints: Vec<String>,
+}
+
+impl CppTemplateParam {
+    pub fn typename(name: String) -> Self {
+        CppTemplateParam {
+            kind: "typename".to_string(),
+            name,
+            constraints: vec![],
+        }
+    }
+}
 
 #[derive(Debug, Eq, Hash, PartialEq, Clone, Default, PartialOrd, Ord)]
 pub struct CppTemplate {
-    pub names: Vec<(String, String)>,
+    pub names: Vec<CppTemplateParam>,
 }
 
 impl CppTemplate {
     pub fn just_names(&self) -> impl Iterator<Item = &String> {
-        self.names.iter().map(|(_constraint, t)| t)
+        self.names.iter().map(|p| &p.name)
+    }
+
+    /// Drops the first `skip` parameters, as well as any constraint left behind that
+    /// mentioned one of them. Whatever the caller substitutes those parameters with does
+    /// not necessarily name a type the remaining `requires` clause may still refer to.
+    pub fn skip_params(&self, skip: usize) -> CppTemplate {
+        let dropped = self
+            .names
+            .iter()
+            .take(skip)
+            .map(|p| p.name.as_str())
+            .collect_vec();
+
+        CppTemplate {
+            names: self
+                .names
+                .iter()
+                .skip(skip)
+                .map(|p| CppTemplateParam {
+                    constraints: p
+                        .constraints
+                        .iter()
+                        .filter(|c| !dropped.iter().any(|d| mentions_identifier(c, d)))
+                        .cloned()
+                        .collect(),
+                    ..p.clone()
+                })
+                .collect(),
+        }
+    }
+
+    /// The `requires` clause covering every constrained parameter, if there is one.
+    /// Constraints of parameters that aren't part of this template are not included,
+    /// so slicing [`Self::names`] keeps the clause well formed.
+    pub fn requires_clause(&self) -> Option<String> {
+        let constraints = self
+            .names
+            .iter()
+            .flat_map(|p| p.constraints.iter())
+            .join(" && ");
+
+        (!constraints.is_empty()).then_some(constraints)
+    }
+}
+
+impl CppTemplate {
+    /// Makes a template whose parameters carry the C# `where` clauses of `container`.
+    ///
+    /// Constraining types are hard included, since a `requires` clause is checked at
+    /// instantiation time and needs them complete by then.
+    pub fn make_constrained(
+        container: &CsGenericContainer,
+        declaring_cpp_type: &mut CppType,
+        name_resolver: &CppNameResolver,
+    ) -> Self {
+        let names = container
+            .args
+            .iter()
+            .map(|arg| {
+                let name = &arg.name;
+
+                let constraints = arg
+                    .constraints
+                    .iter()
+                    .filter_map(|constraint| match constraint {
+                        CsGenericConstraint::Class => {
+                            Some(format!("{CORDL_REFERENCE_TYPE_CONSTRAINT}<{name}>"))
+                        }
+                        CsGenericConstraint::Struct => {
+                            Some(format!("{CORDL_VALUE_TYPE_CONSTRAINT}<{name}>"))
+                        }
+                        CsGenericConstraint::DefaultConstructor => {
+                            Some(format!("{CORDL_DEFAULT_CTOR_CONSTRAINT}<{name}>"))
+                        }
+                        // variance says how the type may be substituted, it constrains nothing
+                        CsGenericConstraint::Covariant | CsGenericConstraint::Contravariant => None,
+                        CsGenericConstraint::Resolved(resolved) => {
+                            let ty = resolve_constraint_name(
+                                resolved,
+                                declaring_cpp_type,
+                                name_resolver,
+                            )?;
+
+                            Some(format!("{CORDL_TYPE_CONSTRAINT}<{name}, {ty}>"))
+                        }
+                    })
+                    .collect();
+
+                CppTemplateParam {
+                    kind: "typename".to_string(),
+                    name: name.clone(),
+                    constraints,
+                }
+            })
+            .collect();
+
+        CppTemplate { names }
+    }
+}
+
+/// Resolves the C++ name a `where T : X` constraint should check against,
+/// or [`None`] if the constraint cannot be expressed in C++.
+fn resolve_constraint_name(
+    constraint: &ResolvedType,
+    declaring_cpp_type: &mut CppType,
+    name_resolver: &CppNameResolver,
+) -> Option<String> {
+    let metadata = name_resolver.cordl_metadata;
+
+    // `where T : class`/`struct`/`Enum` also carry a constraint on the base type they imply.
+    // The other variants of CsGenericConstraint already cover those, and those base types
+    // aren't C++ base classes anyway.
+    if constraint_tags(constraint).any(|tag| {
+        let td = tag.get_tdi().get_type_definition(metadata.metadata);
+
+        td.namespace(metadata.metadata) == "System"
+            && matches!(td.name(metadata.metadata), "Object" | "ValueType" | "Enum")
+    }) {
+        return None;
+    }
+
+    // A constraint naming the type it is declared on, e.g. `class Foo<T> where T : Foo<T>`,
+    // would need Foo<T> complete to check whether Foo<T> may be instantiated
+    if constraint_tags(constraint).any(|tag| tag == declaring_cpp_type.self_tag) {
+        return None;
+    }
+
+    if matches!(constraint.data, ResolvedTypeData::Blacklisted(_)) {
+        return None;
+    }
+
+    let name = name_resolver.resolve_name(
+        declaring_cpp_type,
+        constraint,
+        TypeUsage::GenericConstraint,
+        true,
+    );
+
+    Some(name.combine_all())
+}
+
+/// Whether `haystack` uses `ident` as a whole C++ identifier rather than as part of a longer one
+fn mentions_identifier(haystack: &str, ident: &str) -> bool {
+    let is_ident_char = |c: char| c.is_alphanumeric() || c == '_';
+
+    haystack.match_indices(ident).any(|(start, _)| {
+        let before = haystack[..start].chars().next_back();
+        let after = haystack[start + ident.len()..].chars().next();
+
+        !before.is_some_and(is_ident_char) && !after.is_some_and(is_ident_char)
+    })
+}
+
+/// Every type tag a resolved type refers to, including its generic arguments
+fn constraint_tags(ty: &ResolvedType) -> Box<dyn Iterator<Item = CsTypeTag> + '_> {
+    match &ty.data {
+        ResolvedTypeData::Array(inner)
+        | ResolvedTypeData::Ptr(inner)
+        | ResolvedTypeData::ByRef(inner)
+        | ResolvedTypeData::ByRefConst(inner) => constraint_tags(inner),
+        ResolvedTypeData::GenericInst(inner, args) => Box::new(
+            constraint_tags(inner).chain(args.iter().flat_map(|(arg, _)| constraint_tags(arg))),
+        ),
+        ResolvedTypeData::Type(tag) | ResolvedTypeData::Blacklisted(tag) => {
+            Box::new(std::iter::once(*tag))
+        }
+        ResolvedTypeData::Primitive(_)
+        | ResolvedTypeData::GenericArg(_, _)
+        | ResolvedTypeData::GenericMethodArg(_, _, _) => Box::new(std::iter::empty()),
     }
 }
 
 impl From<CsGenericContainer> for CppTemplate {
+    /// Makes an unconstrained template. Constraints need the resolved C++ names of the
+    /// constraining types, so they are filled in later by [`CppTemplate::make_constrained`].
     fn from(value: CsGenericContainer) -> Self {
         CppTemplate {
             names: value
                 .args
                 .into_iter()
-                .map(|arg| {
-                    // TODO: Handle constraints properly, currently we just check if it's a reference type constraint and if it is we make it a ref type, otherwise we just make it a typename. This is obviously not ideal but it works for the cases we have and we can always improve it later if we need to
-                    // let ref_type = arg.constraints.iter().any(|c| {
-                    //     match c.data {
-                    //         ResolvedTypeData::Type(t) =>
-                    //     }
-                    // });
-
-                    // let mut cpp_ty: String;
-                    // if ref_type {
-                    //     cpp_ty = CORDL_REFERENCE_TYPE_CONSTRAINT.to_string();
-                    // } else {
-                    //     cpp_ty = "typename".to_string();
-                    //     // We make no further distinction between generic constraints, but we could if we wanted to
-                    // }
-
-                    ("typename".to_string(), arg.name)
-                })
+                .map(|arg| CppTemplateParam::typename(arg.name))
                 .collect(),
         }
     }
@@ -687,19 +869,10 @@ impl CppUsingAlias {
         let (literal_args, template) = match &cpp_type.cpp_template {
             Some(other_template) => {
                 // Skip the first args as those aren't necessary
-                let extra_template_args = other_template
-                    .names
-                    .iter()
-                    .skip(forwarded_generic_args.len())
-                    .cloned()
-                    .collect_vec();
+                let extra_template_args = other_template.skip_params(forwarded_generic_args.len());
 
-                let remaining_cpp_template = match !extra_template_args.is_empty() {
-                    true => Some(CppTemplate {
-                        names: extra_template_args,
-                    }),
-                    false => None,
-                };
+                let remaining_cpp_template =
+                    (!extra_template_args.names.is_empty()).then_some(extra_template_args);
 
                 // Essentially, all nested types inherit their declaring type's generic params.
                 // Append the rest of the template params as generic parameters

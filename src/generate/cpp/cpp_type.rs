@@ -52,6 +52,15 @@ pub const __CORDL_BACKING_ENUM_TYPE: &str = "__CORDL_BACKING_ENUM_TYPE";
 
 pub const CORDL_METHOD_HELPER_NAMESPACE: &str = "::cordl_internals";
 
+/// `where T : class`
+pub const CORDL_REFERENCE_TYPE_CONSTRAINT: &str = "::cordl_internals::reference_type_constraint";
+/// `where T : struct`
+pub const CORDL_VALUE_TYPE_CONSTRAINT: &str = "::cordl_internals::value_type_constraint";
+/// `where T : new()`
+pub const CORDL_DEFAULT_CTOR_CONSTRAINT: &str = "::cordl_internals::default_constructor_constraint";
+/// `where T : SomeType`
+pub const CORDL_TYPE_CONSTRAINT: &str = "::cordl_internals::type_constraint";
+
 pub const VALUE_TYPE_WRAPPER_SIZE: &str = "__IL2CPP_VALUE_TYPE_SIZE";
 
 pub const CORDL_NO_INCLUDE_IMPL_DEFINE: &str = "CORDL_NO_IMPL_INCLUDE";
@@ -643,7 +652,10 @@ impl CppType {
         for ctor in constructors {
             let m_params_with_def = self.make_params(ctor.parameters, name_resolver, config);
 
-            let template: Option<CppTemplate> = ctor.template.clone().map(|t| t.into());
+            let template: Option<CppTemplate> = ctor
+                .template
+                .as_ref()
+                .map(|t| CppTemplate::make_constrained(t, self, name_resolver));
             self.create_ref_constructor(&m_params_with_def, template.as_ref());
         }
     }
@@ -852,10 +864,13 @@ impl CppType {
 
         // TODO: Add template<typename ...> if a generic inst e.g
         // T UnityEngine.Component::GetComponent<T>() -> bs_hook::Il2CppWrapperType UnityEngine.Component::GetComponent()
-        let template = match method.generic_instatiation {
+        let template = match &method.generic_instatiation {
             // if generic method instantiation, we don't add template params, they are only for the decl
             Some(_) => Some(CppTemplate::default()),
-            None => method.template.clone().map(|t| t.into()),
+            None => method
+                .template
+                .as_ref()
+                .map(|t| CppTemplate::make_constrained(t, self, name_resolver)),
         };
 
         let mut cpp_ret_type =

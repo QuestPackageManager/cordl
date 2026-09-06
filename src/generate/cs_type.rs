@@ -7,7 +7,7 @@ use byteorder::ReadBytesExt;
 
 use brocolib::{
     global_metadata::{
-        FieldIndex, Il2CppFieldDefinition, Il2CppTypeDefinition,
+        FieldIndex, Il2CppFieldDefinition, Il2CppGenericParameter, Il2CppTypeDefinition,
         MethodIndex, ParameterIndex, TypeDefinitionIndex,
     },
     runtime_metadata::{Il2CppType, Il2CppTypeEnum, TypeData},
@@ -22,8 +22,10 @@ use crate::{
         type_resolver::{ResolvedType, TypeResolver, TypeUsage},
     },
     generate::{
-        cs_members::{CsField, CsGenericArg},
-        type_extensions::{ParameterDefinitionExtensions, TypeExtentions},
+        cs_members::{CsField, CsGenericArg, CsGenericConstraint},
+        type_extensions::{
+            GenericParameterExtensions, ParameterDefinitionExtensions, TypeExtentions,
+        },
     },
     helpers::cursor::ReadBytesExtensions,
 };
@@ -529,13 +531,14 @@ impl CsType {
                         .constraints(metadata.metadata)
                         .iter()
                         .map(|c| {
-                            type_resolver.resolve_type(
+                            CsGenericConstraint::Resolved(type_resolver.resolve_type(
                                 self,
                                 *c as usize,
                                 TypeUsage::GenericConstraint,
                                 true,
-                            )
+                            ))
                         })
+                        .chain(special_generic_constraints(arg))
                         .collect_vec(),
                     index: arg.num,
                 })
@@ -743,13 +746,14 @@ impl CsType {
                                 .constraints(metadata.metadata)
                                 .iter()
                                 .map(|c| {
-                                    type_resolver.resolve_type(
+                                    CsGenericConstraint::Resolved(type_resolver.resolve_type(
                                         self,
                                         *c as usize,
-                                        TypeUsage::GenericArg,
+                                        TypeUsage::GenericConstraint,
                                         true,
-                                    )
+                                    ))
                                 })
+                                .chain(special_generic_constraints(param))
                                 .collect_vec(),
                             index: param.num,
                         });
@@ -1025,4 +1029,30 @@ impl CsType {
     ) -> &'a Il2CppTypeDefinition {
         &metadata.metadata.global_metadata.type_definitions[tdi]
     }
+}
+
+/// The constraints of a generic parameter that have no type to point at
+/// (`class`/`struct`/`new()`), along with its variance
+fn special_generic_constraints(
+    param: &Il2CppGenericParameter,
+) -> impl Iterator<Item = CsGenericConstraint> {
+    let mut constraints = Vec::new();
+
+    if param.has_reference_type_constraint() {
+        constraints.push(CsGenericConstraint::Class);
+    }
+    if param.has_not_nullable_value_type_constraint() {
+        constraints.push(CsGenericConstraint::Struct);
+    }
+    if param.has_default_constructor_constraint() {
+        constraints.push(CsGenericConstraint::DefaultConstructor);
+    }
+    if param.is_covariant() {
+        constraints.push(CsGenericConstraint::Covariant);
+    }
+    if param.is_contravariant() {
+        constraints.push(CsGenericConstraint::Contravariant);
+    }
+
+    constraints.into_iter()
 }

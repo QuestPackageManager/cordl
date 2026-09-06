@@ -2,7 +2,9 @@ use core::panic;
 
 use brocolib::{
     Metadata,
-    global_metadata::{Il2CppMethodDefinition, Il2CppTypeDefinition, TypeDefinitionIndex},
+    global_metadata::{
+        Il2CppGenericParameter, Il2CppMethodDefinition, Il2CppTypeDefinition, TypeDefinitionIndex,
+    },
     runtime_metadata::{Il2CppType, Il2CppTypeEnum, TypeData},
 };
 use itertools::Itertools;
@@ -22,6 +24,14 @@ pub const FIELD_ATTRIBUTE_PUBLIC: u16 = 0x0006;
 pub const FIELD_ATTRIBUTE_PRIVATE: u16 = 0x0001;
 pub const FIELD_ATTRIBUTE_STATIC: u16 = 0x0010;
 pub const FIELD_ATTRIBUTE_LITERAL: u16 = 0x0040;
+
+// ECMA-335 II.23.1.7 GenericParamAttributes
+pub const GENERIC_PARAM_ATTRIBUTE_VARIANCE_MASK: u16 = 0x0003;
+pub const GENERIC_PARAM_ATTRIBUTE_COVARIANT: u16 = 0x0001;
+pub const GENERIC_PARAM_ATTRIBUTE_CONTRAVARIANT: u16 = 0x0002;
+pub const GENERIC_PARAM_ATTRIBUTE_REFERENCE_TYPE_CONSTRAINT: u16 = 0x0004;
+pub const GENERIC_PARAM_ATTRIBUTE_NOT_NULLABLE_VALUE_TYPE_CONSTRAINT: u16 = 0x0008;
+pub const GENERIC_PARAM_ATTRIBUTE_DEFAULT_CONSTRUCTOR_CONSTRAINT: u16 = 0x0010;
 
 pub const METHOD_ATTRIBUTE_PUBLIC: u16 = 0x0006;
 pub const METHOD_ATTRIBUTE_STATIC: u16 = 0x0010;
@@ -68,6 +78,41 @@ impl MethodDefintionExtensions for Il2CppMethodDefinition {
 
     fn is_final_method(&self) -> bool {
         (self.flags & METHOD_ATTRIBUTE_FINAL) != 0
+    }
+}
+
+pub trait GenericParameterExtensions {
+    /// `where T : class`
+    fn has_reference_type_constraint(&self) -> bool;
+    /// `where T : struct`
+    fn has_not_nullable_value_type_constraint(&self) -> bool;
+    /// `where T : new()`
+    fn has_default_constructor_constraint(&self) -> bool;
+    /// `out T`
+    fn is_covariant(&self) -> bool;
+    /// `in T`
+    fn is_contravariant(&self) -> bool;
+}
+
+impl GenericParameterExtensions for Il2CppGenericParameter {
+    fn has_reference_type_constraint(&self) -> bool {
+        (self.flags & GENERIC_PARAM_ATTRIBUTE_REFERENCE_TYPE_CONSTRAINT) != 0
+    }
+
+    fn has_not_nullable_value_type_constraint(&self) -> bool {
+        (self.flags & GENERIC_PARAM_ATTRIBUTE_NOT_NULLABLE_VALUE_TYPE_CONSTRAINT) != 0
+    }
+
+    fn has_default_constructor_constraint(&self) -> bool {
+        (self.flags & GENERIC_PARAM_ATTRIBUTE_DEFAULT_CONSTRUCTOR_CONSTRAINT) != 0
+    }
+
+    fn is_covariant(&self) -> bool {
+        (self.flags & GENERIC_PARAM_ATTRIBUTE_VARIANCE_MASK) == GENERIC_PARAM_ATTRIBUTE_COVARIANT
+    }
+
+    fn is_contravariant(&self) -> bool {
+        (self.flags & GENERIC_PARAM_ATTRIBUTE_VARIANCE_MASK) == GENERIC_PARAM_ATTRIBUTE_CONTRAVARIANT
     }
 }
 

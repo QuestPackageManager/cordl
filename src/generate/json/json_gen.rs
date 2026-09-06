@@ -12,7 +12,7 @@ use crate::generate::{
 };
 
 use super::{
-    json_data::{JsonResolvedTypeData, JsonTypeTag},
+    json_data::{JsonGenericConstraint, JsonResolvedTypeData, JsonTypeTag},
     json_name_resolver::JsonNameResolver,
 };
 
@@ -76,11 +76,9 @@ pub struct JsonProperty {
     pub setter: Option<(u32, String)>,
 }
 
-pub type JsonGenericConstraint = Vec<JsonResolvedTypeData>;
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JsonGenericArgument {
-    pub constraints: JsonGenericConstraint,
+    pub constraints: Vec<JsonGenericConstraint>,
     pub index: u16, // generic argument index
     pub name: String,
 }

@@ -14,12 +14,30 @@ pub struct CsGenericContainer {
 
 #[derive(Debug, Eq, Hash, PartialEq, Clone, Default)]
 pub struct CsGenericArg {
+    /// Types this parameter must be convertible to, e.g. `where T : Foo, IBar<T>`
     pub constraints: Vec<CsGenericConstraint>,
     pub name: String,
     pub index: u16,
 }
 
-pub type CsGenericConstraint = ResolvedType;
+#[derive(Debug, Eq, Hash, PartialEq, Clone)]
+pub enum CsGenericConstraint {
+    /// A type constraint, e.g. `where T : Foo`
+    Resolved(ResolvedType),
+
+    // Constraints that aren't expressed as a type, e.g. `where T : struct, new()`
+
+    /// A constraint that the type must be a value type (struct) e.g where T: struct
+    Struct,
+    /// A constraint that the type must be a reference type (class) e.g where T: class
+    Class,
+    /// A constraint that the type must have a default constructor e.g where T: new()
+    DefaultConstructor,
+    /// A constraint that the type must be covariant e.g where T: out T
+    Covariant,
+    /// A constraint that the type must be contravariant e.g where T: in T
+    Contravariant,
+}
 
 impl CsGenericContainer {
     pub fn just_names(&self) -> impl Iterator<Item = &String> {
