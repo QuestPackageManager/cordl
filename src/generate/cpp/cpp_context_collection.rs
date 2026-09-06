@@ -11,16 +11,15 @@ use log::{info, trace};
 use pathdiff::diff_paths;
 
 use crate::generate::{
-    cpp::config::STATIC_CONFIG, cs_context_collection::TypeContextCollection, cs_type::CsType,
-    cs_type_tag::CsTypeTag, metadata::CordlMetadata,
+    cpp::{config::STATIC_CONFIG, cpp_members::CppTemplate}, cs_context_collection::TypeContextCollection, cs_type::CsType, cs_type_tag::CsTypeTag, metadata::CordlMetadata,
 };
 
 unsafe impl Send for CsTypeTag {}
 unsafe impl Send for CppContext {}
 
 use super::{
-    config::CppGenerationConfig, cpp_context::CppContext,
-    cpp_members::{CppInclude, CppTemplate}, cpp_name_resolver::CppNameResolver, cpp_type::CppType,
+    config::CppGenerationConfig, cpp_context::CppContext, cpp_members::CppInclude,
+    cpp_name_resolver::CppNameResolver, cpp_type::CppType,
 };
 
 #[derive(Default)]
@@ -49,15 +48,23 @@ impl CppContextCollection {
         }
         cpp_collection.alias_context = collection.alias_context;
 
-        // Constraints have to be resolved before anything is filled, since filling a type
-        // forward declares the generic types it references. A forward declaration whose
-        // requires clause differs from the definition's does not compile.
-        info!("Filling generic constraints in CppContextCollection");
-        for context in collection.all_contexts.values() {
-            for (tag, cs_type) in &context.typedef_types {
-                cpp_collection.fill_generic_constraints(*tag, cs_type, metadata);
-            }
-        }
+        // Class-level generic parameters are deliberately left unconstrained (see
+        // `CppType::cpp_template`'s assignment in `make_cpp_type`): a `requires` clause on a
+        // class template is checked as soon as the template-id is *named*, not just when it's
+        // instantiated. cordl's headers name generic types via forward-declared pointer
+        // arguments all over the place (e.g. a property of type `WeakReference_1<Foo*>*` needs
+        // only `Foo` forward declared) - `MARK_REF_T`/`MARK_VAL_T` for `Foo` isn't visible yet at
+        // that point, so a class-level constraint fails to compile there even though no
+        // incomplete type is ever actually used. Method/constructor-level constraints (built by
+        // `CppTemplate::make_constrained` in `cpp_type.rs`) don't have this problem: those are
+        // only checked where the method is actually called, by which point full includes are in
+        // scope.
+        // info!("Filling generic constraints in CppContextCollection");
+        // for context in collection.all_contexts.values() {
+        //     for (tag, cs_type) in &context.typedef_types {
+        //         cpp_collection.fill_generic_constraints(*tag, cs_type, metadata);
+        //     }
+        // }
 
         info!("Filling typedefs in CppContextCollection");
         for (_, context) in collection.all_contexts {
