@@ -820,15 +820,15 @@ impl CppParam {
         params.iter().map(|p| {
             let prefix = Self::attribute_comment_prefix(p);
             match &p.def_value {
-                Some(val) => format!("{prefix}{}{} {} = {val}", p.ty, p.modifiers, p.name),
-                None => format!("{prefix}{}{} {}", p.ty, p.modifiers, p.name),
+                Some(val) => format!("{prefix}{} {} {} = {val}", p.ty, p.modifiers, p.name),
+                None => format!("{prefix}{} {} {}", p.ty, p.modifiers, p.name),
             }
         })
     }
     pub fn params_as_args_no_default(params: &[CppParam]) -> impl Iterator<Item = String> + '_ {
         params.iter().map(|p| {
             let prefix = Self::attribute_comment_prefix(p);
-            format!("{prefix}{}{} {}", p.ty, p.modifiers, p.name)
+            format!("{prefix}{} {} {}", p.ty, p.modifiers, p.name)
         })
     }
     pub fn params_names(params: &[CppParam]) -> impl Iterator<Item = &String> {
