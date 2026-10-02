@@ -47,7 +47,7 @@ impl CppGenerationConfig {
             return format!("_cordl_{string}");
         }
 
-        match string {
+        let name = match string {
             // https://github.com/sc2ad/Il2Cpp-Modding-Codegen/blob/b3267c7099f0cc1853e57a1118d1bba3884b5f03/Codegen-CLI/Program.cs#L77-L87
             "alignas" | "alignof" | "and" | "and_eq" | "asm" | "atomic_cancel"
             | "atomic_commit" | "atomic_noexcept" | "auto" | "bitand" | "bitor" | "bool"
@@ -94,18 +94,43 @@ impl CppGenerationConfig {
             }
 
             // Coincidentally the same as path_name
-            _ => string.replace(['<', '`', '>', '/', '.', '|', ',', '(', ')', '[', ']', '-'], "_"),
+            _ => string.replace(['<', '`', '>', '/', '.', '|', ',', '(', ')', '[', ']', '-', '='], "_"),
+        };
+        if name.starts_with(|c: char| c.is_ascii_digit()) {
+            format!("_cordl_{name}")
+        } else {
+            name
         }
     }
     /// for converting C++ names into just a single C++ word
     pub fn sanitize_to_cpp_name(&self, string: &str) -> String {
         // Coincidentally the same as path_name
-        string.replace(['<', '`', '>', '/', '.', ':', '|', ',', '(', ')', '*'], "_")
+        string.replace(['<', '`', '>', '/', '.', ':', '|', ',', '(', ')', '*', '='], "_")
     }
     pub fn namespace_path(&self, string: &str) -> String {
         string.replace(['<', '>', '`', '/'], "_").replace('.', "/")
     }
     pub fn path_name(&self, string: &str) -> String {
         string.replace(['<', '>', '`', '.', '/', ',', '(', ')'], "_")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::STATIC_CONFIG;
+
+    #[test]
+    fn compiler_generated_identifiers_are_valid_cpp_names() {
+        assert_eq!(
+            STATIC_CONFIG.name_cpp("__StaticArrayInitTypeSize=188"),
+            "__StaticArrayInitTypeSize_188"
+        );
+        assert_eq!(
+            STATIC_CONFIG.sanitize_to_cpp_name("Details::__StaticArrayInitTypeSize=188"),
+            "Details____StaticArrayInitTypeSize_188"
+        );
+        assert_eq!(STATIC_CONFIG.name_cpp("23E41CE5"), "_cordl_23E41CE5");
+        assert_eq!(STATIC_CONFIG.name_cpp("class"), "_cordl_class");
+        assert_eq!(STATIC_CONFIG.name_cpp("List`1"), "List_1");
     }
 }

@@ -252,14 +252,10 @@ pub fn layout_fields(
     );
 
     // assign base size values based on parent type (or no parent type)
-    if !declaring_ty_def.parent_index.idx_is_valid() {
-        instance_size = metadata.object_size() as usize;
-        actual_size = metadata.object_size() as usize;
-        minimum_alignment = metadata.pointer_size as u8;
-    } else {
+    if let Some(parent_index) = metadata.parent_type_index(declaring_ty_def) {
         let parent_sa = get_parent_sa(
             metadata,
-            declaring_ty_def.parent_index.idx(),
+            parent_index,
             generic_inst_types,
         );
 
@@ -271,6 +267,10 @@ pub fn layout_fields(
         } else {
             minimum_alignment = parent_sa.alignment;
         }
+    } else {
+        instance_size = metadata.object_size() as usize;
+        actual_size = metadata.object_size() as usize;
+        minimum_alignment = metadata.pointer_size as u8;
     }
 
     // if we have fields, do something with their values
@@ -494,13 +494,23 @@ fn get_parent_sa(
         _ => todo!("Not yet implemented: {:?}", parent_ty.data),
     };
 
-    layout_fields(
+    let mut parent_sa = layout_fields(
         metadata,
         parent_tdi,
         parent_generics.as_deref(),
         None,
         false,
-    )
+    );
+    // Runtime-injected fields (for example in __Il2CppComObject) need not
+    // appear in metadata's field list. The generated base already contains
+    // padding for them, so derived types must start after that storage.
+    if let Some(size) = get_size_of_type_table(metadata, parent_tdi)
+        && size.instance_size as usize > parent_sa.size
+    {
+        parent_sa.size = size.instance_size as usize;
+        parent_sa.actual_size = parent_sa.size;
+    }
+    parent_sa
 }
 
 fn update_instance_size_for_generic_class(

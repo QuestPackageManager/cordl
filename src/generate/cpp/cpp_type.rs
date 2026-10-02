@@ -166,11 +166,29 @@ pub struct CppType {
 }
 
 impl CppType {
+    fn is_runtime_placeholder(&self) -> bool {
+        self.cs_name_components.namespace.as_deref() == Some("Unity.IL2CPP.Metadata")
+            && matches!(
+                self.cs_name_components.name.as_str(),
+                "__Il2CppFullySharedGenericType" | "__Il2CppFullySharedGenericStructType"
+            )
+    }
+
     pub fn write_impl(&self, writer: &mut Writer) -> color_eyre::Result<()> {
+        if self.is_runtime_placeholder() {
+            return Ok(());
+        }
         self.write_impl_internal(writer)
     }
 
     pub fn write_def(&self, writer: &mut Writer) -> color_eyre::Result<()> {
+        // Fully shared generic placeholders have no fixed object layout.
+        // Keep their forward declarations and type metadata, allowing opaque
+        // pointers without inventing a concrete, incorrectly sized class.
+        if self.is_runtime_placeholder() {
+            writeln!(writer, "// IL2CPP fully shared generic placeholder; its layout is only known at runtime.")?;
+            return Ok(());
+        }
         self.write_def_internal(writer, Some(&self.cpp_namespace()))
     }
 
@@ -457,6 +475,27 @@ impl CppType {
         let tdi: TypeDefinitionIndex = cs_type.self_tag.into();
         let metadata = name_resolver.cordl_metadata;
         let t = &metadata.metadata.global_metadata.type_definitions[tdi];
+
+        if t.is_explicit_layout() && self.is_value_type {
+            if let Some(size) = &self.size_info {
+                #[cfg(feature = "il2cpp_v29")]
+                let alignment = size.natural_alignment as u32;
+                #[cfg(any(feature = "il2cpp_v31", feature = "il2cpp_v39"))]
+                let alignment = size.minimum_alignment as u32;
+
+                // An explicit managed size can end before the next natural
+                // alignment boundary. C++ requires sizeof(T) to be a multiple
+                // of alignof(T), so cap packing to an alignment that fits it.
+                if size.instance_size > 0 && alignment > 0 && size.instance_size % alignment != 0 {
+                    let size_alignment = 1u32 << size.instance_size.trailing_zeros();
+                    let packing = self
+                        .packing
+                        .filter(|packing| *packing != 0)
+                        .unwrap_or(alignment);
+                    self.packing = Some(packing.min(size_alignment));
+                }
+            }
+        }
 
         // we depend on parents and generic args here
         // default ctor
@@ -1207,7 +1246,10 @@ impl CppType {
             return;
         }
 
-        let remaining_size = metadata_size_instance.abs_diff(size_info.calculated_instance_size);
+        // Padding can only grow a type. A calculated size larger than the
+        // metadata size must be handled by its layout/packing, not by adding
+        // the absolute difference a second time.
+        let remaining_size = metadata_size_instance.saturating_sub(size_info.calculated_instance_size);
 
         // pack the remaining size to fit the packing of the type
         let closest_packing = |size: u32| match size {

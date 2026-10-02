@@ -244,21 +244,21 @@ impl CsType {
             attributes: cs_attributes::decode_custom_attributes(metadata, tdi, t.token),
         };
 
-        if !t.parent_index.idx_is_valid() {
-            if !t.is_interface() && t.full_name(metadata.metadata, true) != "System.Object" {
-                info!(
-                    "Skipping type: {ns}::{name} because it has parent index: {} and is not an interface!",
-                    t.parent_index.idx()
-                );
-                return None;
-            }
-        } else if metadata
-            .metadata_registration
-            .types
-            .get(t.parent_index.idx())
-            .is_none()
-        {
-            panic!("NO PARENT! But valid index found: {}", t.parent_index.idx());
+        if let Some(parent_index) = metadata.parent_type_index(t) {
+            assert!(
+                metadata
+                    .metadata_registration
+                    .types
+                    .get(parent_index)
+                    .is_some(),
+                "NO PARENT! But valid index found: {parent_index}"
+            );
+        } else if !t.is_interface() && t.full_name(metadata.metadata, true) != "System.Object" {
+            info!(
+                "Skipping type: {ns}::{name} because it has parent index: {} and is not an interface!",
+                t.parent_index.idx()
+            );
+            return None;
         }
 
         Some(cpptype)
@@ -503,7 +503,9 @@ impl CsType {
                     instance: !f_type.is_static() && !f_type.is_constant(),
                     readonly: f_type.is_constant(),
                     brief_comment: Some(brief_comment),
-                    is_const: f_type.is_constant() || def_value.is_some(),
+                    // RVA-backed static data also has default-value metadata;
+                    // only literal fields are C# constants.
+                    is_const: f_type.is_constant(),
                     value: def_value,
                     attributes,
                 }
@@ -563,7 +565,7 @@ impl CsType {
         let ns = t.namespace(metadata.metadata);
         let name = t.name(metadata.metadata);
 
-        if !t.parent_index.idx_is_valid() {
+        let Some(parent_index) = metadata.parent_type_index(t) else {
             // TYPE_ATTRIBUTE_INTERFACE = 0x00000020
             match t.is_interface() {
                 true => {
@@ -577,13 +579,13 @@ impl CsType {
                 }
             }
             return;
-        }
+        };
 
         let parent_type = metadata
             .metadata_registration
             .types
-            .get(t.parent_index.idx())
-            .unwrap_or_else(|| panic!("NO PARENT! But valid index found: {}", t.parent_index.idx()));
+            .get(parent_index)
+            .unwrap_or_else(|| panic!("NO PARENT! But valid index found: {parent_index}"));
 
         // handle value types and enum types specially
         if !t.is_value_type() || t.is_enum_type() {
@@ -592,11 +594,14 @@ impl CsType {
                 parent_type.ty,
                 Il2CppTypeEnum::Class | Il2CppTypeEnum::Genericinst | Il2CppTypeEnum::Object
             );
-            assert!(is_ref_type, "Not a class, object or generic inst!");
+            assert!(
+                is_ref_type,
+                "Invalid parent for {ns}::{name}: {parent_type:?}"
+            );
 
             self.parent = Some(type_resolver.resolve_type(
                 self,
-                t.parent_index.idx(),
+                parent_index,
                 TypeUsage::TypeName,
                 true,
             ));
