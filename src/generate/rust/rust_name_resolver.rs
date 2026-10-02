@@ -301,13 +301,9 @@ impl<'b> RustNameResolver<'_, 'b> {
             .type_definitions[tag.get_tdi()];
 
         if td.is_enum_type() {
-            let ty_idx = td.element_type_index;
-            let ty = &self
-                .cordl_metadata
-                .metadata
-                .runtime_metadata
-                .metadata_registration
-                .types[ty_idx as usize];
+            let ty = td
+                .enum_backing_type(self.cordl_metadata.metadata)
+                .expect("enum type missing backing type");
 
             return RustNameComponents {
                 name: Self::primitive_to_rust_ty(&ty.ty).into(),

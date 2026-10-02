@@ -37,7 +37,7 @@ use super::{
     cs_type_tag::CsTypeTag,
     metadata::CordlMetadata,
     offsets::{self, SizeInfo},
-    type_extensions::{MethodDefintionExtensions, TypeDefinitionExtensions},
+    type_extensions::{MethodDefintionExtensions, TypeDefinitionExtensions, TypeIndexExt},
 };
 
 #[derive(Debug, Clone, Default)]
@@ -189,11 +189,11 @@ impl CsType {
         }
 
         // all nested types are unnested
-        let declaring_ty = (t.declaring_type_index != u32::MAX).then(|| {
+        let declaring_ty = t.declaring_type_index.idx_is_valid().then(|| {
             metadata
                 .metadata_registration
                 .types
-                .get(t.declaring_type_index as usize)
+                .get(t.declaring_type_index.idx())
                 .unwrap()
         });
         let declaring_tag =
@@ -244,21 +244,21 @@ impl CsType {
             attributes: cs_attributes::decode_custom_attributes(metadata, tdi, t.token),
         };
 
-        if t.parent_index == u32::MAX {
+        if !t.parent_index.idx_is_valid() {
             if !t.is_interface() && t.full_name(metadata.metadata, true) != "System.Object" {
                 info!(
                     "Skipping type: {ns}::{name} because it has parent index: {} and is not an interface!",
-                    t.parent_index
+                    t.parent_index.idx()
                 );
                 return None;
             }
         } else if metadata
             .metadata_registration
             .types
-            .get(t.parent_index as usize)
+            .get(t.parent_index.idx())
             .is_none()
         {
-            panic!("NO PARENT! But valid index found: {}", t.parent_index);
+            panic!("NO PARENT! But valid index found: {}", t.parent_index.idx());
         }
 
         Some(cpptype)
@@ -317,7 +317,7 @@ impl CsType {
         let _param_type = metadata
             .metadata_registration
             .types
-            .get(param.type_index as usize)
+            .get(param.type_index.idx())
             .unwrap();
 
         let def_value = Self::param_default_value(metadata, param_index);
@@ -329,7 +329,7 @@ impl CsType {
             def_value,
             il2cpp_ty: type_resolver.resolve_type(
                 self,
-                param.type_index as usize,
+                param.type_index.idx(),
                 TypeUsage::Parameter,
                 false,
             ),
@@ -408,7 +408,7 @@ impl CsType {
             let f_type = metadata
                 .metadata_registration
                 .types
-                .get(field.type_index as usize)
+                .get(field.type_index.idx())
                 .unwrap();
             let f_name = field.name(metadata.metadata);
 
@@ -453,7 +453,7 @@ impl CsType {
             let f_type = metadata
                 .metadata_registration
                 .types
-                .get(field.type_index as usize)
+                .get(field.type_index.idx())
                 .unwrap();
 
             let generic_inst_types: Option<Vec<usize>> =
@@ -471,7 +471,7 @@ impl CsType {
                 let f_type = metadata
                     .metadata_registration
                     .types
-                    .get(field.type_index as usize)
+                    .get(field.type_index.idx())
                     .unwrap();
 
                 let field_index = FieldIndex::new(t.field_start.index() + i as u32);
@@ -497,7 +497,7 @@ impl CsType {
 
                 CsField {
                     name: f_name.to_owned(),
-                    field_ty: type_resolver.resolve_type(self, field.type_index as usize, TypeUsage::Field, true),
+                    field_ty: type_resolver.resolve_type(self, field.type_index.idx(), TypeUsage::Field, true),
                     offset: f_offset,
                     size: f_size,
                     instance: !f_type.is_static() && !f_type.is_constant(),
@@ -539,7 +539,7 @@ impl CsType {
                         .map(|c| {
                             CsGenericConstraint::Resolved(type_resolver.resolve_type(
                                 self,
-                                *c as usize,
+                                c.idx(),
                                 TypeUsage::GenericConstraint,
                                 true,
                             ))
@@ -563,7 +563,7 @@ impl CsType {
         let ns = t.namespace(metadata.metadata);
         let name = t.name(metadata.metadata);
 
-        if t.parent_index == u32::MAX {
+        if !t.parent_index.idx_is_valid() {
             // TYPE_ATTRIBUTE_INTERFACE = 0x00000020
             match t.is_interface() {
                 true => {
@@ -572,7 +572,7 @@ impl CsType {
                 false => {
                     info!(
                         "Skipping type: {ns}::{name} because it has parent index: {} and is not an interface!",
-                        t.parent_index
+                        t.parent_index.idx()
                     );
                 }
             }
@@ -582,8 +582,8 @@ impl CsType {
         let parent_type = metadata
             .metadata_registration
             .types
-            .get(t.parent_index as usize)
-            .unwrap_or_else(|| panic!("NO PARENT! But valid index found: {}", t.parent_index));
+            .get(t.parent_index.idx())
+            .unwrap_or_else(|| panic!("NO PARENT! But valid index found: {}", t.parent_index.idx()));
 
         // handle value types and enum types specially
         if !t.is_value_type() || t.is_enum_type() {
@@ -596,7 +596,7 @@ impl CsType {
 
             self.parent = Some(type_resolver.resolve_type(
                 self,
-                t.parent_index as usize,
+                t.parent_index.idx(),
                 TypeUsage::TypeName,
                 true,
             ));
@@ -609,11 +609,11 @@ impl CsType {
         let t = &metadata.metadata.global_metadata.type_definitions[tdi];
 
         for &interface_index in t.interfaces(metadata.metadata) {
-            let _int_ty = &metadata.metadata_registration.types[interface_index as usize];
+            let _int_ty = &metadata.metadata_registration.types[interface_index.idx()];
 
             let resolved = type_resolver.resolve_type(
                 self,
-                interface_index as usize,
+                interface_index.idx(),
                 TypeUsage::TypeName,
                 true,
             );
@@ -664,8 +664,8 @@ impl CsType {
             }
 
             let p_type_index = match p_getter {
-                Some(g) => g.return_type as usize,
-                None => p_setter.unwrap().parameters(metadata.metadata)[0].type_index as usize,
+                Some(g) => g.return_type.idx(),
+                None => p_setter.unwrap().parameters(metadata.metadata)[0].type_index.idx(),
             };
 
             let _p_type = metadata
@@ -727,7 +727,7 @@ impl CsType {
         let _m_ret_type = metadata
             .metadata_registration
             .types
-            .get(method.return_type as usize)
+            .get(method.return_type.idx())
             .unwrap();
 
         let m_params_with_def: Vec<CsParam> = self.make_parameters(method, type_resolver);
@@ -758,7 +758,7 @@ impl CsType {
                                 .map(|c| {
                                     CsGenericConstraint::Resolved(type_resolver.resolve_type(
                                         self,
-                                        *c as usize,
+                                        c.idx(),
                                         TypeUsage::GenericConstraint,
                                         true,
                                     ))
@@ -825,7 +825,7 @@ impl CsType {
             name: m_name.to_string(),
             return_type: type_resolver.resolve_type(
                 self,
-                method.return_type as usize,
+                method.return_type.idx(),
                 TypeUsage::ReturnType,
                 true,
             ),
@@ -949,7 +949,7 @@ impl CsType {
                         return metadata
                             .metadata_registration
                             .types
-                            .get(type_def.byval_type_index as usize)
+                            .get(type_def.byval_type_index.idx())
                             .unwrap();
                     }
                 }
@@ -975,7 +975,7 @@ impl CsType {
                 let ty: &Il2CppType = metadata
                     .metadata_registration
                     .types
-                    .get(def.type_index as usize)
+                    .get(def.type_index.idx())
                     .unwrap();
 
                 // get default value for given type
@@ -1001,7 +1001,7 @@ impl CsType {
                 let mut ty = metadata
                     .metadata_registration
                     .types
-                    .get(def.type_index as usize)
+                    .get(def.type_index.idx())
                     .unwrap();
 
                 ty = Self::unbox_nullable_valuetype(metadata, ty);
@@ -1023,7 +1023,7 @@ impl CsType {
                                 ty = metadata
                                     .metadata_registration
                                     .types
-                                    .get(type_def.byval_type_index as usize)
+                                    .get(type_def.byval_type_index.idx())
                                     .unwrap();
                             }
                         }

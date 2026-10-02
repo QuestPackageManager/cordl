@@ -11,7 +11,9 @@ use log::{trace, warn};
 use std::io::Write;
 
 use crate::generate::{
-    cs_type_tag::CsTypeTag, type_extensions::TypeDefinitionExtensions, writer::Writer,
+    cs_type_tag::CsTypeTag,
+    type_extensions::{TypeDefinitionExtensions, TypeIndexExt},
+    writer::Writer,
 };
 
 use super::rust_type::RustType;
@@ -44,7 +46,7 @@ impl RustContext {
 
         let path = PathBuf::from(config.namespace_path(ns));
 
-        let path_name = match t.declaring_type_index != u32::MAX {
+        let path_name = match t.declaring_type_index.idx_is_valid() {
             true => {
                 let name = config.name_rs(name);
                 // sanitize declaring types

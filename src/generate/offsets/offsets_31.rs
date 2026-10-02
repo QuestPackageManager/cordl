@@ -4,7 +4,7 @@ use crate::TypeDefinitionIndex;
 use crate::generate::cs_type_tag::CsTypeTag;
 use crate::generate::metadata::CordlMetadata;
 use crate::generate::metadata::PointerSize;
-use crate::generate::type_extensions::TypeDefinitionExtensions;
+use crate::generate::type_extensions::{TypeDefinitionExtensions, TypeIndexExt};
 
 use brocolib::global_metadata::Il2CppTypeDefinition;
 use brocolib::runtime_metadata::Il2CppTypeDefinitionSizes;
@@ -235,7 +235,7 @@ pub fn layout_fields(
     let has_references = declaring_ty_def
         .fields(metadata.metadata)
         .iter()
-        .map(|f| &metadata.metadata_registration.types[f.type_index as usize])
+        .map(|f| &metadata.metadata_registration.types[f.type_index.idx()])
         .filter(|f| !f.is_static() && !f.is_constant())
         .any(is_reference);
 
@@ -252,12 +252,16 @@ pub fn layout_fields(
     );
 
     // assign base size values based on parent type (or no parent type)
-    if declaring_ty_def.parent_index == u32::MAX {
+    if !declaring_ty_def.parent_index.idx_is_valid() {
         instance_size = metadata.object_size() as usize;
         actual_size = metadata.object_size() as usize;
         minimum_alignment = metadata.pointer_size as u8;
     } else {
-        let parent_sa = get_parent_sa(metadata, declaring_ty_def.parent_index, generic_inst_types);
+        let parent_sa = get_parent_sa(
+            metadata,
+            declaring_ty_def.parent_index.idx(),
+            generic_inst_types,
+        );
 
         instance_size = parent_sa.size;
         actual_size = parent_sa.actual_size;
@@ -373,7 +377,7 @@ fn layout_instance_fields(
             .metadata
             .runtime_metadata
             .metadata_registration
-            .types[f.type_index as usize];
+            .types[f.type_index.idx()];
 
         if field_ty.is_static() || field_ty.is_constant() {
             // filter for instance fields
@@ -436,10 +440,10 @@ fn get_offset_of_type_table(
 
 fn get_parent_sa(
     metadata: &CordlMetadata<'_>,
-    parent_index: u32,
+    parent_index: usize,
     generic_inst_types: Option<&[usize]>,
 ) -> SizeAndAlignment {
-    let parent_ty = &metadata.metadata_registration.types[parent_index as usize];
+    let parent_ty = &metadata.metadata_registration.types[parent_index];
     let (parent_tdi, parent_generics) = match parent_ty.data {
         TypeData::TypeDefinitionIndex(parent_tdi) => (parent_tdi, None),
         TypeData::GenericClassIndex(generic_index) => {
@@ -669,9 +673,10 @@ fn get_type_size_and_alignment(
             let value_td = &metadata.metadata.global_metadata.type_definitions[value_tdi];
 
             if value_td.is_enum_type() {
-                let enum_base_type =
-                    metadata.metadata_registration.types[value_td.element_type_index as usize];
-                return get_type_size_and_alignment(&enum_base_type, None, metadata);
+                let enum_base_type = value_td
+                    .enum_backing_type(metadata.metadata)
+                    .expect("enum type missing backing type");
+                return get_type_size_and_alignment(enum_base_type, None, metadata);
             }
 
             // Size of the value type comes from the instance size - size of the wrapper object
@@ -715,10 +720,11 @@ fn get_type_size_and_alignment(
 
             // enum type
             if td.is_enum_type() {
-                let enum_base_type =
-                    metadata.metadata_registration.types[td.element_type_index as usize];
+                let enum_base_type = td
+                    .enum_backing_type(metadata.metadata)
+                    .expect("enum type missing backing type");
                 return get_type_size_and_alignment(
-                    &enum_base_type,
+                    enum_base_type,
                     Some(&new_generic_inst.types),
                     metadata,
                 );

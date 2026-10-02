@@ -9,6 +9,36 @@ use brocolib::{
 };
 use itertools::Itertools;
 
+/// Abstracts over `brocolib::global_metadata::TypeIndex`'s representation, which differs
+/// between brocolib versions: a plain `u32` on `il2cpp_v29`/`il2cpp_v31`, and a newtype struct
+/// (exposing `.index()`/`.is_valid()`) on `il2cpp_v39`.
+pub trait TypeIndexExt: Copy {
+    fn idx(self) -> usize;
+    fn idx_is_valid(self) -> bool;
+}
+
+#[cfg(any(feature = "il2cpp_v29", feature = "il2cpp_v31"))]
+impl TypeIndexExt for u32 {
+    fn idx(self) -> usize {
+        self as usize
+    }
+
+    fn idx_is_valid(self) -> bool {
+        self != u32::MAX
+    }
+}
+
+#[cfg(feature = "il2cpp_v39")]
+impl TypeIndexExt for brocolib::global_metadata::TypeIndex {
+    fn idx(self) -> usize {
+        self.index() as usize
+    }
+
+    fn idx_is_valid(self) -> bool {
+        self.is_valid()
+    }
+}
+
 use crate::{data::name_components::NameComponents, generate::cs_type_tag::CsTypeTag};
 
 pub const PARAM_ATTRIBUTE_IN: u16 = 0x0001;
@@ -227,11 +257,15 @@ pub trait TypeDefinitionExtensions {
 
     fn is_reference_type(&self, metadata: &Metadata) -> bool;
 
-    /// An enum's backing integer type - `Il2CppTypeDefinition::elementTypeIndex`
-    /// (`GlobalMetadataFileInternals.h:74`), the metadata counterpart of what
+    /// An enum's backing integer type, read off its sole non-static instance field
+    /// (conventionally named `value__`) - the metadata counterpart of what
     /// `Class::GetEnumBaseType` (`vm/Class.cpp:270`) reads off the runtime `Il2CppClass`.
     /// `None` if this isn't an enum, or it has no backing type on record.
     fn enum_backing_type<'a>(&self, metadata: &'a Metadata) -> Option<&'a Il2CppType>;
+
+    /// Same as [`Self::enum_backing_type`], but returns the raw index into
+    /// `metadata_registration.types` instead of the resolved type.
+    fn enum_backing_type_index(&self, metadata: &Metadata) -> Option<usize>;
 }
 
 impl TypeDefinitionExtensions for Il2CppTypeDefinition {
@@ -255,11 +289,11 @@ impl TypeDefinitionExtensions for Il2CppTypeDefinition {
         }
 
         // check recursively if any declaring type is compiler generated
-        if self.declaring_type_index == u32::MAX {
+        if !self.declaring_type_index.idx_is_valid() {
             return false;
         }
         let declaring_ty = metadata.runtime_metadata.metadata_registration.types
-            [self.declaring_type_index as usize];
+            [self.declaring_type_index.idx()];
         let declaring_td = CsTypeTag::from_type_data(declaring_ty.data, metadata);
         let declaring_td = declaring_td.get_tdi().get_type_definition(metadata);
 
@@ -291,12 +325,12 @@ impl TypeDefinitionExtensions for Il2CppTypeDefinition {
         }
 
         // does not inherit anything
-        if self.parent_index == u32::MAX {
+        if !self.parent_index.idx_is_valid() {
             return false;
         }
 
         let parent_ty =
-            &metadata.runtime_metadata.metadata_registration.types[self.parent_index as usize];
+            &metadata.runtime_metadata.metadata_registration.types[self.parent_index.idx()];
 
         // direct inheritance
         if other_td.byval_type_index == self.parent_index {
@@ -368,12 +402,12 @@ impl TypeDefinitionExtensions for Il2CppTypeDefinition {
         };
 
         let _ty =
-            &metadata.runtime_metadata.metadata_registration.types[self.byval_type_index as usize];
+            &metadata.runtime_metadata.metadata_registration.types[self.byval_type_index.idx()];
 
-        match self.declaring_type_index != u32::MAX {
+        match self.declaring_type_index.idx_is_valid() {
             true => {
                 let declaring_ty = metadata.runtime_metadata.metadata_registration.types
-                    [self.declaring_type_index as usize];
+                    [self.declaring_type_index.idx()];
 
                 let declaring_ty_names = match declaring_ty.data {
                     brocolib::runtime_metadata::TypeData::TypeDefinitionIndex(tdi) => {
@@ -475,21 +509,30 @@ impl TypeDefinitionExtensions for Il2CppTypeDefinition {
 
     fn is_reference_type(&self, metadata: &Metadata) -> bool {
         let ty =
-            &metadata.runtime_metadata.metadata_registration.types[self.byval_type_index as usize];
+            &metadata.runtime_metadata.metadata_registration.types[self.byval_type_index.idx()];
 
         (!self.is_value_type() && !self.is_enum_type()) || ty.ty == Il2CppTypeEnum::Class
     }
 
-    fn enum_backing_type<'a>(&self, metadata: &'a Metadata) -> Option<&'a Il2CppType> {
-        if !self.is_enum_type() || self.element_type_index == u32::MAX {
+    fn enum_backing_type_index(&self, metadata: &Metadata) -> Option<usize> {
+        if !self.is_enum_type() {
             return None;
         }
 
-        metadata
-            .runtime_metadata
-            .metadata_registration
-            .types
-            .get(self.element_type_index as usize)
+        // Newer il2cpp metadata versions dropped the `elementTypeIndex` shortcut, so instead
+        // we find the backing type the same way the runtime does: an enum's only non-static
+        // instance field (conventionally named `value__`) carries it.
+        self.fields(metadata).iter().find_map(|f| {
+            let idx = f.type_index.idx();
+            let field_ty = metadata.runtime_metadata.metadata_registration.types.get(idx)?;
+
+            (!field_ty.is_static()).then_some(idx)
+        })
+    }
+
+    fn enum_backing_type<'a>(&self, metadata: &'a Metadata) -> Option<&'a Il2CppType> {
+        self.enum_backing_type_index(metadata)
+            .map(|idx| &metadata.runtime_metadata.metadata_registration.types[idx])
     }
 }
 

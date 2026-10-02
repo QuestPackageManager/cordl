@@ -1,6 +1,9 @@
 #![feature(map_try_insert)]
 #![feature(exit_status_error)]
 
+#[cfg(feature = "il2cpp_v39")]
+extern crate brocolib_il2cpp_v39 as brocolib;
+
 #[cfg(feature = "il2cpp_v31")]
 extern crate brocolib_il2cpp_v31 as brocolib;
 
@@ -8,6 +11,7 @@ extern crate brocolib_il2cpp_v31 as brocolib;
 extern crate brocolib_il2cpp_v29 as brocolib;
 
 use brocolib::{global_metadata::TypeDefinitionIndex, runtime_metadata::TypeData};
+use generate::type_extensions::TypeIndexExt;
 use byteorder::LittleEndian;
 use color_eyre::eyre::Context;
 use generate::metadata::CordlMetadata;
@@ -278,10 +282,10 @@ fn main() -> color_eyre::Result<()> {
             let tdi = TypeDefinitionIndex::new(tdi_u64 as u32);
 
             let ty_def = &metadata.metadata.global_metadata.type_definitions[tdi];
-            let _ty = &metadata.metadata_registration.types[ty_def.byval_type_index as usize];
+            let _ty = &metadata.metadata_registration.types[ty_def.byval_type_index.idx()];
 
             // only make the roots
-            if ty_def.declaring_type_index != u32::MAX {
+            if ty_def.declaring_type_index.idx_is_valid() {
                 continue;
             }
 
@@ -307,7 +311,7 @@ fn main() -> color_eyre::Result<()> {
 
             let ty_def = &metadata.metadata.global_metadata.type_definitions[tdi];
 
-            if ty_def.declaring_type_index == u32::MAX {
+            if !ty_def.declaring_type_index.idx_is_valid() {
                 continue;
             }
 

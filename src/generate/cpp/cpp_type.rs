@@ -29,7 +29,7 @@ use crate::{
         metadata::CordlMetadata,
         offsets::SizeInfo,
         type_extensions::{
-            TypeDefinitionExtensions, TypeDefinitionIndexExtensions, TypeExtentions,
+            TypeDefinitionExtensions, TypeDefinitionIndexExtensions, TypeExtentions, TypeIndexExt,
         },
         writer::{Sortable, Writable, Writer},
     },
@@ -424,9 +424,9 @@ impl CppType {
             .get_type_definition(metadata.metadata);
         let mut declaring_name = declaring_td.get_name_components(metadata.metadata).name;
 
-        while declaring_td.declaring_type_index != u32::MAX {
+        while declaring_td.declaring_type_index.idx_is_valid() {
             let declaring_ty =
-                &metadata.metadata_registration.types[declaring_td.declaring_type_index as usize];
+                &metadata.metadata_registration.types[declaring_td.declaring_type_index.idx()];
 
             let declaring_tag = CsTypeTag::from_type_data(declaring_ty.data, metadata.metadata);
 
@@ -467,7 +467,9 @@ impl CppType {
                 let tdi = self.self_tag.get_tdi();
                 let t = tdi.get_type_definition(metadata.metadata);
 
-                let backing_field_idx = t.element_type_index as usize;
+                let backing_field_idx = t
+                    .enum_backing_type_index(metadata.metadata)
+                    .expect("enum type missing backing type");
                 let backing_field_ty = &metadata.metadata_registration.types[backing_field_idx];
 
                 let backing_field_resolved_ty = ResolvedType {
@@ -1197,7 +1199,7 @@ impl CppType {
             0 => size_info.calculated_instance_size,
             alignment => (size_info.calculated_instance_size + alignment) & !(alignment - 1),
         };
-        #[cfg(feature = "il2cpp_v31")]
+        #[cfg(any(feature = "il2cpp_v31", feature = "il2cpp_v39"))]
         let aligned_calculated_size = size_info.calculated_instance_size;
 
         // return if calculated layout size == metadata size
@@ -1301,7 +1303,7 @@ impl CppType {
                 let f_type = metadata
                     .metadata_registration
                     .types
-                    .get(field.type_index as usize)
+                    .get(field.type_index.idx())
                     .unwrap();
 
                 f_type.is_static().then(|| {

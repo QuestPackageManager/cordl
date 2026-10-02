@@ -19,7 +19,7 @@ use crate::generate::cpp::cpp_type::CORDL_NO_INCLUDE_IMPL_DEFINE;
 
 use crate::generate::cs_type_tag::CsTypeTag;
 use crate::generate::metadata::CordlMetadata;
-use crate::generate::type_extensions::TypeDefinitionExtensions;
+use crate::generate::type_extensions::{TypeDefinitionExtensions, TypeIndexExt};
 use crate::generate::writer::{Writable, Writer};
 use crate::helpers::sorting::DependencyGraph;
 
@@ -110,7 +110,7 @@ impl CppContext {
         } else {
             ns_path + "/"
         };
-        let path_name = match t.declaring_type_index != u32::MAX {
+        let path_name = match t.declaring_type_index.idx_is_valid() {
             true => {
                 let name = config.path_name(name);
                 let base_name = components.declaring_types.unwrap_or_default().join("_");
