@@ -206,9 +206,10 @@ impl<'b> CppNameResolver<'_, 'b> {
                 let generic_formatted = generic.combine_all();
 
                 CppNameComponents {
-                    name: "ByRefConst".into(),
+                    name: "by_ref".into(),
                     namespace: Some("".into()),
-                    generics: Some(vec![generic_formatted.clone()]),
+                    // Qualify the referenced slot, including pointer slots, rather than its pointee.
+                    generics: Some(vec![format!("{generic_formatted} const")]),
                     is_pointer: false,
                     ..Default::default()
                 }

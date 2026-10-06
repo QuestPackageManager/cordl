@@ -105,6 +105,142 @@ pub struct ResolvedType {
     pub ty: usize,              // index into metadata_registration.types
 }
 
+impl ResolvedType {
+    /// Custom attributes belong to the parameter, not the shared runtime type.
+    pub fn with_readonly_parameter(mut self, readonly: bool) -> Self {
+        if readonly && let ResolvedTypeData::ByRef(inner) = self.data {
+            self.data = ResolvedTypeData::ByRefConst(inner);
+        }
+        self
+    }
+}
+
+fn wrap_byref(
+    data: ResolvedTypeData,
+    ty: &Il2CppType,
+    index: usize,
+    usage: TypeUsage,
+) -> ResolvedTypeData {
+    // In/Out are also marshalling flags on by-value parameters. Neither implies byref.
+    // Preserve the existing value-type guard: the binary loader's byref flag also sees the value-type bit.
+    if !ty.byref
+        || ty.valuetype
+        || !matches!(
+            usage,
+            TypeUsage::Parameter
+                | TypeUsage::ReturnType
+                | TypeUsage::TypeName
+                | TypeUsage::GenericArg
+        )
+    {
+        return data;
+    }
+    let inner = Box::new(ResolvedType { ty: index, data });
+    // Out (including [In, Out]) must remain writable. Don't interpret field/return flags as parameter flags.
+    if usage == TypeUsage::Parameter && ty.is_param_in() && !ty.is_param_out() {
+        ResolvedTypeData::ByRefConst(inner)
+    } else {
+        ResolvedTypeData::ByRef(inner)
+    }
+}
+
+#[cfg(test)]
+mod readonly_tests {
+    use super::*;
+    use crate::generate::type_extensions::{PARAM_ATTRIBUTE_IN, PARAM_ATTRIBUTE_OUT};
+
+    fn runtime_type(byref: bool, attrs: u16) -> Il2CppType {
+        Il2CppType {
+            data: TypeData::TypeIndex(0),
+            ty: Il2CppTypeEnum::I4,
+            byref,
+            attrs,
+            pinned: false,
+            valuetype: false,
+        }
+    }
+
+    fn resolve(byref: bool, attrs: u16, usage: TypeUsage) -> ResolvedTypeData {
+        wrap_byref(
+            ResolvedTypeData::Primitive(Il2CppTypeEnum::I4),
+            &runtime_type(byref, attrs),
+            42,
+            usage,
+        )
+    }
+
+    #[test]
+    fn in_byref_is_readonly_but_ref_and_out_are_mutable() {
+        let readonly = resolve(true, PARAM_ATTRIBUTE_IN, TypeUsage::Parameter);
+        assert!(matches!(&readonly, ResolvedTypeData::ByRefConst(inner) if inner.ty == 42));
+        for attrs in [
+            0,
+            PARAM_ATTRIBUTE_OUT,
+            PARAM_ATTRIBUTE_IN | PARAM_ATTRIBUTE_OUT,
+        ] {
+            assert!(matches!(
+                resolve(true, attrs, TypeUsage::Parameter),
+                ResolvedTypeData::ByRef(_)
+            ));
+        }
+    }
+
+    #[test]
+    fn marshalling_flags_do_not_turn_values_into_references() {
+        for attrs in [
+            0,
+            PARAM_ATTRIBUTE_IN,
+            PARAM_ATTRIBUTE_OUT,
+            PARAM_ATTRIBUTE_IN | PARAM_ATTRIBUTE_OUT,
+        ] {
+            assert_eq!(
+                resolve(false, attrs, TypeUsage::Parameter),
+                ResolvedTypeData::Primitive(Il2CppTypeEnum::I4)
+            );
+        }
+        assert!(matches!(
+            resolve(true, PARAM_ATTRIBUTE_IN, TypeUsage::ReturnType),
+            ResolvedTypeData::ByRef(_)
+        ));
+        assert_eq!(
+            resolve(true, PARAM_ATTRIBUTE_IN, TypeUsage::Field),
+            ResolvedTypeData::Primitive(Il2CppTypeEnum::I4)
+        );
+        let mut value_type = runtime_type(true, PARAM_ATTRIBUTE_IN);
+        value_type.valuetype = true;
+        assert_eq!(
+            wrap_byref(
+                ResolvedTypeData::Primitive(Il2CppTypeEnum::I4),
+                &value_type,
+                42,
+                TypeUsage::Parameter
+            ),
+            ResolvedTypeData::Primitive(Il2CppTypeEnum::I4)
+        );
+    }
+
+    #[test]
+    fn readonly_attribute_only_promotes_an_existing_byref() {
+        let parameter = ResolvedType {
+            ty: 42,
+            data: resolve(true, 0, TypeUsage::Parameter),
+        };
+        assert!(matches!(
+            parameter.clone().with_readonly_parameter(true).data,
+            ResolvedTypeData::ByRefConst(_)
+        ));
+        assert!(matches!(
+            parameter.with_readonly_parameter(false).data,
+            ResolvedTypeData::ByRef(_)
+        ));
+        let value = ResolvedType {
+            ty: 42,
+            data: resolve(false, 0, TypeUsage::Parameter),
+        };
+        assert_eq!(value.clone().with_readonly_parameter(true), value);
+    }
+}
+
 pub struct TypeResolver<'a, 'b> {
     pub cordl_metadata: &'a CordlMetadata<'b>,
     pub collection: &'a TypeContextCollection,
@@ -312,31 +448,7 @@ impl TypeResolver<'_, '_> {
             _ => panic!("/* UNKNOWN TYPE! {to_resolve:?} */"),
         };
 
-        let byref_allowed = matches!(
-            typ_usage,
-            TypeUsage::Parameter
-                | TypeUsage::ReturnType
-                | TypeUsage::TypeName
-                | TypeUsage::GenericArg
-        );
-
-        if (to_resolve.is_param_out() || (to_resolve.byref && !to_resolve.valuetype))
-            && byref_allowed
-        {
-            return ResolvedTypeData::ByRef(Box::new(ResolvedType {
-                ty: to_resolve_idx,
-                data: ret,
-            }));
-        }
-
-        if to_resolve.is_param_in() && byref_allowed {
-            return ResolvedTypeData::ByRefConst(Box::new(ResolvedType {
-                ty: to_resolve_idx,
-                data: ret,
-            }));
-        }
-
-        ret
+        wrap_byref(ret, to_resolve, to_resolve_idx, typ_usage)
     }
 
     fn resolve_ptr(
