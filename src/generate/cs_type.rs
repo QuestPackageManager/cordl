@@ -314,29 +314,22 @@ impl CsType {
         let metadata = type_resolver.cordl_metadata;
         let _tdi = self.self_tag.get_tdi();
 
-        let param_type = metadata
-            .metadata_registration
-            .types
-            .get(param.type_index.idx())
-            .unwrap();
-
         let def_value = Self::param_default_value(metadata, param_index);
         let attributes =
             cs_attributes::decode_custom_attributes(metadata, declaring_tdi, param.token);
-        let readonly = !param_type.is_param_out()
-            && attributes.iter().any(|attribute| {
-                let definition = &metadata.metadata.global_metadata.type_definitions
-                    [attribute.attribute_type.get_tdi()];
-                definition.namespace(metadata.metadata) == "System.Runtime.CompilerServices"
-                    && definition.name(metadata.metadata) == "IsReadOnlyAttribute"
-            });
 
         CsParam {
             name: param.name(metadata.metadata).to_owned(),
             def_value,
-            il2cpp_ty: type_resolver
-                .resolve_type(self, param.type_index.idx(), TypeUsage::Parameter, false)
-                .with_readonly_parameter(readonly),
+            // The resolver uses runtime In/Out flags for readonly references.
+            // IsReadOnlyAttribute could cover additional cases, but we intentionally
+            // skip that extra per-parameter scan.
+            il2cpp_ty: type_resolver.resolve_type(
+                self,
+                param.type_index.idx(),
+                TypeUsage::Parameter,
+                false,
+            ),
             modifiers: CsParamFlags::empty(),
             attributes,
         }
