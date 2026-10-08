@@ -105,16 +105,6 @@ pub struct ResolvedType {
     pub ty: usize,              // index into metadata_registration.types
 }
 
-impl ResolvedType {
-    /// Custom attributes belong to the parameter, not the shared runtime type.
-    pub fn with_readonly_parameter(mut self, readonly: bool) -> Self {
-        if readonly && let ResolvedTypeData::ByRef(inner) = self.data {
-            self.data = ResolvedTypeData::ByRefConst(inner);
-        }
-        self
-    }
-}
-
 fn wrap_byref(
     data: ResolvedTypeData,
     ty: &Il2CppType,
@@ -177,27 +167,6 @@ mod readonly_tests {
             wrap(PARAM_ATTRIBUTE_IN, TypeUsage::ReturnType),
             ResolvedTypeData::ByRef(_)
         ));
-    }
-
-    #[test]
-    fn readonly_attribute_only_promotes_an_existing_byref() {
-        let parameter = ResolvedType {
-            ty: 42,
-            data: wrap(0, TypeUsage::Parameter),
-        };
-        assert!(matches!(
-            parameter.clone().with_readonly_parameter(true).data,
-            ResolvedTypeData::ByRefConst(_)
-        ));
-        assert!(matches!(
-            parameter.with_readonly_parameter(false).data,
-            ResolvedTypeData::ByRef(_)
-        ));
-        let value = ResolvedType {
-            ty: 42,
-            data: ResolvedTypeData::Primitive(Il2CppTypeEnum::I4),
-        };
-        assert_eq!(value.clone().with_readonly_parameter(true), value);
     }
 }
 
