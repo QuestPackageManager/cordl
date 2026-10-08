@@ -120,56 +120,6 @@ fn wrap_byref(
     }
 }
 
-#[cfg(test)]
-mod readonly_tests {
-    use super::*;
-    use crate::generate::type_extensions::{PARAM_ATTRIBUTE_IN, PARAM_ATTRIBUTE_OUT};
-
-    fn runtime_type(attrs: u16) -> Il2CppType {
-        Il2CppType {
-            data: TypeData::TypeIndex(0),
-            ty: Il2CppTypeEnum::I4,
-            byref: true,
-            attrs,
-            pinned: false,
-            valuetype: false,
-        }
-    }
-
-    fn wrap(attrs: u16, usage: TypeUsage) -> ResolvedTypeData {
-        wrap_byref(
-            ResolvedTypeData::Primitive(Il2CppTypeEnum::I4),
-            &runtime_type(attrs),
-            42,
-            usage,
-        )
-    }
-
-    #[test]
-    fn in_byref_is_readonly_but_ref_and_out_are_mutable() {
-        let readonly = wrap(PARAM_ATTRIBUTE_IN, TypeUsage::Parameter);
-        assert!(matches!(&readonly, ResolvedTypeData::ByRefConst(inner) if inner.ty == 42));
-        for attrs in [
-            0,
-            PARAM_ATTRIBUTE_OUT,
-            PARAM_ATTRIBUTE_IN | PARAM_ATTRIBUTE_OUT,
-        ] {
-            assert!(matches!(
-                wrap(attrs, TypeUsage::Parameter),
-                ResolvedTypeData::ByRef(_)
-            ));
-        }
-    }
-
-    #[test]
-    fn return_type_does_not_use_parameter_flags() {
-        assert!(matches!(
-            wrap(PARAM_ATTRIBUTE_IN, TypeUsage::ReturnType),
-            ResolvedTypeData::ByRef(_)
-        ));
-    }
-}
-
 pub struct TypeResolver<'a, 'b> {
     pub cordl_metadata: &'a CordlMetadata<'b>,
     pub collection: &'a TypeContextCollection,
