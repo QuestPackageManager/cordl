@@ -208,7 +208,6 @@ impl<'b> CppNameResolver<'_, 'b> {
                 CppNameComponents {
                     name: "by_ref".into(),
                     namespace: Some("".into()),
-                    // Qualify the referenced slot, including pointer slots, rather than its pointee.
                     generics: Some(vec![format!("{generic_formatted} const")]),
                     is_pointer: false,
                     ..Default::default()
