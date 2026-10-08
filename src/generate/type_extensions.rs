@@ -39,7 +39,10 @@ impl TypeIndexExt for brocolib::global_metadata::TypeIndex {
     }
 }
 
-use crate::{data::name_components::NameComponents, generate::cs_type_tag::CsTypeTag};
+use crate::{
+    data::name_components::NameComponents,
+    generate::{cs_type_tag::CsTypeTag, metadata::CordlMetadata},
+};
 
 pub const PARAM_ATTRIBUTE_IN: u16 = 0x0001;
 pub const PARAM_ATTRIBUTE_OUT: u16 = 0x0002;
@@ -248,7 +251,7 @@ pub trait TypeDefinitionExtensions {
     fn is_compiler_generated(&self, metadata: &Metadata) -> bool;
     fn is_interface(&self) -> bool;
     fn is_explicit_layout(&self) -> bool;
-    fn is_assignable_to(&self, other_td: &Il2CppTypeDefinition, metadata: &Metadata) -> bool;
+    fn is_assignable_to(&self, other_td: &Il2CppTypeDefinition, metadata: &CordlMetadata) -> bool;
 
     fn get_name_components(&self, metadata: &Metadata) -> NameComponents;
 
@@ -257,8 +260,9 @@ pub trait TypeDefinitionExtensions {
 
     fn is_reference_type(&self, metadata: &Metadata) -> bool;
 
-    /// An enum's backing integer type, read off its sole non-static instance field
-    /// (conventionally named `value__`) - the metadata counterpart of what
+    /// An enum's backing integer type, stored in parent_index on v39 or read off
+    /// its sole non-static instance field (conventionally named `value__`) on
+    /// older versions - the metadata counterpart of what
     /// `Class::GetEnumBaseType` (`vm/Class.cpp:270`) reads off the runtime `Il2CppClass`.
     /// `None` if this isn't an enum, or it has no backing type on record.
     fn enum_backing_type<'a>(&self, metadata: &'a Metadata) -> Option<&'a Il2CppType>;
@@ -311,7 +315,7 @@ impl TypeDefinitionExtensions for Il2CppTypeDefinition {
         self.flags & TYPE_ATTRIBUTE_EXPLICIT_LAYOUT != 0
     }
 
-    fn is_assignable_to(&self, other_td: &Il2CppTypeDefinition, metadata: &Metadata) -> bool {
+    fn is_assignable_to(&self, other_td: &Il2CppTypeDefinition, metadata: &CordlMetadata) -> bool {
         // same type
         if self.name_index == other_td.name_index
             && self.namespace_index == other_td.namespace_index
@@ -325,15 +329,14 @@ impl TypeDefinitionExtensions for Il2CppTypeDefinition {
         }
 
         // does not inherit anything
-        if !self.parent_index.idx_is_valid() {
+        let Some(parent_index) = metadata.parent_type_index(self) else {
             return false;
-        }
+        };
 
-        let parent_ty =
-            &metadata.runtime_metadata.metadata_registration.types[self.parent_index.idx()];
+        let parent_ty = &metadata.metadata_registration.types[parent_index];
 
         // direct inheritance
-        if other_td.byval_type_index == self.parent_index {
+        if other_td.byval_type_index.idx() == parent_index {
             return true;
         }
 
@@ -352,13 +355,9 @@ impl TypeDefinitionExtensions for Il2CppTypeDefinition {
         let parent_tdi = match parent_ty.data {
             TypeData::TypeDefinitionIndex(tdi) => tdi,
             TypeData::GenericClassIndex(gen_idx) => {
-                let gen_inst = &metadata
-                    .runtime_metadata
-                    .metadata_registration
-                    .generic_classes[gen_idx];
+                let gen_inst = &metadata.metadata_registration.generic_classes[gen_idx];
 
-                let gen_ty =
-                    &metadata.runtime_metadata.metadata_registration.types[gen_inst.type_index];
+                let gen_ty = &metadata.metadata_registration.types[gen_inst.type_index];
 
                 let TypeData::TypeDefinitionIndex(gen_tdi) = gen_ty.data else {
                     todo!()
@@ -369,12 +368,12 @@ impl TypeDefinitionExtensions for Il2CppTypeDefinition {
             _ => panic!(
                 "Unsupported type: {:?} {}",
                 parent_ty,
-                parent_ty.full_name(metadata)
+                parent_ty.full_name(metadata.metadata)
             ),
         };
 
         // check if parent is descendant of `other_td`
-        let parent_td = &metadata.global_metadata.type_definitions[parent_tdi];
+        let parent_td = &metadata.metadata.global_metadata.type_definitions[parent_tdi];
         parent_td.is_assignable_to(other_td, metadata)
     }
 
@@ -519,9 +518,16 @@ impl TypeDefinitionExtensions for Il2CppTypeDefinition {
             return None;
         }
 
+        #[cfg(feature = "il2cpp_v39")]
+        {
+            let _ = metadata;
+            self.parent_index.idx_is_valid().then(|| self.parent_index.idx())
+        }
+
         // Newer il2cpp metadata versions dropped the `elementTypeIndex` shortcut, so instead
         // we find the backing type the same way the runtime does: an enum's only non-static
         // instance field (conventionally named `value__`) carries it.
+        #[cfg(not(feature = "il2cpp_v39"))]
         self.fields(metadata).iter().find_map(|f| {
             let idx = f.type_index.idx();
             let field_ty = metadata.runtime_metadata.metadata_registration.types.get(idx)?;

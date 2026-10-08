@@ -54,7 +54,7 @@ pub fn unity_object_resolve_handler(
 
     let unity_td = &metadata.metadata.global_metadata.type_definitions[metadata.unity_object_tdi];
 
-    if !td.is_assignable_to(unity_td, metadata.metadata) {
+    if !td.is_assignable_to(unity_td, metadata) {
         return original;
     }
 

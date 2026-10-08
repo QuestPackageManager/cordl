@@ -164,7 +164,7 @@ impl TypeContextCollection {
             return None;
         }
 
-        let nested_inherits_declaring = ty_def.is_assignable_to(context_td, metadata.metadata);
+        let nested_inherits_declaring = ty_def.is_assignable_to(context_td, metadata);
         if nested_inherits_declaring {
             warn!(
                 "Nested type \"{}\" inherits declaring type \"{}\"",

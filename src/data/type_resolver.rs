@@ -105,6 +105,21 @@ pub struct ResolvedType {
     pub ty: usize,              // index into metadata_registration.types
 }
 
+fn wrap_byref(
+    data: ResolvedTypeData,
+    ty: &Il2CppType,
+    index: usize,
+    usage: TypeUsage,
+) -> ResolvedTypeData {
+    let inner = Box::new(ResolvedType { ty: index, data });
+    // Out (including [In, Out]) must remain writable. Don't interpret field/return flags as parameter flags.
+    if usage == TypeUsage::Parameter && ty.is_param_in() && !ty.is_param_out() {
+        ResolvedTypeData::ByRefConst(inner)
+    } else {
+        ResolvedTypeData::ByRef(inner)
+    }
+}
+
 pub struct TypeResolver<'a, 'b> {
     pub cordl_metadata: &'a CordlMetadata<'b>,
     pub collection: &'a TypeContextCollection,
@@ -312,31 +327,22 @@ impl TypeResolver<'_, '_> {
             _ => panic!("/* UNKNOWN TYPE! {to_resolve:?} */"),
         };
 
-        let byref_allowed = matches!(
-            typ_usage,
-            TypeUsage::Parameter
-                | TypeUsage::ReturnType
-                | TypeUsage::TypeName
-                | TypeUsage::GenericArg
-        );
-
-        if (to_resolve.is_param_out() || (to_resolve.byref && !to_resolve.valuetype))
-            && byref_allowed
+        // In/Out are also marshalling flags on by-value parameters. Neither implies byref.
+        // Preserve the existing value-type guard: the binary loader's byref flag also sees the value-type bit.
+        if to_resolve.byref
+            && !to_resolve.valuetype
+            && matches!(
+                typ_usage,
+                TypeUsage::Parameter
+                    | TypeUsage::ReturnType
+                    | TypeUsage::TypeName
+                    | TypeUsage::GenericArg
+            )
         {
-            return ResolvedTypeData::ByRef(Box::new(ResolvedType {
-                ty: to_resolve_idx,
-                data: ret,
-            }));
+            wrap_byref(ret, to_resolve, to_resolve_idx, typ_usage)
+        } else {
+            ret
         }
-
-        if to_resolve.is_param_in() && byref_allowed {
-            return ResolvedTypeData::ByRefConst(Box::new(ResolvedType {
-                ty: to_resolve_idx,
-                data: ret,
-            }));
-        }
-
-        ret
     }
 
     fn resolve_ptr(

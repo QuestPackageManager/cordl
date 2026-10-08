@@ -3,6 +3,13 @@ use std::collections::{HashMap, HashSet};
 use brocolib::global_metadata::{ImageIndex, Il2CppTypeDefinition, MethodIndex, TypeDefinitionIndex};
 use itertools::Itertools;
 
+#[cfg(feature = "il2cpp_v39")]
+use super::type_extensions::TypeDefinitionExtensions;
+use super::type_extensions::TypeIndexExt;
+
+#[cfg(all(test, feature = "il2cpp_v39"))]
+mod tests;
+
 pub struct MethodCalculations {
     pub estimated_size: usize,
     pub addrs: u64,
@@ -73,6 +80,26 @@ pub struct CordlMetadata<'a> {
 }
 
 impl<'a> CordlMetadata<'a> {
+    /// Resolve the runtime parent rather than the enum backing type stored in v39.
+    pub fn parent_type_index(&self, ty: &Il2CppTypeDefinition) -> Option<usize> {
+        #[cfg(feature = "il2cpp_v39")]
+        if ty.is_enum_type() {
+            // Unity 6000.3 GlobalMetadata::FromTypeDefinition sets enum_class as the
+            // parent and uses the serialized parentIndex for element_class instead.
+            let enum_tdi = self
+                .name_to_tdi
+                .get(&Il2cppFullName("System", "Enum"))
+                .expect("No System.Enum type found");
+            return Some(
+                self.metadata.global_metadata.type_definitions[*enum_tdi]
+                    .byval_type_index
+                    .idx(),
+            );
+        }
+
+        ty.parent_index.idx_is_valid().then(|| ty.parent_index.idx())
+    }
+
     /// Returns the size of the base object.
     /// To be used for boxing/unboxing and various offset computations.
     pub fn object_size(&self) -> u8 {
